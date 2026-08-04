@@ -7,6 +7,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { useFilteredList } from "../hooks/useFilteredList";
 import { ListFilterBar, FilterField } from "../components/ListFilterBar";
 import { PaginationControls } from "../components/PaginationControls";
+import {
+  useManutencoesPersistentes,
+  INTERVALO_ALERTA_PERSISTENTE_DIAS,
+} from "../hooks/useManutencoesPersistentes";
 
 const STATUS_PERMITIDOS = [
   "pendente",
@@ -15,14 +19,6 @@ const STATUS_PERMITIDOS = [
   "concluida",
   "cancelada",
 ];
-
-// Janela de histórico usada só pelo alerta de "manutenções persistentes":
-// o alerta compara as 2 últimas manutenções concluídas de cada máquina, então
-// não precisa do histórico completo, apenas de um período recente o
-// suficiente pra cobrir o intervalo de alerta.
-const JANELA_PERSISTENTES_DIAS = 180;
-
-const INTERVALO_ALERTA_PERSISTENTE_DIAS = 45;
 
 const manutencaoAtribuidaAoUsuario = (manutencao, usuarioId) =>
   String(manutencao?.funcionarioId || "") === String(usuarioId || "");
@@ -428,31 +424,11 @@ function Manutencoes() {
     pageSize: 20,
   });
 
-  // Manutenções concluídas recentes, usadas só pelo alerta de "manutenções
-  // persistentes" abaixo — busca separada da listagem principal pra não
-  // prender a tabela navegável a um histórico maior do que ela precisa.
-  const [manutencoesConcluidasRecentes, setManutencoesConcluidasRecentes] =
-    useState([]);
-
-  const carregarManutencoesConcluidasRecentes = async () => {
-    try {
-      const dataInicio = new Date(
-        Date.now() - JANELA_PERSISTENTES_DIAS * 24 * 60 * 60 * 1000,
-      )
-        .toISOString()
-        .slice(0, 10);
-      const res = await api.get("/manutencoes", {
-        params: { all: true, dataInicio },
-      });
-      setManutencoesConcluidasRecentes(res.data || []);
-    } catch (err) {
-      console.error(
-        "Erro ao buscar manutenções concluídas recentes:",
-        err?.response?.data || err,
-      );
-      setManutencoesConcluidasRecentes([]);
-    }
-  };
+  // Alerta de "manutenções persistentes" — hook compartilhado com a central
+  // de Alertas, busca separada da listagem principal pra não prender a
+  // tabela navegável a um histórico maior do que ela precisa.
+  const { manutencoesPersistentes, recarregar: recarregarManutencoesPersistentes } =
+    useManutencoesPersistentes({ isAdmin, usuarioId: usuario?.id });
 
   const [showNovaManutencao, setShowNovaManutencao] = useState(false);
   const [novaManutencao, setNovaManutencao] = useState({
@@ -490,7 +466,7 @@ function Manutencoes() {
       listaManutencoes.hasSearched
         ? listaManutencoes.goToPage(listaManutencoes.pagination.page)
         : listaManutencoes.search(),
-      carregarManutencoesConcluidasRecentes(),
+      recarregarManutencoesPersistentes(),
     ]);
   };
 
@@ -599,7 +575,6 @@ function Manutencoes() {
     // ("não concluídas") é o motivo principal de abrir a página — é uma
     // lista pequena e operacional, não um histórico grande.
     listaManutencoes.search();
-    carregarManutencoesConcluidasRecentes();
     api
       .get("/lojas", { params: { all: true } })
       .then((res) => setLojas(res.data || []))
@@ -675,72 +650,6 @@ function Manutencoes() {
           ),
     [isAdmin, listaManutencoes.data, usuario?.id],
   );
-
-  const manutencoesPersistentes = useMemo(() => {
-    const manutencoesBase = isAdmin
-      ? manutencoesConcluidasRecentes
-      : manutencoesConcluidasRecentes.filter((m) =>
-          manutencaoAtribuidaAoUsuario(m, usuario?.id),
-        );
-
-    const limiteIntervaloMs =
-      INTERVALO_ALERTA_PERSISTENTE_DIAS * 24 * 60 * 60 * 1000;
-
-    const concluidas = manutencoesBase.filter(
-      (m) => (m.status === "feito" || m.status === "concluida") && m.maquinaId,
-    );
-
-    const agrupadasPorMaquina = concluidas.reduce((acc, manutencao) => {
-      const chave = String(manutencao.maquinaId);
-      if (!acc[chave]) acc[chave] = [];
-      acc[chave].push(manutencao);
-      return acc;
-    }, {});
-
-    const persistentes = Object.values(agrupadasPorMaquina)
-      .filter((lista) => lista.length > 1)
-      .map((lista) => {
-        const ordenadas = [...lista].sort((a, b) => {
-          const dataA = new Date(a.concluidoEm || a.createdAt).getTime();
-          const dataB = new Date(b.concluidoEm || b.createdAt).getTime();
-          return dataB - dataA;
-        });
-
-        const dataAtualTs = new Date(
-          ordenadas[0].concluidoEm || ordenadas[0].createdAt,
-        ).getTime();
-        const dataUltimaTs = new Date(
-          ordenadas[1].concluidoEm || ordenadas[1].createdAt,
-        ).getTime();
-
-        if (!Number.isFinite(dataAtualTs) || !Number.isFinite(dataUltimaTs)) {
-          return null;
-        }
-
-        const intervaloEntreManutencoesMs = Math.abs(
-          dataAtualTs - dataUltimaTs,
-        );
-
-        if (intervaloEntreManutencoesMs > limiteIntervaloMs) {
-          return null;
-        }
-
-        return {
-          maquinaId: ordenadas[0].maquinaId,
-          maquinaNome: ordenadas[0].maquina?.codigo || "Máquina sem código",
-          lojaNome: ordenadas[0].loja?.nome || "Ponto não informado",
-          dataAtual: ordenadas[0].concluidoEm || ordenadas[0].createdAt,
-          dataUltima: ordenadas[1].concluidoEm || ordenadas[1].createdAt,
-        };
-      })
-      .filter(Boolean)
-      .sort(
-        (a, b) =>
-          new Date(b.dataAtual).getTime() - new Date(a.dataAtual).getTime(),
-      );
-
-    return persistentes;
-  }, [isAdmin, manutencoesConcluidasRecentes, usuario?.id]);
 
   const formatarDataHora = (valor) => {
     if (!valor) return "-";

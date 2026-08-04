@@ -7,6 +7,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
+import { AlertasProvider } from "./contexts/AlertasContext.jsx";
 import { PrivateRoute } from "./components/PrivateRoute";
 import { Login } from "./pages/Login";
 import { Registrar } from "./pages/Registrar";
@@ -376,9 +377,11 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <AlertasProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AlertasProvider>
     </AuthProvider>
   );
 }

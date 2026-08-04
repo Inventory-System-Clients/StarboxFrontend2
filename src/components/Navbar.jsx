@@ -1,46 +1,150 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useAlertas } from "../contexts/AlertasContext.jsx";
+
+const ADMIN_LIKE = ["ADMIN", "GERENCIADOR"];
+// Usuário MANUTENCAO só consegue navegar pra /pecas e /manutencoes (o próprio
+// App.jsx redireciona à força pra /pecas em qualquer outra rota) — o menu não
+// deve oferecer links que vão só jogar o usuário de volta.
+const ROTAS_PERMITIDAS_MANUTENCAO = ["/pecas", "/manutencoes"];
+
+const podeVerItem = (item, role) => {
+  if (role === "MANUTENCAO") {
+    return ROTAS_PERMITIDAS_MANUTENCAO.includes(item.to);
+  }
+  if (item.adminOnly && !ADMIN_LIKE.includes(role)) return false;
+  if (item.allowedRoles && !item.allowedRoles.includes(role)) return false;
+  if (item.deniedRoles && item.deniedRoles.includes(role)) return false;
+  return true;
+};
+
+const itensSoltos = [{ to: "/", label: "Dashboard", icon: "📊" }];
+
+const grupos = [
+  {
+    id: "operacional",
+    label: "Operacional",
+    icon: "🛠️",
+    itens: [
+      { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
+      { to: "/manutencoes", label: "Manutenções", icon: "🛠️", alert: true },
+      { to: "/estoque-usuarios", label: "Meu Estoque", icon: "📦" },
+      { to: "/quebra-ordem", label: "Quebra de Ordem", icon: "🔀" },
+      {
+        to: "/veiculos",
+        label: "Veículos",
+        icon: "🚚",
+        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+      },
+      {
+        to: "/veiculos/revisoes-pendentes",
+        label: "Revisões Pendentes",
+        icon: "🔧",
+        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+      },
+    ],
+  },
+  {
+    id: "estoque-pecas",
+    label: "Estoque e Peças",
+    icon: "🧩",
+    itens: [
+      { to: "/pecas", label: "Peças e Carrinhos", icon: "🧰" },
+      {
+        to: "/gerenciar-carrinhos",
+        label: "Gerenciar Carrinhos",
+        icon: "🛒",
+        adminOnly: true,
+      },
+      { to: "/deposito-principal", label: "Depósito Principal", icon: "🏭" },
+      {
+        to: "/dashboard/pecas-defeituosas",
+        label: "Peças Defeituosas",
+        icon: "♻️",
+        allowedRoles: [
+          "FUNCIONARIO",
+          "FUNCIONARIO_TODAS_LOJAS",
+          "ABASTECEDOR",
+        ],
+      },
+      {
+        to: "/admin/pecas-defeituosas",
+        label: "Peças Defeituosas",
+        icon: "♻️",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
+    id: "cadastros",
+    label: "Cadastros",
+    icon: "🗂️",
+    itens: [
+      {
+        to: "/lojas",
+        label: "Lojas",
+        icon: "🏪",
+        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+      },
+      {
+        to: "/maquinas",
+        label: "Máquinas",
+        icon: "🎮",
+        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+      },
+      { to: "/produtos", label: "Produtos", icon: "🧸" },
+      { to: "/usuarios", label: "Usuários", icon: "👥", adminOnly: true },
+    ],
+  },
+  {
+    id: "analise",
+    label: "Análise",
+    icon: "📈",
+    itens: [
+      { to: "/movimentacoes", label: "Movimentações", icon: "🔄" },
+      { to: "/graficos", label: "Gráficos", icon: "📈", adminOnly: true },
+      {
+        to: "/relatorios",
+        label: "Relatórios",
+        icon: "📄",
+        allowedRoles: ["ADMIN"],
+      },
+    ],
+  },
+  {
+    id: "financeiro",
+    label: "Financeiro",
+    icon: "💰",
+    itens: [
+      {
+        to: "/fluxo-caixa",
+        label: "Fluxo de Caixa",
+        icon: "💵",
+        deniedRoles: ["GERENCIADOR"],
+      },
+      {
+        to: "/financeiro",
+        label: "Financeiro",
+        icon: "💰",
+        deniedRoles: ["GERENCIADOR"],
+      },
+    ],
+  },
+];
 
 export default function Navbar() {
-  const { usuario, logout } = useAuth(); // Assumindo que seu context proveja usuario e logout
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [useCompactMenu, setUseCompactMenu] = useState(false);
-  const location = useLocation();
+  const { usuario, logout } = useAuth();
+  const { totalGeral, podeVerAlertas } = useAlertas();
   const navigate = useNavigate();
-  const isFuncionario =
-    usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR";
-  const isPerfilFuncionario =
-    usuario?.role === "FUNCIONARIO" ||
-    usuario?.role === "FUNCIONARIO_TODAS_LOJAS" ||
-    usuario?.role === "ABASTECEDOR";
-  const isAdminLike =
-    usuario?.role === "ADMIN" || usuario?.role === "GERENCIADOR";
+  const location = useLocation();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [gruposAbertos, setGruposAbertos] = useState({});
 
   const isActive = (path) => location.pathname === path;
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const closeMenu = () => setIsMenuOpen(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      // Desktop mantém links visíveis. Menu compacto apenas para tamanhos menores.
-      const shouldCompact = window.innerWidth < 1280;
-      setUseCompactMenu((prev) =>
-        prev === shouldCompact ? prev : shouldCompact,
-      );
-
-      if (!shouldCompact) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
+  const toggleGrupo = (id) =>
+    setGruposAbertos((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleLogout = async () => {
     try {
@@ -50,6 +154,32 @@ export default function Navbar() {
       console.error("Erro ao sair:", error);
     }
   };
+
+  const perfilLabel =
+    usuario?.role === "ADMIN"
+      ? "🛡️ Administrador"
+      : usuario?.role === "CONTROLADOR_ESTOQUE"
+        ? "📦 Controlador de Estoque"
+        : usuario?.role === "GERENCIADOR"
+          ? "🧩 Gerenciador"
+          : usuario?.role === "FUNCIONARIO_TODAS_LOJAS"
+            ? "👤 Funcionário (todos os pontos)"
+            : usuario?.role === "MANUTENCAO"
+              ? "🛠️ Manutenção"
+              : usuario?.role === "ABASTECEDOR"
+                ? "🚚 Abastecedor"
+                : "👤 Funcionário Abastecedor";
+
+  const itensSoltosVisiveis = itensSoltos.filter((item) =>
+    podeVerItem(item, usuario?.role),
+  );
+
+  const gruposVisiveis = grupos
+    .map((grupo) => ({
+      ...grupo,
+      itens: grupo.itens.filter((item) => podeVerItem(item, usuario?.role)),
+    }))
+    .filter((grupo) => grupo.itens.length > 0);
 
   return (
     <nav
@@ -61,327 +191,180 @@ export default function Navbar() {
     >
       <div className="w-full px-2 sm:px-3 lg:px-4">
         <div className="flex items-center justify-between w-full min-h-18 py-2 gap-2">
-          {/* Logo e Nome */}
-          <div className="flex items-center relative min-w-0 flex-1">
-            <Link
-              to="/"
-              className="flex items-center space-x-2 sm:space-x-3 group min-w-0 relative z-10"
-            >
-              <img
-                src="/starbox-logo.png"
-                alt="StarBox Logo"
-                className="pl-1 sm:pl-2 w-20 h-8 sm:w-24 sm:h-9 lg:w-30 lg:h-10 object-contain transition-transform duration-300 group-hover:scale-105"
-                style={{
-                  maxWidth: "150px",
-                  height: "auto",
-                  background: "transparent",
-                }}
-                onError={(e) => {
-                  e.target.style.display = "none";
-                }}
-              />
-            </Link>
+          <Link to="/" className="flex shrink-0 items-center group">
+            <img
+              src="/starbox-logo.png"
+              alt="StarBox Logo"
+              className="pl-1 sm:pl-2 w-20 h-8 sm:w-24 sm:h-9 lg:w-30 lg:h-10 object-contain transition-transform duration-300 group-hover:scale-105"
+              style={{ maxWidth: "150px", height: "auto", background: "transparent" }}
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
+            />
+          </Link>
 
-            {/* Menu Desktop */}
-            <div className={`${useCompactMenu ? "hidden" : "hidden xl:block"} ml-4`}>
-              <div className="flex items-center space-x-2 whitespace-nowrap">
-                <NavLink to="/" active={isActive("/")}>
-                  📊 Dashboard
-                </NavLink>
-                <NavLink to="/roteiros" active={isActive("/roteiros")}>
-                  🗺️ Rotas
-                </NavLink>
-                {!isFuncionario && usuario?.role !== "CONTROLADOR_ESTOQUE" && (
-                  <NavLink to="/maquinas" active={isActive("/maquinas")}>
-                    🎮 Máquinas
-                  </NavLink>
-                )}
-                {!isPerfilFuncionario && (
-                  <NavLink to="/lojas" active={isActive("/lojas")}>
-                    🏪 Pontos
-                  </NavLink>
-                )}
-
-                <NavLink to="/produtos" active={isActive("/produtos")}>
-                  🧸 Produtos
-                </NavLink>
-
-                {(usuario?.role === "ADMIN" ||
-                  usuario?.role === "FUNCIONARIO" ||
-                  usuario?.role === "FUNCIONARIO_TODAS_LOJAS" ||
-                  usuario?.role === "ABASTECEDOR" ||
-                  usuario?.role === "CONTROLADOR_ESTOQUE" ||
-                  usuario?.role === "MANUTENCAO" ||
-                  usuario?.role === "GERENCIADOR") && (
-                  <NavLink to="/pecas" active={isActive("/pecas")}>
-                    🛠️ Peças
-                  </NavLink>
-                )}
-
-                {(usuario?.role === "FUNCIONARIO" ||
-                  usuario?.role === "FUNCIONARIO_TODAS_LOJAS" ||
-                  usuario?.role === "ABASTECEDOR") && (
-                  <NavLink
-                    to="/dashboard/pecas-defeituosas"
-                    active={isActive("/dashboard/pecas-defeituosas")}
-                  >
-                    ♻️ Defeituosas
-                  </NavLink>
-                )}
-
-                {isAdminLike && (
-                  <NavLink
-                    to="/gerenciar-carrinhos"
-                    active={isActive("/gerenciar-carrinhos")}
-                  >
-                    🛒 Carrinhos
-                  </NavLink>
-                )}
-
-                {usuario?.role === "ADMIN" && (
-                  <NavLink to="/relatorios" active={isActive("/relatorios")}>
-                    📄 Relatórios
-                  </NavLink>
-                )}
-
-                {usuario?.role === "ADMIN" && (
-                  <NavLink to="/fluxo-caixa" active={isActive("/fluxo-caixa")}>
-                    💰 Fluxo de Caixa
-                  </NavLink>
-                )}
-
-                {isAdminLike && (
-                  <NavLink to="/usuarios" active={isActive("/usuarios")}>
-                    👥 Usuários
-                  </NavLink>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* User Info e Logout */}
-          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0 pr-1 sm:pr-2 min-w-0">
-            <button
-              onClick={toggleMenu}
-              className={`${useCompactMenu ? "" : "xl:hidden"} p-2 rounded-lg hover:bg-white/10 transition-colors`}
-            >
-              {isMenuOpen ? <CloseIcon /> : <MenuIcon />}
-            </button>
-
-            <div className="hidden xl:block text-right bg-white/5 px-3 py-2 rounded-lg border border-white/10 max-w-55">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 pr-1 sm:pr-2 min-w-0">
+            <div className="hidden lg:block text-right bg-white/5 px-3 py-2 rounded-lg border border-white/10 max-w-55">
               <div className="text-sm font-semibold text-white truncate">
                 {usuario?.nome || "Usuário"}
               </div>
-              <div className="text-xs text-accent-cream flex items-center justify-end gap-1 truncate">
-                {usuario?.role === "ADMIN"
-                  ? "🛡️ Administrador"
-                  : usuario?.role === "CONTROLADOR_ESTOQUE"
-                    ? "📦 Controlador de Estoque"
-                    : usuario?.role === "GERENCIADOR"
-                      ? "🧩 Gerenciador"
-                      : usuario?.role === "FUNCIONARIO_TODAS_LOJAS"
-                        ? "👤 Funcionário (todos os pontos)"
-                        : usuario?.role === "MANUTENCAO"
-                          ? "🛠️ Manutenção"
-                          : usuario?.role === "ABASTECEDOR"
-                            ? "🚚 Abastecedor"
-                            : "👤 Funcionário Abastecedor"}
+              <div className="text-xs text-accent-cream truncate">
+                {perfilLabel}
               </div>
             </div>
 
+            {podeVerAlertas && (
+              <button
+                type="button"
+                onClick={() => navigate("/alertas")}
+                className={`relative flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold shadow-lg transition-all duration-200 hover:-translate-y-0.5 sm:px-4 ${
+                  totalGeral > 0
+                    ? "animate-pulse bg-linear-to-r from-yellow-500 to-orange-600 text-white hover:from-yellow-600 hover:to-orange-700"
+                    : "bg-white/10 text-white hover:bg-white/15"
+                }`}
+              >
+                <span className="text-lg leading-none">🔔</span>
+                <span className="hidden sm:inline">Alertas</span>
+                {totalGeral > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-xs font-black text-white">
+                    {totalGeral > 99 ? "99+" : totalGeral}
+                  </span>
+                )}
+              </button>
+            )}
+
             <button
+              type="button"
+              onClick={() => setIsMenuOpen((open) => !open)}
+              className="rounded-lg p-2 transition-colors hover:bg-white/10"
+              aria-label="Menu"
+              aria-expanded={isMenuOpen}
+            >
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+
+            <button
+              type="button"
               onClick={handleLogout}
               className="bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-1.5 whitespace-nowrap"
             >
-              <LogoutIcon />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
               <span className="hidden sm:inline">Sair</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Menu Mobile Dropdown */}
       {isMenuOpen && (
-        <div
-          className={`${useCompactMenu ? "" : "xl:hidden"} bg-gray-900 border-t border-white/10 animate-fade-in-down`}
-        >
-          <div className="px-4 py-3 space-y-2">
-            <MobileNavLink to="/" active={isActive("/")} onClick={closeMenu}>
-              📊 Dashboard
-            </MobileNavLink>
-            <MobileNavLink
-              to="/roteiros"
-              active={isActive("/roteiros")}
-              onClick={closeMenu}
-            >
-              🗺️ Roteiros
-            </MobileNavLink>
-            {!isFuncionario && usuario?.role !== "CONTROLADOR_ESTOQUE" && (
-              <MobileNavLink
-                to="/maquinas"
-                active={isActive("/maquinas")}
-                onClick={closeMenu}
-              >
-                🎮 Máquinas
-              </MobileNavLink>
-            )}
-            {!isPerfilFuncionario && (
-              <MobileNavLink
-                to="/lojas"
-                active={isActive("/lojas")}
-                onClick={closeMenu}
-              >
-                🏪 Pontos
-              </MobileNavLink>
-            )}
-            <MobileNavLink
-              to="/estoque-usuarios"
-              active={isActive("/estoque-usuarios")}
-              onClick={closeMenu}
-            >
-              📦 Meu Estoque
-            </MobileNavLink>
-            {(usuario?.role === "ADMIN" ||
-              usuario?.role === "FUNCIONARIO" ||
-              usuario?.role === "FUNCIONARIO_TODAS_LOJAS" ||
-              usuario?.role === "ABASTECEDOR" ||
-              usuario?.role === "CONTROLADOR_ESTOQUE" ||
-              usuario?.role === "MANUTENCAO" ||
-              usuario?.role === "GERENCIADOR") && (
-              <MobileNavLink
-                to="/pecas"
-                active={isActive("/pecas")}
-                onClick={closeMenu}
-              >
-                🛠️ Peças
-              </MobileNavLink>
-            )}
-            {(usuario?.role === "FUNCIONARIO" ||
-              usuario?.role === "FUNCIONARIO_TODAS_LOJAS" ||
-              usuario?.role === "ABASTECEDOR") && (
-              <MobileNavLink
-                to="/dashboard/pecas-defeituosas"
-                active={isActive("/dashboard/pecas-defeituosas")}
-                onClick={closeMenu}
-              >
-                ♻️ Defeituosas
-              </MobileNavLink>
-            )}
-            {isAdminLike && (
-              <MobileNavLink
-                to="/gerenciar-carrinhos"
-                active={isActive("/gerenciar-carrinhos")}
-                onClick={closeMenu}
-              >
-                🛒 Carrinhos
-              </MobileNavLink>
-            )}
-            {usuario?.role === "ADMIN" && (
-              <MobileNavLink
-                to="/relatorios"
-                active={isActive("/relatorios")}
-                onClick={closeMenu}
-              >
-                📄 Relatórios
-              </MobileNavLink>
-            )}
-            {usuario?.role === "ADMIN" && (
-              <MobileNavLink
-                to="/fluxo-caixa"
-                active={isActive("/fluxo-caixa")}
-                onClick={closeMenu}
-              >
-                💰 Fluxo de Caixa
-              </MobileNavLink>
-            )}
-            {/* ... Repetir para outros links ... */}
-            {isAdminLike && (
-              <MobileNavLink
-                to="/usuarios"
-                active={isActive("/usuarios")}
-                onClick={closeMenu}
-              >
-                👥 Usuários
-              </MobileNavLink>
-            )}
+        <div className="border-t border-white/10 bg-neutral-950">
+          <div className="mx-auto max-w-7xl space-y-3 px-4 py-3 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {itensSoltosVisiveis.map((item) => {
+                const active = isActive(item.to);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={closeMenu}
+                    className={`relative flex min-h-12 items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-all ${
+                      active
+                        ? "bg-linear-to-r from-primary to-accent-yellow text-white shadow-lg"
+                        : "text-gray-300 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="text-lg" aria-hidden="true">
+                        {item.icon}
+                      </span>
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2">
+              {gruposVisiveis.map((grupo) => {
+                const aberto = Boolean(gruposAbertos[grupo.id]);
+
+                return (
+                  <div key={grupo.id} className="overflow-hidden rounded-lg border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => toggleGrupo(grupo.id)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-gray-200 transition-colors hover:bg-white/10"
+                      aria-expanded={aberto}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="text-lg" aria-hidden="true">
+                          {grupo.icon}
+                        </span>
+                        {grupo.label}
+                      </span>
+                      <span
+                        className={`text-xs transition-transform duration-200 ${aberto ? "rotate-90" : ""}`}
+                        aria-hidden="true"
+                      >
+                        ▶
+                      </span>
+                    </button>
+
+                    {aberto && (
+                      <div className="grid grid-cols-1 gap-2 border-t border-white/10 bg-black/20 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {grupo.itens.map((item) => {
+                          const active = isActive(item.to);
+
+                          return (
+                            <Link
+                              key={item.to}
+                              to={item.to}
+                              onClick={closeMenu}
+                              className={`relative flex min-h-12 items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-all ${
+                                active
+                                  ? "bg-linear-to-r from-primary to-accent-yellow text-white shadow-lg"
+                                  : "text-gray-300 hover:bg-white/10 hover:text-white"
+                              }`}
+                            >
+                              <span className="flex min-w-0 items-center gap-3">
+                                <span className="text-lg" aria-hidden="true">
+                                  {item.icon}
+                                </span>
+                                <span className="truncate">{item.label}</span>
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-white/10 pt-3 lg:hidden">
+              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                <div className="truncate text-sm font-semibold text-white">
+                  {usuario?.nome}
+                </div>
+                <div className="mt-1 text-xs text-accent-cream">{perfilLabel}</div>
+              </div>
+            </div>
           </div>
         </div>
       )}
     </nav>
   );
 }
-
-// Sub-componentes para manter o código limpo
-const NavLink = ({ to, active, children }) => (
-  <Link
-    to={to}
-    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
-      active
-        ? "bg-linear-to-r from-primary to-accent-yellow text-white shadow-lg scale-105"
-        : "text-gray-300 hover:bg-white/10 hover:text-white"
-    }`}
-  >
-    {children}
-  </Link>
-);
-
-const MobileNavLink = ({ to, active, onClick, children }) => (
-  <Link
-    to={to}
-    onClick={onClick}
-    className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-      active
-        ? "bg-linear-to-r from-primary to-accent-yellow text-white"
-        : "text-gray-300 hover:bg-white/10"
-    }`}
-  >
-    {children}
-  </Link>
-);
-
-// Ícones simples
-const MenuIcon = () => (
-  <svg
-    className="w-6 h-6"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M4 6h16M4 12h16M4 18h16"
-    />
-  </svg>
-);
-const CloseIcon = () => (
-  <svg
-    className="w-6 h-6"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M6 18L18 6M6 6l12 12"
-    />
-  </svg>
-);
-const LogoutIcon = () => (
-  <svg
-    className="w-4 h-4"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-    />
-  </svg>
-);

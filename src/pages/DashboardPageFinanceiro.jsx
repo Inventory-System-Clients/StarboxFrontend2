@@ -246,7 +246,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <Button
-          onClick={() => navigate("/financeiro/avisos")}
+          onClick={() => navigate("/alertas")}
           variant="outline"
           className="border-green-300 text-green-700 hover:bg-green-50"
         >
@@ -353,7 +353,7 @@ export default function DashboardPage() {
                   Contas Empresariais
                 </Button>
                 <Button
-                  onClick={() => navigate("/financeiro/avisos")}
+                  onClick={() => navigate("/alertas")}
                   variant="outline"
                   className="border-yellow-300 text-yellow-600 hover:bg-yellow-50"
                 >
@@ -404,7 +404,7 @@ export default function DashboardPage() {
                     ao vencimento
                   </p>
                   <button
-                    onClick={() => navigate("/financeiro/avisos")}
+                    onClick={() => navigate("/alertas")}
                     className="text-sm text-yellow-700 underline hover:text-yellow-900"
                     data-testid="link-view-alerts"
                   >
@@ -544,7 +544,7 @@ export default function DashboardPage() {
               className="bg-linear-to-br from-red-500 to-red-600 rounded-xl shadow-md p-6 text-white card-hover cursor-pointer"
               data-testid="card-due-today"
               title="Contas com status urgente"
-              onClick={() => navigate("/financeiro/avisos")}
+              onClick={() => navigate("/alertas")}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-white/20 rounded-lg">
@@ -570,7 +570,7 @@ export default function DashboardPage() {
               className="bg-linear-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-md p-6 text-white card-hover cursor-pointer"
               data-testid="card-due-3-days"
               title="Contas que vencem nos próximos 3 dias (status: Em Aberto)"
-              onClick={() => navigate("/financeiro/avisos")}
+              onClick={() => navigate("/alertas")}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-white/20 rounded-lg">
