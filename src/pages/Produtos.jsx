@@ -11,42 +11,50 @@ import {
   ConfirmDialog,
   AlertBox,
 } from "../components/UIComponents";
-import { PageLoader, EmptyState } from "../components/Loading";
+import { EmptyState } from "../components/Loading";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { ListFilterBar, FilterField } from "../components/ListFilterBar";
+import { PaginationControls } from "../components/PaginationControls";
 
 export function Produtos() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const [produtos, setProdutos] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
   const [produtoParaDeletar, setProdutoParaDeletar] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("");
-  const [mostrarInativos, setMostrarInativos] = useState(false);
+  // Lista completa só para popular o filtro de categoria e as métricas do
+  // topo (produtos é um catálogo pequeno, não a tabela navegável em si)
+  const [todosProdutos, setTodosProdutos] = useState([]);
 
-  useEffect(() => {
-    carregarProdutos();
-  }, [mostrarInativos]); // Recarrega quando o filtro muda
+  const listaProdutos = useFilteredList({
+    fetcher: (filtros, paginacao) =>
+      api.get("/produtos", {
+        params: {
+          categoria: filtros.categoria || undefined,
+          incluirInativos: filtros.incluirInativos || undefined,
+          ...paginacao,
+        },
+      }),
+    initialFilters: { categoria: "", incluirInativos: "" },
+    pageSize: 20,
+  });
 
-  const carregarProdutos = async () => {
+  const carregarTodosProdutos = async () => {
     try {
-      setLoading(true);
-      const urlProdutos = mostrarInativos
-        ? "/produtos?incluirInativos=true&all=true"
-        : "/produtos?all=true";
-      const response = await api.get(urlProdutos);
-      setProdutos(response.data);
+      const response = await api.get("/produtos", {
+        params: { incluirInativos: "true", all: true },
+      });
+      setTodosProdutos(response.data || []);
     } catch (error) {
-      setError(
-        "Erro ao carregar produtos: " +
-          (error.response?.data?.error || error.message),
-      );
-    } finally {
-      setLoading(false);
+      console.error("Erro ao carregar métricas de produtos:", error);
     }
   };
+
+  useEffect(() => {
+    carregarTodosProdutos();
+  }, []);
 
   const handleDelete = async () => {
     try {
@@ -61,7 +69,10 @@ export function Produtos() {
         );
       }
 
-      carregarProdutos();
+      carregarTodosProdutos();
+      if (listaProdutos.hasSearched) {
+        listaProdutos.goToPage(listaProdutos.pagination.page);
+      }
       setDeleteId(null);
       setProdutoParaDeletar(null);
     } catch (error) {
@@ -80,22 +91,20 @@ export function Produtos() {
   };
 
   const categorias = [
-    ...new Set(produtos.map((p) => p.categoria).filter(Boolean)),
+    ...new Set(todosProdutos.map((p) => p.categoria).filter(Boolean)),
   ];
-  const produtosFiltrados = filtroCategoria
-    ? produtos.filter((p) => p.categoria === filtroCategoria)
-    : produtos;
+  const produtosFiltrados = listaProdutos.data;
 
   const stats = [
     {
       label: "Total de Produtos",
-      value: produtos.length,
+      value: todosProdutos.length,
       icon: "🧸",
       gradient: "bg-gradient-to-br from-pink-500 to-pink-600",
     },
     {
       label: "Produtos Ativos",
-      value: produtos.filter((p) => p.ativo).length,
+      value: todosProdutos.filter((p) => p.ativo).length,
       icon: "✅",
       gradient: "bg-gradient-to-br from-green-500 to-green-600",
     },
@@ -112,10 +121,10 @@ export function Produtos() {
     stats.push({
       label: "Valor Médio",
       value:
-        produtos.length > 0
+        todosProdutos.length > 0
           ? `R$ ${(
-              produtos.reduce((sum, p) => sum + Number(p.preco || 0), 0) /
-              produtos.length
+              todosProdutos.reduce((sum, p) => sum + Number(p.preco || 0), 0) /
+              todosProdutos.length
             ).toFixed(2)}`
           : "R$ 0,00",
       icon: "💰",
@@ -239,8 +248,6 @@ export function Produtos() {
       ? columns.filter((coluna) => !colunasOcultasParaAbastecedor.has(coluna.key))
       : columns;
 
-  if (loading) return <PageLoader />;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#62A1D9] via-[#A6806A] to-[#24094E] text-[#24094E]">
       <Navbar />
@@ -273,54 +280,70 @@ export function Produtos() {
 
         <StatsGrid stats={stats} />
 
-        <div className="card-gradient">
-          {/* Filtros */}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            {categorias.length > 0 && (
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Filtrar por Categoria
-                </label>
-                <select
-                  value={filtroCategoria}
-                  onChange={(e) => setFiltroCategoria(e.target.value)}
-                  className="select-field w-full"
-                >
-                  <option value="">Todas as Categorias</option>
-                  {categorias.map((categoria) => (
-                    <option key={categoria} value={categoria}>
-                      {categoria}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={mostrarInativos}
-                  onChange={(e) => setMostrarInativos(e.target.checked)}
-                  className="w-4 h-4 text-primary focus:ring-primary"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Mostrar produtos inativos
-                </span>
-              </label>
-            </div>
-          </div>
+        <ListFilterBar
+          onSearch={listaProdutos.search}
+          onReset={listaProdutos.resetFilters}
+          loading={listaProdutos.loading}
+        >
+          {categorias.length > 0 && (
+            <FilterField label="Categoria">
+              <select
+                value={listaProdutos.filters.categoria}
+                onChange={(e) =>
+                  listaProdutos.setFilter("categoria", e.target.value)
+                }
+                className="select-field"
+              >
+                <option value="">Todas as Categorias</option>
+                {categorias.map((categoria) => (
+                  <option key={categoria} value={categoria}>
+                    {categoria}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+          )}
+          <FilterField label="Status">
+            <label className="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors h-10.5">
+              <input
+                type="checkbox"
+                checked={listaProdutos.filters.incluirInativos === "true"}
+                onChange={(e) =>
+                  listaProdutos.setFilter(
+                    "incluirInativos",
+                    e.target.checked ? "true" : "",
+                  )
+                }
+                className="w-4 h-4 text-primary focus:ring-primary"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Mostrar produtos inativos
+              </span>
+            </label>
+          </FilterField>
+        </ListFilterBar>
 
-          {produtosFiltrados.length > 0 ? (
-            <DataTable headers={colunasVisiveis} data={produtosFiltrados} />
+        <div className="card-gradient">
+          {!listaProdutos.hasSearched ? (
+            <EmptyState
+              icon="🔍"
+              title="Use os filtros para buscar"
+              message="Escolha uma categoria e/ou clique em Buscar para ver os produtos cadastrados."
+            />
+          ) : produtosFiltrados.length > 0 ? (
+            <>
+              <DataTable headers={colunasVisiveis} data={produtosFiltrados} />
+              <PaginationControls
+                pagination={listaProdutos.pagination}
+                onPageChange={listaProdutos.goToPage}
+                loading={listaProdutos.loading}
+              />
+            </>
           ) : (
             <EmptyState
               icon="🧸"
               title="Nenhum produto encontrado"
-              message={
-                filtroCategoria
-                  ? "Não há produtos cadastrados nesta categoria. Experimente selecionar outra categoria."
-                  : "Cadastre seu primeiro produto para começar!"
-              }
+              message="Não há produtos cadastrados para os filtros selecionados."
               action={{
                 label: "Novo Produto",
                 onClick: () => navigate("/produtos/novo"),

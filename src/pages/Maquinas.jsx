@@ -12,50 +12,42 @@ import {
   ConfirmDialog,
   AlertBox,
 } from "../components/UIComponents";
-import { PageLoader, EmptyState } from "../components/Loading";
+import { EmptyState } from "../components/Loading";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { ListFilterBar, FilterField } from "../components/ListFilterBar";
+import { PaginationControls } from "../components/PaginationControls";
 
 export function Maquinas() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const [maquinas, setMaquinas] = useState([]);
   const [lojas, setLojas] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
   const [maquinaParaDeletar, setMaquinaParaDeletar] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [filtroLoja, setFiltroLoja] = useState("");
-  const [filtroMaquina, setFiltroMaquina] = useState("");
-  const [mostrarInativas, setMostrarInativas] = useState(false);
+
+  const listaMaquinas = useFilteredList({
+    fetcher: (filtros, paginacao) =>
+      api.get("/maquinas", {
+        params: {
+          lojaId: filtros.lojaId || undefined,
+          busca: filtros.busca || undefined,
+          incluirInativas: filtros.incluirInativas || undefined,
+          ...paginacao,
+        },
+      }),
+    initialFilters: { lojaId: "", busca: "", incluirInativas: "" },
+    pageSize: 20,
+  });
 
   useEffect(() => {
-    carregarDados();
-  }, [mostrarInativas]); // Recarrega quando o filtro muda
-
-  const carregarDados = async () => {
-    try {
-      setLoading(true);
-      const urlMaquinas = mostrarInativas
-        ? "/maquinas?incluirInativas=true&all=true"
-        : "/maquinas?all=true";
-
-      const [maquinasRes, lojasRes] = await Promise.all([
-        api.get(urlMaquinas),
-        api.get("/lojas", { params: { all: true } }),
-      ]);
-      console.log("Máquinas recebidas:", maquinasRes.data);
-      console.log("Lojas recebidas:", lojasRes.data);
-      setMaquinas(maquinasRes.data);
-      setLojas(lojasRes.data);
-    } catch (error) {
-      setError(
-        "Erro ao carregar dados: " +
-          (error.response?.data?.error || error.message),
+    api
+      .get("/lojas", { params: { all: true } })
+      .then((res) => setLojas(res.data || []))
+      .catch((err) =>
+        console.error("Erro ao carregar lojas para filtro:", err),
       );
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   const handleDelete = async () => {
     try {
@@ -70,7 +62,9 @@ export function Maquinas() {
         );
       }
 
-      carregarDados();
+      if (listaMaquinas.hasSearched) {
+        listaMaquinas.goToPage(listaMaquinas.pagination.page);
+      }
       setDeleteId(null);
       setMaquinaParaDeletar(null);
     } catch (error) {
@@ -88,55 +82,46 @@ export function Maquinas() {
     setMaquinaParaDeletar(maquina);
   };
 
-  // Filtros locais por loja e código (backend já filtra por ativo/inativo)
-  const termoLoja = filtroLoja.trim().toLowerCase();
-  const termoMaquina = filtroMaquina.trim().toLowerCase();
-  const maquinasFiltradas = maquinas.filter((maquina) => {
-    const loja = lojas.find((l) => l.id === maquina.lojaId);
-    const correspondeLoja = termoLoja
-      ? [loja?.nome, loja?.razaoSocial, loja?.cidade, loja?.endereco]
-          .filter(Boolean)
-          .some((valor) => String(valor).toLowerCase().includes(termoLoja))
-      : true;
-    const correspondeMaquina = termoMaquina
-      ? [maquina?.codigo, maquina?.nome, maquina?.modelo, maquina?.tipo]
-          .filter(Boolean)
-          .some((valor) => String(valor).toLowerCase().includes(termoMaquina))
-      : true;
-
-    return correspondeLoja && correspondeMaquina;
-  });
+  const maquinasFiltradas = listaMaquinas.data;
 
   const stats = [
     {
       label: "Total de Máquinas",
-      value: maquinas.length,
+      value: listaMaquinas.pagination.total,
       icon: "🎰",
       gradient: "bg-gradient-to-br from-purple-500 to-purple-600",
     },
     {
       label: "Máquinas Ativas",
-      value: maquinas.filter((m) => m.ativo).length,
+      value: maquinasFiltradas.filter((m) => m.ativo).length,
       icon: "✅",
       gradient: "bg-gradient-to-br from-green-500 to-green-600",
+      subtitle: "nesta página",
     },
     {
       label: "Capacidade Total",
-      value: maquinas.reduce((sum, m) => sum + (m.capacidadePadrao || 0), 0),
+      value: maquinasFiltradas.reduce(
+        (sum, m) => sum + (m.capacidadePadrao || 0),
+        0,
+      ),
       icon: "📦",
       gradient: "bg-gradient-to-br from-blue-500 to-blue-600",
+      subtitle: "nesta página",
     },
     {
       label: "Valor Médio Ficha",
       value:
-        maquinas.length > 0
+        maquinasFiltradas.length > 0
           ? `R$ ${(
-              maquinas.reduce((sum, m) => sum + (m.valorFicha || 0), 0) /
-              maquinas.length
+              maquinasFiltradas.reduce(
+                (sum, m) => sum + (m.valorFicha || 0),
+                0,
+              ) / maquinasFiltradas.length
             ).toFixed(2)}`
           : "R$ 0,00",
       icon: "💰",
       gradient: "bg-gradient-to-br from-yellow-500 to-yellow-600",
+      subtitle: "nesta página",
     },
   ];
 
@@ -187,8 +172,8 @@ export function Maquinas() {
       key: "loja",
       label: "Ponto",
       render: (maquina) => {
-        console.log("Buscando loja para máquina:", maquina.lojaId, "em", lojas);
-        const loja = lojas.find((l) => l.id === maquina.lojaId);
+        const loja =
+          maquina.loja || lojas.find((l) => l.id === maquina.lojaId);
         return loja ? loja.nome : `N/A (ID: ${maquina.lojaId})`;
       },
     },
@@ -225,8 +210,6 @@ export function Maquinas() {
     
   ];
 
-  if (loading) return <PageLoader />;
-
   return (
     <div className="min-h-screen bg-background-light bg-pattern teddy-pattern">
       <Navbar />
@@ -257,63 +240,79 @@ export function Maquinas() {
           />
         )}
 
-        <StatsGrid stats={stats} />
+        {listaMaquinas.hasSearched && <StatsGrid stats={stats} />}
+
+        <ListFilterBar
+          onSearch={listaMaquinas.search}
+          onReset={listaMaquinas.resetFilters}
+          loading={listaMaquinas.loading}
+        >
+          <FilterField label="Ponto">
+            <select
+              className="input-field"
+              value={listaMaquinas.filters.lojaId}
+              onChange={(e) =>
+                listaMaquinas.setFilter("lojaId", e.target.value)
+              }
+            >
+              <option value="">Todos os pontos</option>
+              {lojas.map((loja) => (
+                <option key={loja.id} value={loja.id}>
+                  {loja.nome}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Buscar máquina">
+            <input
+              type="text"
+              value={listaMaquinas.filters.busca}
+              onChange={(e) => listaMaquinas.setFilter("busca", e.target.value)}
+              placeholder="Digite nome ou código"
+              className="input-field"
+            />
+          </FilterField>
+          <FilterField label="Status">
+            <label className="flex items-center gap-2 cursor-pointer h-10.5">
+              <input
+                type="checkbox"
+                checked={listaMaquinas.filters.incluirInativas === "true"}
+                onChange={(e) =>
+                  listaMaquinas.setFilter(
+                    "incluirInativas",
+                    e.target.checked ? "true" : "",
+                  )
+                }
+                className="w-5 h-5 text-primary rounded focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-sm font-semibold text-gray-700">
+                Incluir inativas
+              </span>
+            </label>
+          </FilterField>
+        </ListFilterBar>
 
         <div className="card-gradient">
-          {/* Filtros */}
-          <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Buscar por Loja
-              </label>
-              <input
-                type="text"
-                value={filtroLoja}
-                onChange={(e) => setFiltroLoja(e.target.value)}
-                placeholder="Digite o nome da loja"
-                className="input-field"
+          {!listaMaquinas.hasSearched ? (
+            <EmptyState
+              icon="🔍"
+              title="Use os filtros para buscar"
+              message="Escolha um ponto e/ou busque por nome/código e clique em Buscar para ver as máquinas cadastradas."
+            />
+          ) : maquinasFiltradas.length > 0 ? (
+            <>
+              <DataTable headers={columns} data={maquinasFiltradas} />
+              <PaginationControls
+                pagination={listaMaquinas.pagination}
+                onPageChange={listaMaquinas.goToPage}
+                loading={listaMaquinas.loading}
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Buscar por Maquina
-              </label>
-              <input
-                type="text"
-                value={filtroMaquina}
-                onChange={(e) => setFiltroMaquina(e.target.value)}
-                placeholder="Digite nome, codigo ou modelo"
-                className="input-field"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={mostrarInativas}
-                  onChange={(e) => setMostrarInativas(e.target.checked)}
-                  className="w-5 h-5 text-primary rounded focus:ring-2 focus:ring-primary"
-                />
-                <span className="text-sm font-semibold text-gray-700">
-                  Mostrar máquinas inativas
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {maquinasFiltradas.length > 0 ? (
-            <DataTable headers={columns} data={maquinasFiltradas} />
+            </>
           ) : (
             <EmptyState
               icon="🎰"
               title="Nenhuma máquina encontrada"
-              message={
-                filtroLoja || filtroMaquina
-                  ? "Nenhuma máquina corresponde aos filtros informados. Ajuste o ponto ou o código pesquisado."
-                  : "Cadastre sua primeira máquina para começar!"
-              }
+              message="Nenhuma máquina corresponde aos filtros informados."
               action={{
                 label: "Nova Máquina",
                 onClick: () => navigate("/maquinas/nova"),

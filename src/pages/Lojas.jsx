@@ -10,46 +10,39 @@ import {
   ConfirmDialog,
   Badge,
 } from "../components/UIComponents";
-import { PageLoader } from "../components/Loading";
+import { EmptyState } from "../components/Loading";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { ListFilterBar, FilterField } from "../components/ListFilterBar";
+import { PaginationControls } from "../components/PaginationControls";
 
 export function Lojas() {
   const { usuario } = useAuth();
-  const [lojas, setLojas] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filtroNome, setFiltroNome] = useState("");
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
     lojaId: null,
   });
 
-  useEffect(() => {
-    carregarLojas();
-  }, []);
-
-  const carregarLojas = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get("/lojas", { params: { all: true } });
-      setLojas(response.data);
-      setError("");
-    } catch (error) {
-      setError(
-        "Erro ao carregar lojas: " +
-          (error.response?.data?.error || error.message),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  const listaLojas = useFilteredList({
+    fetcher: (filtros, paginacao) =>
+      api.get("/lojas", {
+        params: {
+          busca: filtros.busca || undefined,
+          ativo: filtros.ativo || undefined,
+          ...paginacao,
+        },
+      }),
+    initialFilters: { busca: "", ativo: "" },
+    pageSize: 20,
+  });
 
   const handleDelete = async (id) => {
     try {
       await api.delete(`/lojas/${id}`);
-      setLojas(lojas.filter((loja) => loja.id !== id));
       setDeleteDialog({ open: false, lojaId: null });
       setError("");
+      listaLojas.goToPage(listaLojas.pagination.page);
     } catch (error) {
       setDeleteDialog({ open: false, lojaId: null });
       setError(
@@ -59,26 +52,7 @@ export function Lojas() {
     }
   };
 
-  const termoBusca = filtroNome.trim().toLowerCase();
-
-  // IDs permitidos para o controlador de estoque
-  let idsPermitidos = [];
-  if (usuario?.role === "CONTROLADOR_ESTOQUE") {
-    // Tente pegar do campo lojasPermitidas (array de ids) ou permissoesLojas (array de objetos)
-    if (Array.isArray(usuario.lojasPermitidas) && usuario.lojasPermitidas.length > 0) {
-      idsPermitidos = usuario.lojasPermitidas;
-    } else if (Array.isArray(usuario.permissoesLojas) && usuario.permissoesLojas.length > 0) {
-      idsPermitidos = usuario.permissoesLojas.map((p) => p.lojaId || p.id);
-    }
-  }
-
-  const lojasFiltradas = lojas.filter((loja) => {
-    // Se for controlador, só mostra as permitidas
-    if (usuario?.role === "CONTROLADOR_ESTOQUE" && idsPermitidos.length > 0) {
-      if (!idsPermitidos.includes(loja.id)) return false;
-    }
-    return termoBusca ? loja.nome?.toLowerCase().includes(termoBusca) : true;
-  });
+  const lojasFiltradas = listaLojas.data;
 
   const headers = [
     {
@@ -206,8 +180,6 @@ export function Lojas() {
     },
   ];
 
-  if (loading) return <PageLoader />;
-
   return (
     <div className="min-h-screen bg-linear-to-br from-[#62A1D9] via-[#A6806A] to-[#24094E] text-[#24094E]">
       <Navbar />
@@ -246,12 +218,15 @@ export function Lojas() {
           <AlertBox type="error" message={error} onClose={() => setError("")} />
         )}
 
+        {listaLojas.hasSearched && (
         <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="card bg-linear-to-br from-purple-500 to-purple-600 text-white">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm opacity-90">Total de Lojas</p>
-                <p className="text-3xl font-bold">{lojas.length}</p>
+                <p className="text-3xl font-bold">
+                  {listaLojas.pagination.total}
+                </p>
               </div>
               <svg
                 className="w-12 h-12 opacity-80"
@@ -272,8 +247,9 @@ export function Lojas() {
               <div>
                 <p className="text-sm opacity-90">Lojas Ativas</p>
                 <p className="text-3xl font-bold">
-                  {lojas.filter((l) => l.ativo).length}
+                  {lojasFiltradas.filter((l) => l.ativo).length}
                 </p>
+                <p className="text-xs opacity-75">nesta página</p>
               </div>
               <svg
                 className="w-12 h-12 opacity-80"
@@ -294,11 +270,12 @@ export function Lojas() {
               <div>
                 <p className="text-sm opacity-90">Total de Máquinas</p>
                 <p className="text-3xl font-bold">
-                  {lojas.reduce(
+                  {lojasFiltradas.reduce(
                     (acc, loja) => acc + (loja.maquinas?.length || 0),
                     0,
                   )}
                 </p>
+                <p className="text-xs opacity-75">nesta página</p>
               </div>
               <svg
                 className="w-12 h-12 opacity-80"
@@ -310,29 +287,55 @@ export function Lojas() {
             </div>
           </div>
         </div>
+        )}
 
-        <div className="card mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Buscar loja por nome
-          </label>
-          <input
-            type="text"
-            value={filtroNome}
-            onChange={(e) => setFiltroNome(e.target.value)}
-            placeholder="Digite o nome do ponto"
-            className="input-field"
+        <ListFilterBar
+          onSearch={listaLojas.search}
+          onReset={listaLojas.resetFilters}
+          loading={listaLojas.loading}
+        >
+          <FilterField label="Buscar por nome ou cidade">
+            <input
+              type="text"
+              value={listaLojas.filters.busca}
+              onChange={(e) => listaLojas.setFilter("busca", e.target.value)}
+              placeholder="Digite o nome ou cidade do ponto"
+              className="input-field"
+            />
+          </FilterField>
+          <FilterField label="Status">
+            <select
+              className="input-field"
+              value={listaLojas.filters.ativo}
+              onChange={(e) => listaLojas.setFilter("ativo", e.target.value)}
+            >
+              <option value="">Todos</option>
+              <option value="true">Ativas</option>
+              <option value="false">Inativas</option>
+            </select>
+          </FilterField>
+        </ListFilterBar>
+
+        {!listaLojas.hasSearched ? (
+          <EmptyState
+            icon="🔍"
+            title="Use os filtros para buscar"
+            message="Digite um nome/cidade e/ou escolha o status acima e clique em Buscar para ver os pontos cadastrados."
           />
-        </div>
-
-        <DataTable
-          headers={headers}
-          data={lojasFiltradas}
-          emptyMessage={
-            filtroNome
-              ? "Nenhum ponto encontrado para o nome pesquisado."
-              : "Nenhum ponto cadastrado. Clique em 'Novo Ponto' para começar."
-          }
-        />
+        ) : (
+          <>
+            <DataTable
+              headers={headers}
+              data={lojasFiltradas}
+              emptyMessage="Nenhum ponto encontrado para os filtros selecionados."
+            />
+            <PaginationControls
+              pagination={listaLojas.pagination}
+              onPageChange={listaLojas.goToPage}
+              loading={listaLojas.loading}
+            />
+          </>
+        )}
       </div>
 
       <ConfirmDialog
