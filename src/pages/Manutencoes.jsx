@@ -1,15 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import { AlertBox, PageHeader } from "../components/UIComponents";
-import { PageLoader } from "../components/Loading";
+import { PageLoader, EmptyState } from "../components/Loading";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../contexts/AuthContext";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { ListFilterBar, FilterField } from "../components/ListFilterBar";
+import { PaginationControls } from "../components/PaginationControls";
+
+const STATUS_PERMITIDOS = [
+  "pendente",
+  "em_andamento",
+  "feito",
+  "concluida",
+  "cancelada",
+];
+
+// Janela de histórico usada só pelo alerta de "manutenções persistentes":
+// o alerta compara as 2 últimas manutenções concluídas de cada máquina, então
+// não precisa do histórico completo, apenas de um período recente o
+// suficiente pra cobrir o intervalo de alerta.
+const JANELA_PERSISTENTES_DIAS = 180;
 
 const INTERVALO_ALERTA_PERSISTENTE_DIAS = 45;
-const STATUS_CONCLUIDOS = ["feito", "concluida"];
-
-const statusEhConcluido = (status) =>
-  STATUS_CONCLUIDOS.includes(String(status || "").toLowerCase());
 
 const manutencaoAtribuidaAoUsuario = (manutencao, usuarioId) =>
   String(manutencao?.funcionarioId || "") === String(usuarioId || "");
@@ -391,15 +404,55 @@ function Manutencoes() {
   const { usuario } = useAuth();
   const isAdmin = usuario?.role === "ADMIN";
 
-  const [manutencoes, setManutencoes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [filtroLoja, setFiltroLoja] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("nao_concluidas");
-  const [filtroDataInicio, setFiltroDataInicio] = useState("");
-  const [filtroDataFim, setFiltroDataFim] = useState("");
+  const listaManutencoes = useFilteredList({
+    fetcher: (filtros, paginacao) =>
+      api.get("/manutencoes", {
+        params: {
+          lojaId: filtros.lojaId || undefined,
+          status: filtros.status || undefined,
+          dataInicio: filtros.dataInicio || undefined,
+          dataFim: filtros.dataFim || undefined,
+          ...paginacao,
+        },
+      }),
+    initialFilters: {
+      lojaId: "",
+      status: "nao_concluidas",
+      dataInicio: "",
+      dataFim: "",
+    },
+    pageSize: 20,
+  });
+
+  // Manutenções concluídas recentes, usadas só pelo alerta de "manutenções
+  // persistentes" abaixo — busca separada da listagem principal pra não
+  // prender a tabela navegável a um histórico maior do que ela precisa.
+  const [manutencoesConcluidasRecentes, setManutencoesConcluidasRecentes] =
+    useState([]);
+
+  const carregarManutencoesConcluidasRecentes = async () => {
+    try {
+      const dataInicio = new Date(
+        Date.now() - JANELA_PERSISTENTES_DIAS * 24 * 60 * 60 * 1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+      const res = await api.get("/manutencoes", {
+        params: { all: true, dataInicio },
+      });
+      setManutencoesConcluidasRecentes(res.data || []);
+    } catch (err) {
+      console.error(
+        "Erro ao buscar manutenções concluídas recentes:",
+        err?.response?.data || err,
+      );
+      setManutencoesConcluidasRecentes([]);
+    }
+  };
 
   const [showNovaManutencao, setShowNovaManutencao] = useState(false);
   const [novaManutencao, setNovaManutencao] = useState({
@@ -429,28 +482,25 @@ function Manutencoes() {
   const [pecasCarrinho, setPecasCarrinho] = useState([]);
   const [carregandoCarrinho, setCarregandoCarrinho] = useState(false);
 
+  // Reconsulta a listagem (mantendo página/filtros atuais) e o histórico
+  // recente do alerta de persistência — chamado após criar/editar/concluir/
+  // excluir uma manutenção.
   const carregarManutencoes = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get("/manutencoes", { params: { all: true } });
-      setManutencoes(res.data || []);
-    } catch (err) {
-      console.error("Erro ao buscar manutenções:", err?.response?.data || err);
-      setError(err?.response?.data?.error || "Erro ao buscar manutenções.");
-    } finally {
-      setLoading(false);
-    }
+    await Promise.all([
+      listaManutencoes.hasSearched
+        ? listaManutencoes.goToPage(listaManutencoes.pagination.page)
+        : listaManutencoes.search(),
+      carregarManutencoesConcluidasRecentes(),
+    ]);
   };
 
   const carregarDadosFormulario = async () => {
     try {
-      const [lojasRes, maquinasRes, funcionariosRes] = await Promise.all([
-        api.get("/lojas", { params: { all: true } }),
+      const [maquinasRes, funcionariosRes] = await Promise.all([
         api.get("/maquinas", { params: { all: true } }),
         api.get("/usuarios/funcionarios"),
       ]);
 
-      setLojas(lojasRes.data || []);
       setMaquinas(maquinasRes.data || []);
       setFuncionarios(funcionariosRes.data || []);
     } catch (err) {
@@ -458,7 +508,7 @@ function Manutencoes() {
         "Erro ao carregar dados auxiliares:",
         err?.response?.data || err,
       );
-      setError("Erro ao carregar lojas, máquinas e funcionários.");
+      setError("Erro ao carregar máquinas e funcionários.");
     }
   };
 
@@ -545,7 +595,18 @@ function Manutencoes() {
   };
 
   useEffect(() => {
-    carregarManutencoes();
+    // Busca inicial: diferente das outras listagens, aqui a visão padrão
+    // ("não concluídas") é o motivo principal de abrir a página — é uma
+    // lista pequena e operacional, não um histórico grande.
+    listaManutencoes.search();
+    carregarManutencoesConcluidasRecentes();
+    api
+      .get("/lojas", { params: { all: true } })
+      .then((res) => setLojas(res.data || []))
+      .catch((err) =>
+        console.error("Erro ao carregar lojas para filtro:", err),
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -601,59 +662,26 @@ function Manutencoes() {
     [destinatariosWhatsApp],
   );
 
-  const lojasFiltro = useMemo(() => {
-    return Array.from(
-      new Set(manutencoes.map((m) => m.loja?.nome).filter(Boolean)),
-    );
-  }, [manutencoes]);
-
-  const statusFiltro = useMemo(() => {
-    return Array.from(
-      new Set(manutencoes.map((m) => m.status).filter(Boolean)),
-    );
-  }, [manutencoes]);
-
-  const filtradas = useMemo(() => {
-    const dataInicioMs = filtroDataInicio
-      ? new Date(`${filtroDataInicio}T00:00:00`).getTime()
-      : null;
-    const dataFimMs = filtroDataFim
-      ? new Date(`${filtroDataFim}T23:59:59.999`).getTime()
-      : null;
-
-    return manutencoes.filter((m) => {
-      if (!isAdmin) {
-        if (!manutencaoAtribuidaAoUsuario(m, usuario?.id)) return false;
-      }
-
-      const dataManutencaoMs = new Date(m.createdAt).getTime();
-      if (!Number.isFinite(dataManutencaoMs)) return false;
-
-      const okLoja = !filtroLoja || m.loja?.nome === filtroLoja;
-      const okStatus =
-        filtroStatus === "nao_concluidas"
-          ? !statusEhConcluido(m.status)
-          : !filtroStatus || m.status === filtroStatus;
-      const okDataInicio =
-        dataInicioMs === null || dataManutencaoMs >= dataInicioMs;
-      const okDataFim = dataFimMs === null || dataManutencaoMs <= dataFimMs;
-
-      return okLoja && okStatus && okDataInicio && okDataFim;
-    });
-  }, [
-    filtroDataFim,
-    filtroDataInicio,
-    filtroLoja,
-    filtroStatus,
-    isAdmin,
-    manutencoes,
-    usuario?.id,
-  ]);
+  // Backend já restringe não-admin às próprias manutenções (isAdminLike),
+  // exceto GERENCIADOR — que o backend trata como admin mas esta tela
+  // sempre restringiu à própria lista. Mantido para não mudar esse
+  // comportamento específico.
+  const filtradas = useMemo(
+    () =>
+      isAdmin
+        ? listaManutencoes.data
+        : listaManutencoes.data.filter((m) =>
+            manutencaoAtribuidaAoUsuario(m, usuario?.id),
+          ),
+    [isAdmin, listaManutencoes.data, usuario?.id],
+  );
 
   const manutencoesPersistentes = useMemo(() => {
     const manutencoesBase = isAdmin
-      ? manutencoes
-      : manutencoes.filter((m) => manutencaoAtribuidaAoUsuario(m, usuario?.id));
+      ? manutencoesConcluidasRecentes
+      : manutencoesConcluidasRecentes.filter((m) =>
+          manutencaoAtribuidaAoUsuario(m, usuario?.id),
+        );
 
     const limiteIntervaloMs =
       INTERVALO_ALERTA_PERSISTENTE_DIAS * 24 * 60 * 60 * 1000;
@@ -712,7 +740,7 @@ function Manutencoes() {
       );
 
     return persistentes;
-  }, [isAdmin, manutencoes, usuario?.id]);
+  }, [isAdmin, manutencoesConcluidasRecentes, usuario?.id]);
 
   const formatarDataHora = (valor) => {
     if (!valor) return "-";
@@ -1128,64 +1156,72 @@ function Manutencoes() {
           />
         )}
 
-        <div className="mb-4 flex flex-wrap gap-4">
-          <select
-            className="input-field"
-            value={filtroLoja}
-            onChange={(e) => setFiltroLoja(e.target.value)}
-          >
-            <option value="">Todas as lojas</option>
-            {lojasFiltro.map((loja) => (
-              <option key={loja} value={loja}>
-                {loja}
-              </option>
-            ))}
-          </select>
+        <ListFilterBar
+          onSearch={listaManutencoes.search}
+          onReset={listaManutencoes.resetFilters}
+          loading={listaManutencoes.loading}
+        >
+          <FilterField label="Ponto">
+            <select
+              className="input-field"
+              value={listaManutencoes.filters.lojaId}
+              onChange={(e) =>
+                listaManutencoes.setFilter("lojaId", e.target.value)
+              }
+            >
+              <option value="">Todos os pontos</option>
+              {lojas.map((loja) => (
+                <option key={loja.id} value={loja.id}>
+                  {loja.nome}
+                </option>
+              ))}
+            </select>
+          </FilterField>
 
-          <select
-            className="input-field"
-            value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value)}
-          >
-            <option value="nao_concluidas">Não concluídas</option>
-            <option value="">Todos os status</option>
-            {statusFiltro.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
+          <FilterField label="Status">
+            <select
+              className="input-field"
+              value={listaManutencoes.filters.status}
+              onChange={(e) =>
+                listaManutencoes.setFilter("status", e.target.value)
+              }
+            >
+              <option value="nao_concluidas">Não concluídas</option>
+              <option value="">Todos os status</option>
+              {STATUS_PERMITIDOS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </FilterField>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600">
-              Data inicial
-            </label>
+          <FilterField label="Data inicial">
             <input
               className="input-field"
               type="date"
-              value={filtroDataInicio}
-              onChange={(e) => setFiltroDataInicio(e.target.value)}
-              max={filtroDataFim || undefined}
+              value={listaManutencoes.filters.dataInicio}
+              onChange={(e) =>
+                listaManutencoes.setFilter("dataInicio", e.target.value)
+              }
+              max={listaManutencoes.filters.dataFim || undefined}
               aria-label="Filtrar data inicial"
-              title="Data inicial"
             />
-          </div>
+          </FilterField>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600">
-              Data final
-            </label>
+          <FilterField label="Data final">
             <input
               className="input-field"
               type="date"
-              value={filtroDataFim}
-              onChange={(e) => setFiltroDataFim(e.target.value)}
-              min={filtroDataInicio || undefined}
+              value={listaManutencoes.filters.dataFim}
+              onChange={(e) =>
+                listaManutencoes.setFilter("dataFim", e.target.value)
+              }
+              min={listaManutencoes.filters.dataInicio || undefined}
               aria-label="Filtrar data final"
-              title="Data final"
             />
-          </div>
-        </div>
+          </FilterField>
+        </ListFilterBar>
 
         {showNovaManutencao && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
@@ -1314,8 +1350,14 @@ function Manutencoes() {
           </div>
         )}
 
-        {loading ? (
+        {loading || (listaManutencoes.loading && !listaManutencoes.hasSearched) ? (
           <PageLoader />
+        ) : !listaManutencoes.hasSearched ? (
+          <EmptyState
+            icon="🔍"
+            title="Use os filtros para buscar"
+            message="Escolha um ponto/status/período acima e clique em Buscar para ver as manutenções."
+          />
         ) : (
           <div className="overflow-x-auto bg-white rounded-lg shadow">
             <table className="min-w-full divide-y divide-gray-200">
@@ -1415,6 +1457,11 @@ function Manutencoes() {
                 )}
               </tbody>
             </table>
+            <PaginationControls
+              pagination={listaManutencoes.pagination}
+              onPageChange={listaManutencoes.goToPage}
+              loading={listaManutencoes.loading}
+            />
           </div>
         )}
 
