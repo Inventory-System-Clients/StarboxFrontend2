@@ -176,7 +176,7 @@ export function LojaForm() {
 
   const carregarProdutos = async () => {
     try {
-      const response = await api.get("/produtos");
+      const response = await api.get("/produtos", { params: { all: true } });
       setProdutos(response.data || []);
     } catch (error) {
       console.error("Erro ao carregar produtos:", error);

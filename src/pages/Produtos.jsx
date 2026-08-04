@@ -34,8 +34,8 @@ export function Produtos() {
     try {
       setLoading(true);
       const urlProdutos = mostrarInativos
-        ? "/produtos?incluirInativos=true"
-        : "/produtos";
+        ? "/produtos?incluirInativos=true&all=true"
+        : "/produtos?all=true";
       const response = await api.get(urlProdutos);
       setProdutos(response.data);
     } catch (error) {

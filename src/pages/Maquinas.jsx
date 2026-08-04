@@ -36,12 +36,12 @@ export function Maquinas() {
     try {
       setLoading(true);
       const urlMaquinas = mostrarInativas
-        ? "/maquinas?incluirInativas=true"
-        : "/maquinas";
+        ? "/maquinas?incluirInativas=true&all=true"
+        : "/maquinas?all=true";
 
       const [maquinasRes, lojasRes] = await Promise.all([
         api.get(urlMaquinas),
-        api.get("/lojas"),
+        api.get("/lojas", { params: { all: true } }),
       ]);
       console.log("Máquinas recebidas:", maquinasRes.data);
       console.log("Lojas recebidas:", lojasRes.data);

@@ -116,7 +116,7 @@ export function Relatorios() {
   const carregarLojas = async () => {
     try {
       setLoadingLojas(true);
-      const response = await api.get("/lojas");
+      const response = await api.get("/lojas", { params: { all: true } });
       setLojas(response.data);
     } catch (error) {
       setError(
@@ -2387,7 +2387,9 @@ export function Relatorios() {
               ),
             })
             .catch(() => ({ data: null })),
-          api.get("/produtos").catch(() => ({ data: [] })),
+          api
+            .get("/produtos", { params: { all: true } })
+            .catch(() => ({ data: [] })),
           carregarQuebraCaixaPorLoja(
             lojaSelecionada,
             dataInicio,

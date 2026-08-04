@@ -24,7 +24,7 @@ export function EstoqueDepositoPrincipal() {
       setError("");
 
       // Buscar todas as lojas
-      const lojasResponse = await api.get("/lojas");
+      const lojasResponse = await api.get("/lojas", { params: { all: true } });
       const lojas = lojasResponse.data;
 
       // Encontrar a loja marcada como depósito principal

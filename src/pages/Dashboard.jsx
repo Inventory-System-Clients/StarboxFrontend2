@@ -2,7 +2,7 @@
 async function buscarSaldosDepositoPrincipal(produtoIds, api) {
   if (!Array.isArray(produtoIds) || produtoIds.length === 0) return {};
   try {
-    const lojasRes = await api.get("/lojas");
+    const lojasRes = await api.get("/lojas", { params: { all: true } });
     const deposito = (lojasRes.data || []).find((l) => l.isDepositoPrincipal);
     if (!deposito) return {};
     const estoqueRes = await api.get(`/estoque-lojas/${deposito.id}`);
@@ -47,7 +47,9 @@ export function Dashboard() {
     async function buscarManutencoesPendentes() {
       if (!usuario?.id) return;
       try {
-        const res = await api.get("/manutencoes?status=pendente");
+        const res = await api.get(
+          "/manutencoes?status=pendente&all=true",
+        );
         const pendentes = Array.isArray(res.data) ? res.data : [];
         const atribuida = pendentes.some((m) => m.funcionarioId === usuario.id);
         if (!cancelado) setTemManutencaoPendente(atribuida);
@@ -787,7 +789,7 @@ export function Dashboard() {
         (usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR")
       ) {
         try {
-          const lojasRes = await api.get("/lojas");
+          const lojasRes = await api.get("/lojas", { params: { all: true } });
           lojasParaAnalise = Array.isArray(lojasRes.data) ? lojasRes.data : [];
         } catch {
           lojasParaAnalise = [];
@@ -936,17 +938,21 @@ export function Dashboard() {
       const requisicoes = [
         bloquearVisualizacaoLojasEMaquinas
           ? Promise.resolve({ data: [] })
-          : api.get("/lojas").catch((err) => {
-              console.error("Erro ao carregar lojas:", err.message);
-              return { data: [] };
-            }),
+          : api
+              .get("/lojas", { params: { all: true } })
+              .catch((err) => {
+                console.error("Erro ao carregar lojas:", err.message);
+                return { data: [] };
+              }),
         bloquearVisualizacaoLojasEMaquinas
           ? Promise.resolve({ data: [] })
-          : api.get("/maquinas").catch((err) => {
-              console.error("Erro ao carregar máquinas:", err.message);
-              return { data: [] };
-            }),
-        api.get("/produtos").catch((err) => {
+          : api
+              .get("/maquinas", { params: { all: true } })
+              .catch((err) => {
+                console.error("Erro ao carregar máquinas:", err.message);
+                return { data: [] };
+              }),
+        api.get("/produtos", { params: { all: true } }).catch((err) => {
           console.error("Erro ao carregar produtos:", err.message);
           return { data: [] };
         }),
@@ -977,7 +983,7 @@ export function Dashboard() {
               params: {
                 dataInicio: dataInicioSemana,
                 dataFim: `${dataFimSemana}T23:59:59`,
-                limite: 10000,
+                pageSize: 1000,
               },
             })
             .catch((err) => {
@@ -1016,9 +1022,13 @@ export function Dashboard() {
       }
 
       // Calcular faturamento semanal real a partir das movimentações
-      const movsList = Array.isArray(movSemanaisRes.data)
-        ? movSemanaisRes.data
-        : movSemanaisRes.data?.movimentacoes || movSemanaisRes.data?.rows || [];
+      const movsList = Array.isArray(movSemanaisRes.data?.data)
+        ? movSemanaisRes.data.data
+        : Array.isArray(movSemanaisRes.data)
+          ? movSemanaisRes.data
+          : movSemanaisRes.data?.movimentacoes ||
+            movSemanaisRes.data?.rows ||
+            [];
       let totalDinheiroSemanal = 0;
       let totalCartaoPixSemanal = 0;
       movsList.forEach((mov) => {
@@ -1229,7 +1239,7 @@ export function Dashboard() {
       setLoadingEstoque(true);
 
       // 1. Buscar todas as lojas
-      const lojasRes = await api.get("/lojas");
+      const lojasRes = await api.get("/lojas", { params: { all: true } });
       const lojas = lojasRes.data || [];
 
       // 2. Para cada loja, buscar seu estoque
@@ -1282,7 +1292,11 @@ export function Dashboard() {
     try {
       setLoadingMaquina(true);
       const movRes = await api.get(`/movimentacoes?maquinaId=${maquinaId}`);
-      const lista = Array.isArray(movRes.data) ? movRes.data : [];
+      const lista = Array.isArray(movRes.data?.data)
+        ? movRes.data.data
+        : Array.isArray(movRes.data)
+          ? movRes.data
+          : [];
       setMovimentacoes([...lista].sort(compararMovimentacoesMaisRecentes));
     } catch (error) {
       console.error("Erro ao carregar movimentações:", error);
@@ -1296,13 +1310,17 @@ export function Dashboard() {
     try {
       // Buscar todos os dados necessários
       const [movRes, produtosRes, lojasRes, maquinasRes] = await Promise.all([
-        api.get("/movimentacoes"),
-        api.get("/produtos"),
-        api.get("/lojas"),
-        api.get("/maquinas"),
+        api.get("/movimentacoes", { params: { pageSize: 1000 } }),
+        api.get("/produtos", { params: { all: true } }),
+        api.get("/lojas", { params: { all: true } }),
+        api.get("/maquinas", { params: { all: true } }),
       ]);
 
-      const movimentacoes = movRes.data || [];
+      const movimentacoes = Array.isArray(movRes.data?.data)
+        ? movRes.data.data
+        : Array.isArray(movRes.data)
+          ? movRes.data
+          : [];
       const produtosData = produtosRes.data || [];
       const lojasData = lojasRes.data || [];
       const maquinasData = maquinasRes.data || [];
@@ -2030,7 +2048,11 @@ export function Dashboard() {
 
       // Buscar movimentações para obter último produto
       const movRes = await api.get(`/movimentacoes?maquinaId=${maquina.id}`);
-      const movimentacoes = movRes.data || [];
+      const movimentacoes = Array.isArray(movRes.data?.data)
+        ? movRes.data.data
+        : Array.isArray(movRes.data)
+          ? movRes.data
+          : [];
 
       let ultimoProduto = null;
       if (movimentacoes.length > 0) {
@@ -2041,7 +2063,9 @@ export function Dashboard() {
         const produtoId = ultimaMov.detalhesProdutos?.[0]?.produtoId;
 
         if (produtoId) {
-          const produtosRes = await api.get(`/produtos`);
+          const produtosRes = await api.get(`/produtos`, {
+            params: { all: true },
+          });
           ultimoProduto = produtosRes.data.find((p) => p.id === produtoId);
         }
       }

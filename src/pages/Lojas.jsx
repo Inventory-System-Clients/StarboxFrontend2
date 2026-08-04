@@ -31,7 +31,7 @@ export function Lojas() {
   const carregarLojas = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/lojas");
+      const response = await api.get("/lojas", { params: { all: true } });
       setLojas(response.data);
       setError("");
     } catch (error) {

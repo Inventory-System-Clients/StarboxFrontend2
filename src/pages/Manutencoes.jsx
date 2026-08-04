@@ -432,7 +432,7 @@ function Manutencoes() {
   const carregarManutencoes = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/manutencoes");
+      const res = await api.get("/manutencoes", { params: { all: true } });
       setManutencoes(res.data || []);
     } catch (err) {
       console.error("Erro ao buscar manutenções:", err?.response?.data || err);
@@ -445,8 +445,8 @@ function Manutencoes() {
   const carregarDadosFormulario = async () => {
     try {
       const [lojasRes, maquinasRes, funcionariosRes] = await Promise.all([
-        api.get("/lojas"),
-        api.get("/maquinas"),
+        api.get("/lojas", { params: { all: true } }),
+        api.get("/maquinas", { params: { all: true } }),
         api.get("/usuarios/funcionarios"),
       ]);
 

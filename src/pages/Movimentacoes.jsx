@@ -15,6 +15,9 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import AvisosMaquinasFaltam from "../components/AvisosMaquinasFaltam";
 import TabelaMovimentacoesEstoqueDeLoja from "../components/TabelaMovimentacoesEstoqueDeLoja";
 import ModalEditarMovimentacao from "../components/ModalEditarMovimentacao";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { ListFilterBar, FilterField } from "../components/ListFilterBar";
+import { PaginationControls } from "../components/PaginationControls";
 
 export function Movimentacoes() {
   const [modalRegistrarDinheiro, setModalRegistrarDinheiro] = useState(false);
@@ -30,7 +33,19 @@ export function Movimentacoes() {
   ].includes(usuario?.role);
 
   // --- ESTADOS ---
-  const [movimentacoes, setMovimentacoes] = useState([]);
+  const listaMovimentacoes = useFilteredList({
+    fetcher: (filtros, paginacao) =>
+      api.get("/movimentacoes", {
+        params: {
+          lojaId: filtros.lojaId || undefined,
+          dataInicio: filtros.dataInicio || undefined,
+          dataFim: filtros.dataFim || undefined,
+          ...paginacao,
+        },
+      }),
+    initialFilters: { lojaId: "", dataInicio: "", dataFim: "" },
+    pageSize: 25,
+  });
   const [movimentacoesEstoqueLoja, setMovimentacoesEstoqueLoja] = useState([]);
 
   // Filtros Estoque Loja
@@ -58,7 +73,6 @@ export function Movimentacoes() {
 
   // Filtros Movimentações
   const [filtroLojaForm, setFiltroLojaForm] = useState("");
-  const [filtroLojaListagem, setFiltroLojaListagem] = useState("");
 
   // Estados para modal de edição
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
@@ -218,29 +232,20 @@ export function Movimentacoes() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [movRes, maqRes, prodRes, lojasRes, estoqueUsuarioRes] =
-        await Promise.all([
-          api.get("/movimentacoes"),
-          api.get("/maquinas"),
-          api.get("/produtos"),
-          api.get("/lojas"),
+      // Só busca listas de apoio (dropdowns do formulário) — o histórico de
+      // movimentações vive em listaMovimentacoes (useFilteredList), buscado
+      // sob demanda quando o admin aplica um filtro.
+      const [maqRes, prodRes, lojasRes, estoqueUsuarioRes] = await Promise.all(
+        [
+          api.get("/maquinas", { params: { all: true } }),
+          api.get("/produtos", { params: { all: true } }),
+          api.get("/lojas", { params: { all: true } }),
           isPerfilFuncionario
             ? api
                 .get("/estoque-usuarios/me")
                 .catch(() => ({ data: { estoque: [] } }))
             : Promise.resolve({ data: { estoque: [] } }),
-        ]);
-
-      console.log("🔍 Movimentações carregadas:", movRes.data);
-      console.log(
-        "🔍 Movimentações com justificativa:",
-        movRes.data
-          ?.filter((m) => m.justificativa_ordem)
-          .map((m) => ({
-            id: m.id,
-            justificativa: m.justificativa_ordem,
-            data: m.createdAt,
-          })),
+        ],
       );
 
       const produtosData = Array.isArray(prodRes.data) ? prodRes.data : [];
@@ -254,7 +259,6 @@ export function Movimentacoes() {
         .filter((item) => Number(item?.quantidade || 0) > 0)
         .map((item) => String(item?.produtoId));
 
-      setMovimentacoes(movRes.data || []);
       setMaquinas(maqRes.data || []);
       setProdutos(produtosData);
       setProdutoIdsEstoqueUsuario(produtoIdsUsuario);
@@ -378,22 +382,19 @@ export function Movimentacoes() {
       const totalPos = totalPre + quantidadeAdicionada - retiradaProduto;
 
       // Buscar a última movimentação da máquina selecionada para pegar o totalPos anterior
+      // (busca pontual só dessa máquina, em vez de depender de um histórico
+      // completo carregado em memória)
       let ultimoTotalPos = 0;
-      let movimentacoesMaquina = movimentacoes
-        .filter((m) => {
-          // Considera tanto maquinaId quanto maquina_id
-          return (
-            m.maquinaId === formData.maquina_id ||
-            m.maquina_id === formData.maquina_id
-          );
-        })
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-      if (movimentacoesMaquina.length > 0) {
-        ultimoTotalPos =
-          movimentacoesMaquina[0].totalPos ||
-          movimentacoesMaquina[0].totalPos ||
-          0;
+      try {
+        const ultimaMovRes = await api.get("/movimentacoes", {
+          params: { maquinaId: formData.maquina_id, pageSize: 1 },
+        });
+        const ultimaLista = Array.isArray(ultimaMovRes.data?.data)
+          ? ultimaMovRes.data.data
+          : [];
+        ultimoTotalPos = ultimaLista[0]?.totalPos || 0;
+      } catch (err) {
+        console.error("Erro ao buscar última movimentação da máquina:", err);
       }
 
       // sairam = totalPos da movimentação anterior - totalPre da atual
@@ -498,39 +499,6 @@ export function Movimentacoes() {
         await enviarMovimentacao(true);
       }
 
-      // Logs para depuração do filtro
-      console.log("Todas movimentações:", movimentacoes);
-      console.log(
-        "ID da máquina selecionada:",
-        formData.maquina_id,
-        "(tipo:",
-        typeof formData.maquina_id,
-        ")",
-      );
-      movimentacoesMaquina = movimentacoes
-        .filter((m) => {
-          const id1 = m.maquinaId !== undefined ? m.maquinaId : m.maquina_id;
-          console.log(
-            "Comparando:",
-            id1,
-            "(tipo:",
-            typeof id1,
-            ") com",
-            formData.maquina_id,
-            "(tipo:",
-            typeof formData.maquina_id,
-            ")",
-          );
-          return id1 === formData.maquina_id;
-        })
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      console.log("Movimentações filtradas:", movimentacoesMaquina);
-      ultimoTotalPos = 0;
-      if (movimentacoesMaquina.length > 0) {
-        ultimoTotalPos = movimentacoesMaquina[0].totalPos || 0;
-      }
-      console.log("Último totalPos encontrado:", ultimoTotalPos);
-
       setFormData({
         maquina_id: "",
         produto_id: "",
@@ -585,13 +553,12 @@ export function Movimentacoes() {
     setModalEdicaoAberto(true);
   };
 
-  // Função para atualizar movimentação na lista após edição
-  const atualizarMovimentacao = (movimentacaoAtualizada) => {
-    setMovimentacoes((prev) =>
-      prev.map((mov) =>
-        mov.id === movimentacaoAtualizada.id ? movimentacaoAtualizada : mov
-      )
-    );
+  // Função para atualizar movimentação na lista após edição: reconsulta a
+  // página atual para refletir o que foi salvo no backend
+  const atualizarMovimentacao = () => {
+    if (listaMovimentacoes.hasSearched) {
+      listaMovimentacoes.goToPage(listaMovimentacoes.pagination.page);
+    }
   };
 
   // DEPRECADO: Manter por compatibilidade com código antigo
@@ -673,25 +640,15 @@ export function Movimentacoes() {
     }
   };
 
-  // --- CÁLCULOS DE ESTATÍSTICAS ---
-  const entradas = movimentacoes.filter((m) => m.abastecidas > 0);
-  const saidas = movimentacoes.filter((m) => m.sairam > 0);
-  const totalEntradas = entradas.reduce(
+  // --- CÁLCULOS DE ESTATÍSTICAS (sobre a busca/página atual, não a base inteira) ---
+  const totalEntradas = listaMovimentacoes.data.reduce(
     (sum, m) => sum + (m.abastecidas || 0),
     0,
   );
-  const totalSaidas = saidas.reduce((sum, m) => sum + (m.sairam || 0), 0);
-
-  const movimentacoesFiltradas = filtroLojaListagem
-    ? movimentacoes
-        .filter((mov) => {
-          const maquina = maquinas.find((m) => m.id === mov.maquinaId);
-          return maquina?.lojaId === filtroLojaListagem;
-        })
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    : movimentacoes.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-      );
+  const totalSaidas = listaMovimentacoes.data.reduce(
+    (sum, m) => sum + (m.sairam || 0),
+    0,
+  );
 
   const stats = [
     {
@@ -699,14 +656,14 @@ export function Movimentacoes() {
       value: totalEntradas,
       icon: "📥",
       gradient: "bg-gradient-to-br from-green-500 to-green-600",
-      subtitle: "Produtos abastecidos",
+      subtitle: "Nesta busca",
     },
     {
       label: "Total de Saídas",
       value: totalSaidas,
       icon: "📤",
       gradient: "bg-gradient-to-br from-red-500 to-red-600",
-      subtitle: "Produtos vendidos",
+      subtitle: "Nesta busca",
     },
     {
       label: "Saldo",
@@ -717,10 +674,10 @@ export function Movimentacoes() {
     },
     {
       label: "Movimentações",
-      value: movimentacoes.length,
+      value: listaMovimentacoes.pagination.total,
       icon: "🔄",
       gradient: "bg-gradient-to-br from-purple-500 to-purple-600",
-      subtitle: "Total de registros",
+      subtitle: "Total de registros na busca",
     },
   ];
 
@@ -1049,37 +1006,58 @@ export function Movimentacoes() {
           />
         )}
 
-        {usuario?.role === "ADMIN" && <StatsGrid stats={stats} />}
+        {usuario?.role === "ADMIN" && listaMovimentacoes.hasSearched && (
+          <StatsGrid stats={stats} />
+        )}
 
         <AvisosMaquinasFaltam lojas={lojas} />
 
-        {/* Filtro por Ponto - Apenas para ADMIN */}
+        {/* Filtro de Movimentações - Apenas para ADMIN */}
         {usuario?.role === "ADMIN" && (
-          <div className="card-gradient mb-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🔍</span>
-              Filtrar Movimentações
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  🏪 Filtrar por Ponto
-                </label>
-                <select
-                  value={filtroLojaListagem}
-                  onChange={(e) => setFiltroLojaListagem(e.target.value)}
-                  className="input-field"
-                >
-                  <option value="">Todos os pontos</option>
-                  {lojas.map((loja) => (
-                    <option key={loja.id} value={loja.id}>
-                      {loja.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
+          <ListFilterBar
+            onSearch={listaMovimentacoes.search}
+            onReset={() => {
+              listaMovimentacoes.resetFilters();
+            }}
+            loading={listaMovimentacoes.loading}
+          >
+            <FilterField label="🏪 Ponto">
+              <select
+                value={listaMovimentacoes.filters.lojaId}
+                onChange={(e) =>
+                  listaMovimentacoes.setFilter("lojaId", e.target.value)
+                }
+                className="input-field"
+              >
+                <option value="">Todos os pontos</option>
+                {lojas.map((loja) => (
+                  <option key={loja.id} value={loja.id}>
+                    {loja.nome}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="De">
+              <input
+                type="date"
+                className="input-field"
+                value={listaMovimentacoes.filters.dataInicio}
+                onChange={(e) =>
+                  listaMovimentacoes.setFilter("dataInicio", e.target.value)
+                }
+              />
+            </FilterField>
+            <FilterField label="Até">
+              <input
+                type="date"
+                className="input-field"
+                value={listaMovimentacoes.filters.dataFim}
+                onChange={(e) =>
+                  listaMovimentacoes.setFilter("dataFim", e.target.value)
+                }
+              />
+            </FilterField>
+          </ListFilterBar>
         )}
 
         {showForm && (
@@ -1551,41 +1529,38 @@ export function Movimentacoes() {
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
               <span className="text-2xl">📋</span>
               Histórico de Movimentações
-              {filtroLojaListagem && (
+              {listaMovimentacoes.hasSearched && (
                 <span className="text-sm text-gray-600 font-normal">
-                  ({movimentacoesFiltradas.length} de {movimentacoes.length}{" "}
-                  registros)
+                  ({listaMovimentacoes.pagination.total} registro
+                  {listaMovimentacoes.pagination.total === 1 ? "" : "s"})
                 </span>
               )}
             </h3>
 
-            {(() => {
-              console.log(
-                "🔍 Movimentações filtradas para exibição:",
-                movimentacoesFiltradas,
-              );
-              console.log(
-                "🔍 Movimentações com justificativa na lista filtrada:",
-                movimentacoesFiltradas.filter((m) => m.justificativa_ordem),
-              );
-              return null;
-            })()}
+            {listaMovimentacoes.error && (
+              <AlertBox type="error" message={listaMovimentacoes.error} />
+            )}
 
-            {movimentacoesFiltradas.length > 0 ? (
-              <DataTable headers={columns} data={movimentacoesFiltradas} />
+            {!listaMovimentacoes.hasSearched ? (
+              <EmptyState
+                icon="🔍"
+                title="Use os filtros para buscar"
+                message="Selecione um ponto e/ou período acima e clique em Buscar para ver o histórico de movimentações."
+              />
+            ) : listaMovimentacoes.data.length > 0 ? (
+              <>
+                <DataTable headers={columns} data={listaMovimentacoes.data} />
+                <PaginationControls
+                  pagination={listaMovimentacoes.pagination}
+                  onPageChange={listaMovimentacoes.goToPage}
+                  loading={listaMovimentacoes.loading}
+                />
+              </>
             ) : (
               <EmptyState
                 icon="🔄"
-                title={
-                  filtroLojaListagem
-                    ? "Nenhuma movimentação encontrada"
-                    : "Nenhuma movimentação registrada"
-                }
-                message={
-                  filtroLojaListagem
-                    ? "Não há movimentações para o ponto selecionado."
-                    : "Registre sua primeira movimentação para começar o controle de estoque!"
-                }
+                title="Nenhuma movimentação encontrada"
+                message="Não há movimentações para os filtros selecionados."
                 action={{
                   label: "Nova Movimentação",
                   onClick: () => setShowForm(true),

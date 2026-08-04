@@ -18,6 +18,7 @@ export function Usuarios() {
       if (filtro.role) params.append("role", filtro.role);
       if (filtro.ativo) params.append("ativo", filtro.ativo);
       if (filtro.busca) params.append("busca", filtro.busca);
+      params.append("all", "true");
 
       const response = await api.get(`/usuarios?${params.toString()}`);
       setUsuarios(response.data);

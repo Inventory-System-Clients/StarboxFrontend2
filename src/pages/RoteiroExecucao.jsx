@@ -1125,6 +1125,7 @@ export default function RoteiroExecucao() {
 
   const normalizarMovimentacoes = (payload) => {
     if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
     if (Array.isArray(payload?.rows)) return payload.rows;
     if (Array.isArray(payload?.movimentacoes)) return payload.movimentacoes;
     if (payload && typeof payload === "object") {
@@ -1473,7 +1474,7 @@ export default function RoteiroExecucao() {
 
     try {
       const [produtosRes, estoqueUsuarioRes] = await Promise.all([
-        api.get("/produtos"),
+        api.get("/produtos", { params: { all: true } }),
         api
           .get("/estoque-usuarios/me")
           .catch(() => ({ data: { estoque: [] } })),
@@ -2319,6 +2320,7 @@ export default function RoteiroExecucao() {
         params: {
           lojaId,
           status: "pendente",
+          all: true,
         },
       });
       const manutencoesPendentes = res.data || [];
@@ -2614,6 +2616,7 @@ export default function RoteiroExecucao() {
           params: {
             lojaId: lojaIdConsulta,
             status: "pendente",
+            all: true,
           },
         });
 
@@ -2689,6 +2692,7 @@ export default function RoteiroExecucao() {
           params: {
             lojaId: lojaSelecionada.id,
             status: "pendente",
+            all: true,
           },
         });
 
@@ -2861,7 +2865,7 @@ export default function RoteiroExecucao() {
 
         const [ultimasMovRes, veiculosRes] = await Promise.all([
           api.get("/movimentacao-veiculos/ultimas"),
-          api.get("/veiculos"),
+          api.get("/veiculos", { params: { all: true } }),
         ]);
 
         const usuarioId = String(usuario?.id || "");
@@ -3064,7 +3068,7 @@ export default function RoteiroExecucao() {
 
         const [ultimasMovRes, veiculosRes] = await Promise.all([
           api.get("/movimentacao-veiculos/ultimas"),
-          api.get("/veiculos"),
+          api.get("/veiculos", { params: { all: true } }),
         ]);
 
         const usuarioId = String(usuario?.id || "");

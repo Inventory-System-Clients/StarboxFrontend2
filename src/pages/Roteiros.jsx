@@ -792,14 +792,18 @@ export function Roteiros() {
       setLoading(true);
       const promises = [
         api.get("/roteiros/com-status"),
-        api.get("/lojas"),
+        api.get("/lojas", { params: { all: true } }),
         isGestorRoteiro
           ? api.get("/usuarios/funcionarios")
           : Promise.resolve({ data: [] }),
         isAdmin
-          ? api.get("/usuarios?ativo=true").catch(() => ({ data: [] }))
+          ? api
+              .get("/usuarios?ativo=true&all=true")
+              .catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] }),
-        isGestorRoteiro ? api.get("/veiculos") : Promise.resolve({ data: [] }),
+        isGestorRoteiro
+          ? api.get("/veiculos", { params: { all: true } })
+          : Promise.resolve({ data: [] }),
       ];
       const [resRoteiros, resLojas, resFuncionarios, resUsuarios, resVeiculos] =
         await Promise.all(promises);
@@ -886,7 +890,7 @@ export function Roteiros() {
     try {
       const [ultimasMovRes, veiculosRes] = await Promise.all([
         api.get("/movimentacao-veiculos/ultimas"),
-        api.get("/veiculos"),
+        api.get("/veiculos", { params: { all: true } }),
       ]);
 
       const usuarioId = String(usuario?.id || "").trim();

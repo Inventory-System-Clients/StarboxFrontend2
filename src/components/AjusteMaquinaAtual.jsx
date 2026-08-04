@@ -169,7 +169,7 @@ export default function AjusteMaquinaAtual() {
       try {
         setCarregandoLojas(true);
         setErro("");
-        const response = await api.get("/lojas");
+        const response = await api.get("/lojas", { params: { all: true } });
         if (!cancelado) setLojas(normalizarLista(response.data));
       } catch (error) {
         if (!cancelado) setErro(obterMensagemErro(error));
@@ -208,7 +208,9 @@ export default function AjusteMaquinaAtual() {
         setDadosAtuais(null);
         setValoresForm(valoresIniciais);
         setCamposSelecionados(selecaoInicial);
-        const response = await api.get("/maquinas", { params: { lojaId } });
+        const response = await api.get("/maquinas", {
+          params: { lojaId, all: true },
+        });
         if (!cancelado) setMaquinas(normalizarLista(response.data));
       } catch (error) {
         if (!cancelado) {

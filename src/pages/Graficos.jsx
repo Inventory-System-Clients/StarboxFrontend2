@@ -216,7 +216,7 @@ export function Graficos() {
   // Busca de Lojas para o Dropdown
   const carregarLojas = async () => {
     try {
-      const response = await api.get("/lojas");
+      const response = await api.get("/lojas", { params: { all: true } });
       setLojas(response.data || []);
       if (response.data && response.data.length > 0) {
         setLojaSelecionada(response.data[0].id);

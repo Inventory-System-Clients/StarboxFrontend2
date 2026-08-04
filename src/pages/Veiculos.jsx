@@ -40,7 +40,7 @@ export default function Veiculos() {
   const fetchVeiculos = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/veiculos");
+      const { data } = await api.get("/veiculos", { params: { all: true } });
       setVeiculos(data);
     } catch (error) {
       console.error("Erro ao buscar veículos:", error);

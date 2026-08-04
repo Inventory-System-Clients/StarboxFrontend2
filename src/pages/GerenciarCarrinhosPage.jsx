@@ -44,7 +44,7 @@ export default function GerenciarCarrinhosPage() {
 
   const carregarPecas = async () => {
     try {
-      const response = await api.get("/pecas");
+      const response = await api.get("/pecas", { params: { all: true } });
       setPecasDisponiveis(response.data || []);
     } catch (error) {
       console.error("Erro ao carregar peças:", error);

@@ -20,7 +20,7 @@ export default function CarrinhoDetalhePage() {
         const [funcRes, carrinhoRes, pecasRes] = await Promise.all([
           api.get(`/usuarios/${funcionarioId}`),
           api.get(`/usuarios/${funcionarioId}/carrinho`),
-          api.get(`/pecas`),
+          api.get(`/pecas`, { params: { all: true } }),
         ]);
         setFuncionario(funcRes.data);
         setCarrinho(carrinhoRes.data || []);

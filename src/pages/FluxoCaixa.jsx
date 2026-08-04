@@ -152,7 +152,7 @@ export default function FluxoCaixa() {
 
   const carregarLojas = async () => {
     try {
-      const response = await api.get("/lojas");
+      const response = await api.get("/lojas", { params: { all: true } });
       setLojas(response.data || []);
     } catch (error) {
       console.error("Erro ao carregar lojas:", error);

@@ -4,9 +4,12 @@ import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import { PageHeader, Badge, AlertBox } from "../components/UIComponents";
-import { PageLoader } from "../components/Loading";
+import { PageLoader, EmptyState } from "../components/Loading";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import ModalEditarMovimentacao from "../components/ModalEditarMovimentacao";
+import { useFilteredList } from "../hooks/useFilteredList";
+import { ListFilterBar, FilterField } from "../components/ListFilterBar";
+import { PaginationControls } from "../components/PaginationControls";
 
 export function MaquinaDetalhes() {
   const { id } = useParams();
@@ -14,7 +17,19 @@ export function MaquinaDetalhes() {
   const podeVerFaturamentoMaquina = usuario?.role !== "GERENCIADOR";
   // const location = useLocation(); // Removido pois não é utilizado
   const [maquina, setMaquina] = useState(null);
-  const [movimentacoes, setMovimentacoes] = useState([]);
+  const listaMovimentacoes = useFilteredList({
+    fetcher: (filtros, paginacao) =>
+      api.get("/movimentacoes", {
+        params: {
+          maquinaId: id,
+          dataInicio: filtros.dataInicio || undefined,
+          dataFim: filtros.dataFim || undefined,
+          ...paginacao,
+        },
+      }),
+    initialFilters: { dataInicio: "", dataFim: "" },
+    pageSize: 25,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [estoqueAtual, setEstoqueAtual] = useState(null);
@@ -33,50 +48,45 @@ export function MaquinaDetalhes() {
     // eslint-disable-next-line
   }, [id]);
 
-  // Atualiza o estoque atual e produto da última movimentação sempre que as movimentações mudam
-  useEffect(() => {
-    if (movimentacoes && movimentacoes.length > 0) {
-      // Considera o campo totalPos, se existir, senão tenta outros nomes comuns
-      const ultimaMov = movimentacoes[0];
-      const totalPos =
-        ultimaMov.totalPos ?? ultimaMov.total_pos ?? ultimaMov.totalpos ?? null;
-      setEstoqueAtual(totalPos);
-
-      // Extrai produto da última movimentação
-      if (
-        ultimaMov.detalhesProdutos &&
-        Array.isArray(ultimaMov.detalhesProdutos) &&
-        ultimaMov.detalhesProdutos.length > 0
-      ) {
-        const prod = ultimaMov.detalhesProdutos[0];
-        setProdutoUltimaMov({ nome: prod.nome, emoji: prod.emoji });
-      } else {
-        setProdutoUltimaMov(null);
-      }
-    } else {
-      setEstoqueAtual(null);
-      setProdutoUltimaMov(null);
-    }
-  }, [movimentacoes]);
-
   const carregarDados = async () => {
     try {
       setLoading(true);
       const [
         maquinaRes,
-        movimentacoesRes,
+        ultimaMovRes,
         resInconsistencia,
         resAbastecimento,
       ] = await Promise.all([
         api.get(`/maquinas/${id}`),
-        api.get(`/movimentacoes?maquinaId=${id}`),
+        api.get(`/movimentacoes`, { params: { maquinaId: id, pageSize: 1 } }),
         api.get(
           `/relatorios/alertas-movimentacao-inconsistente?maquinaId=${id}`,
         ),
         api.get(`/relatorios/alertas-abastecimento-incompleto?maquinaId=${id}`),
       ]);
       setMaquina(maquinaRes.data);
-      setMovimentacoes(movimentacoesRes.data);
+
+      // Estoque atual e produto vêm só da última movimentação (busca pontual,
+      // não do histórico inteiro)
+      const ultimaMov = ultimaMovRes.data?.data?.[0] || null;
+      if (ultimaMov) {
+        const totalPos =
+          ultimaMov.totalPos ?? ultimaMov.total_pos ?? ultimaMov.totalpos ?? null;
+        setEstoqueAtual(totalPos);
+
+        if (
+          Array.isArray(ultimaMov.detalhesProdutos) &&
+          ultimaMov.detalhesProdutos.length > 0
+        ) {
+          const prod = ultimaMov.detalhesProdutos[0];
+          setProdutoUltimaMov({ nome: prod.nome, emoji: prod.emoji });
+        } else {
+          setProdutoUltimaMov(null);
+        }
+      } else {
+        setEstoqueAtual(null);
+        setProdutoUltimaMov(null);
+      }
 
       // Valida se o alerta realmente pertence a esta máquina
       const alertaInc = resInconsistencia.data?.alertas?.[0];
@@ -131,13 +141,12 @@ export function MaquinaDetalhes() {
     setModalEdicaoAberto(true);
   };
 
-  // Função para atualizar movimentação na lista após edição
-  const atualizarMovimentacao = (movimentacaoAtualizada) => {
-    setMovimentacoes((prev) =>
-      prev.map((mov) =>
-        mov.id === movimentacaoAtualizada.id ? movimentacaoAtualizada : mov
-      )
-    );
+  // Função para atualizar movimentação na lista após edição: reconsulta a
+  // página atual para refletir o que foi salvo no backend
+  const atualizarMovimentacao = () => {
+    if (listaMovimentacoes.hasSearched) {
+      listaMovimentacoes.goToPage(listaMovimentacoes.pagination.page);
+    }
   };
 
   if (loading) return <PageLoader />;
@@ -272,8 +281,42 @@ export function MaquinaDetalhes() {
         </div>
 
         <h2 className="text-xl font-bold mb-4">Movimentações</h2>
+
+        <ListFilterBar
+          onSearch={listaMovimentacoes.search}
+          onReset={listaMovimentacoes.resetFilters}
+          loading={listaMovimentacoes.loading}
+        >
+          <FilterField label="De">
+            <input
+              type="date"
+              className="input-field"
+              value={listaMovimentacoes.filters.dataInicio}
+              onChange={(e) =>
+                listaMovimentacoes.setFilter("dataInicio", e.target.value)
+              }
+            />
+          </FilterField>
+          <FilterField label="Até">
+            <input
+              type="date"
+              className="input-field"
+              value={listaMovimentacoes.filters.dataFim}
+              onChange={(e) =>
+                listaMovimentacoes.setFilter("dataFim", e.target.value)
+              }
+            />
+          </FilterField>
+        </ListFilterBar>
+
         <div className="bg-white rounded-lg shadow p-4 mb-4">
-          {movimentacoes.length === 0 ? (
+          {!listaMovimentacoes.hasSearched ? (
+            <EmptyState
+              icon="🔍"
+              title="Use os filtros para buscar"
+              message="Selecione um período acima e clique em Buscar para ver o histórico de movimentações desta máquina."
+            />
+          ) : listaMovimentacoes.data.length === 0 ? (
             <p className="text-gray-500">Nenhuma movimentação encontrada.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -295,7 +338,7 @@ export function MaquinaDetalhes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movimentacoes.map((mov) => (
+                  {listaMovimentacoes.data.map((mov) => (
                     <tr key={mov.id} className="border-b hover:bg-gray-50">
                       <td className="py-2 px-2">
                         {new Date(mov.dataColeta || mov.createdAt).toLocaleString(
@@ -364,6 +407,11 @@ export function MaquinaDetalhes() {
                   ))}
                 </tbody>
               </table>
+              <PaginationControls
+                pagination={listaMovimentacoes.pagination}
+                onPageChange={listaMovimentacoes.goToPage}
+                loading={listaMovimentacoes.loading}
+              />
             </div>
           )}
         </div>

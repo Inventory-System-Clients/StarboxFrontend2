@@ -85,7 +85,7 @@ export function MaquinaForm() {
 
   const carregarProximoCodigo = async () => {
     try {
-      const response = await api.get("/maquinas");
+      const response = await api.get("/maquinas", { params: { all: true } });
       const maquinas = response.data;
 
       if (!maquinas || maquinas.length === 0) {
@@ -115,7 +115,7 @@ export function MaquinaForm() {
 
   const carregarLojas = async () => {
     try {
-      const response = await api.get("/lojas");
+      const response = await api.get("/lojas", { params: { all: true } });
       setLojas(response.data.filter((l) => l.ativo));
     } catch (error) {
       setError(

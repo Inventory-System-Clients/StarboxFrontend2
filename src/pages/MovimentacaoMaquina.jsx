@@ -349,7 +349,7 @@ export default function MovimentacaoMaquina() {
         const [maqRes, prodRes, ultimoProdRes, movRes, estoqueUsuarioRes] =
           await Promise.all([
             api.get(`/maquinas/${maquinaId}`),
-            api.get("/produtos"),
+            api.get("/produtos", { params: { all: true } }),
             api
               .get(`/maquinas/${maquinaId}/ultimo-produto`)
               .catch(() => ({ data: { produtoId: null } })),
@@ -403,9 +403,11 @@ export default function MovimentacaoMaquina() {
             )
           : listaProdutos;
 
-        const movimentacoesMaquina = Array.isArray(movRes.data)
-          ? movRes.data
-          : [];
+        const movimentacoesMaquina = Array.isArray(movRes.data?.data)
+          ? movRes.data.data
+          : Array.isArray(movRes.data)
+            ? movRes.data
+            : [];
         const movimentacoesOrdenadas = [...movimentacoesMaquina].sort(
           compararMovimentacaoMaisRecente,
         );

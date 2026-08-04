@@ -19,7 +19,7 @@ export default function PecasPage() {
   useEffect(() => {
     async function fetchPecas() {
       try {
-        const res = await api.get("/pecas");
+        const res = await api.get("/pecas", { params: { all: true } });
         setPecas(res.data);
       } catch (err) {
         setPecas([]);
@@ -74,7 +74,7 @@ export default function PecasPage() {
 
       // Atualizar listas após adicionar
       const [resPecas, resCarrinho] = await Promise.all([
-        api.get("/pecas"),
+        api.get("/pecas", { params: { all: true } }),
         api.get(`/usuarios/${usuario.id}/carrinho`),
       ]);
       setPecas(resPecas.data || []);
@@ -86,7 +86,7 @@ export default function PecasPage() {
 
       // Recarregar peças para garantir estado correto
       try {
-        const resPecas = await api.get("/pecas");
+        const resPecas = await api.get("/pecas", { params: { all: true } });
         setPecas(resPecas.data || []);
       } catch (e) {
         console.error("Erro ao recarregar peças:", e);
@@ -134,7 +134,7 @@ export default function PecasPage() {
       await api.delete(url);
       // Atualiza lista de peças e carrinho após devolução
       const [resPecas, resCarrinho] = await Promise.all([
-        api.get("/pecas"),
+        api.get("/pecas", { params: { all: true } }),
         api.get(`/usuarios/${usuario.id}/carrinho`),
       ]);
       setPecas(resPecas.data || []);
@@ -199,7 +199,7 @@ export default function PecasPage() {
       alert("✅ Peça excluída com sucesso!");
       
       // Recarregar lista de peças
-      const resPecas = await api.get("/pecas");
+      const resPecas = await api.get("/pecas", { params: { all: true } });
       setPecas(resPecas.data || []);
     } catch (err) {
       console.error("Erro ao excluir peça:", err);
@@ -233,7 +233,7 @@ export default function PecasPage() {
       setPecaEditando(null);
       
       // Recarregar lista de peças
-      const resPecas = await api.get("/pecas");
+      const resPecas = await api.get("/pecas", { params: { all: true } });
       setPecas(resPecas.data || []);
     } catch (err) {
       console.error("Erro ao salvar peça:", err);

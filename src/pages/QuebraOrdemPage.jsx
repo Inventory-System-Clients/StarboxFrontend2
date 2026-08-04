@@ -23,13 +23,15 @@ export function QuebraOrdemPage() {
     try {
       setLoading(true);
       const [movRes, lojasRes, roteirosRes] = await Promise.all([
-        api.get("/movimentacoes?apenasJustificativasNovas=true&limite=1000"),
-        api.get("/lojas"),
+        api.get(
+          "/movimentacoes?apenasJustificativasNovas=true&pageSize=1000",
+        ),
+        api.get("/lojas", { params: { all: true } }),
         api.get("/roteiros"),
       ]);
 
       // Filtrar apenas justificativas de quebra de ordem com status 'nova'
-      const movimentacoesComQuebra = movRes.data.filter(
+      const movimentacoesComQuebra = (movRes.data?.data || []).filter(
         (mov) => mov.justificativa_ordem && mov.status_justificativa === "nova",
       );
 

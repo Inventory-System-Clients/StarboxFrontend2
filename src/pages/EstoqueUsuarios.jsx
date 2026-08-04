@@ -4,7 +4,7 @@ async function buscarSaldosDepositoPrincipal(produtoIds) {
   if (!Array.isArray(produtoIds) || produtoIds.length === 0) return {};
   try {
     // Busca a loja depósito principal
-    const lojasRes = await api.get("/lojas");
+    const lojasRes = await api.get("/lojas", { params: { all: true } });
     const deposito = (lojasRes.data || []).find((l) => l.isDepositoPrincipal);
     if (!deposito) return {};
     // Busca o estoque do depósito principal
@@ -187,7 +187,7 @@ export default function EstoqueUsuarios() {
         setError("");
         setSuccess("");
 
-        const requisicoes = [api.get("/produtos")];
+        const requisicoes = [api.get("/produtos", { params: { all: true } })];
 
         if (isGestorEstoque) {
           requisicoes.push(api.get("/estoque-usuarios/usuarios"));

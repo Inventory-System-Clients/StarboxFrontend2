@@ -20,8 +20,8 @@ export function LojaDetalhes() {
   const [error, setError] = useState("");
   const [maquinaSelecionada, setMaquinaSelecionada] = useState(null);
   const [movimentacoes, setMovimentacoes] = useState([]);
-  const [movimentacoesLoja, setMovimentacoesLoja] = useState([]);
   const [loadingMovimentacoes, setLoadingMovimentacoes] = useState(false);
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [relatorioGerado, setRelatorioGerado] = useState(null);
@@ -101,12 +101,6 @@ export function LojaDetalhes() {
   }, [id]);
 
   useEffect(() => {
-    if (!maquinaSelecionada) return;
-    carregarMovimentacoes(maquinaSelecionada.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [movimentacoesLoja]);
-
-  useEffect(() => {
     setRelatorioGerado(null);
     setErroRelatorio("");
   }, [dataInicio, dataFim, maquinaSelecionada]);
@@ -125,61 +119,44 @@ export function LojaDetalhes() {
 
   // Função para atualizar movimentação na lista após edição
   const atualizarMovimentacao = (movimentacaoAtualizada) => {
-    const atualizarLista = (lista) =>
-      lista
+    setMovimentacoes((prev) =>
+      prev
         .map((mov) =>
           mov.id === movimentacaoAtualizada.id ? movimentacaoAtualizada : mov,
         )
-        .sort((a, b) => obterDataMovimentacao(b) - obterDataMovimentacao(a));
-
-    setMovimentacoes((prev) => atualizarLista(prev));
-    setMovimentacoesLoja((prev) => atualizarLista(prev));
+        .sort((a, b) => obterDataMovimentacao(b) - obterDataMovimentacao(a)),
+    );
   };
 
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [lojaRes, maquinasRes, movimentacoesRes, produtosRes] =
-        await Promise.all([
-          api.get(`/lojas/${id}`),
-          api.get(`/maquinas`),
-          api.get(`/movimentacoes?lojaId=${id}&limite=5000`),
-          api.get(`/produtos`),
-        ]);
+      const [lojaRes, maquinasRes, produtosRes] = await Promise.all([
+        api.get(`/lojas/${id}`),
+        api.get(`/maquinas`, { params: { lojaId: id, all: true } }),
+        api.get(`/produtos`, { params: { all: true } }),
+      ]);
 
-      const maquinasDaLoja = maquinasRes.data.filter(
-        (m) => String(m.lojaId) === String(id),
-      );
-      const todasMovimentacoes = (movimentacoesRes.data || []).filter(
-        (mov) => String(mov.lojaId || mov.maquina?.lojaId) === String(id),
-      );
+      const maquinasDaLoja = maquinasRes.data || [];
       const produtosCarregados = produtosRes.data || [];
 
-      // Enriquecer cada máquina com estoque atual e último produto
+      // Enriquecer cada máquina com estoque atual e último produto (uma
+      // chamada por máquina — bounded pelo número de máquinas do ponto, não
+      // pelo histórico de movimentações da loja inteira)
       const maquinasEnriquecidas = await Promise.all(
         maquinasDaLoja.map(async (maquina) => {
           try {
-            // Buscar estoque atual da API
-            const estoqueRes = await api.get(`/maquinas/${maquina.id}/estoque`);
+            const [estoqueRes, ultimoProdutoRes] = await Promise.all([
+              api.get(`/maquinas/${maquina.id}/estoque`),
+              api.get(`/maquinas/${maquina.id}/ultimo-produto`),
+            ]);
             const estoqueAtual = estoqueRes.data.estoqueAtual || 0;
-
-            // Buscar última movimentação desta máquina
-            const movsDaMaquina = todasMovimentacoes
-              .filter((mov) => mov.maquinaId === maquina.id)
-              .sort(
-                (a, b) =>
-                  new Date(b.dataColeta || b.createdAt) -
-                  new Date(a.dataColeta || a.createdAt),
-              );
-
-            let ultimoProduto = null;
-            if (movsDaMaquina.length > 0) {
-              const ultimaMov = movsDaMaquina[0];
-              const produtoId = ultimaMov.detalhesProdutos?.[0]?.produtoId;
-              ultimoProduto = produtosCarregados.find(
-                (p) => String(p.id) === String(produtoId),
-              );
-            }
+            const produtoId = ultimoProdutoRes.data?.produtoId;
+            const ultimoProduto = produtoId
+              ? produtosCarregados.find(
+                  (p) => String(p.id) === String(produtoId),
+                )
+              : null;
 
             return {
               ...maquina,
@@ -203,11 +180,6 @@ export function LojaDetalhes() {
       setLoja(lojaRes.data);
       setProdutos(produtosCarregados);
       setMaquinas(maquinasEnriquecidas);
-      setMovimentacoesLoja(
-        [...todasMovimentacoes].sort(
-          (a, b) => obterDataMovimentacao(b) - obterDataMovimentacao(a),
-        ),
-      );
     } catch (error) {
       setError(
         "Erro ao carregar dados: " +
@@ -218,13 +190,19 @@ export function LojaDetalhes() {
     }
   };
 
-  const carregarMovimentacoes = (maquinaId) => {
+  // Busca sob demanda o histórico de uma máquina (não fica pré-carregado)
+  const carregarMovimentacoes = async (maquinaId) => {
     try {
       setLoadingMovimentacoes(true);
-      const listaDaMaquina = [...movimentacoesLoja]
-        .filter((mov) => String(mov.maquinaId) === String(maquinaId))
-        .sort((a, b) => obterDataMovimentacao(b) - obterDataMovimentacao(a));
-      setMovimentacoes(listaDaMaquina);
+      const res = await api.get("/movimentacoes", {
+        params: { maquinaId, pageSize: 5000 },
+      });
+      const lista = Array.isArray(res.data?.data) ? res.data.data : [];
+      setMovimentacoes(
+        [...lista].sort(
+          (a, b) => obterDataMovimentacao(b) - obterDataMovimentacao(a),
+        ),
+      );
     } catch (error) {
       console.error("Erro ao carregar movimentações:", error);
       setMovimentacoes([]);
@@ -255,7 +233,7 @@ export function LojaDetalhes() {
     });
   };
 
-  const construirRelatorioMovimentacoes = (escopo) => {
+  const construirRelatorioMovimentacoes = (escopo, movimentacoesFornecidas) => {
     if (escopo === "selecionada" && !maquinaSelecionada) {
       return {
         error: "Selecione uma máquina para gerar o relatório individual.",
@@ -269,7 +247,7 @@ export function LojaDetalhes() {
           )
         : maquinas;
 
-    const movimentacoesBase = movimentacoesLoja.filter((mov) =>
+    const movimentacoesBase = (movimentacoesFornecidas || []).filter((mov) =>
       escopo === "selecionada"
         ? String(mov.maquinaId) === String(maquinaSelecionada?.id)
         : true,
@@ -517,17 +495,39 @@ export function LojaDetalhes() {
     };
   };
 
-  const handleGerarRelatorio = (escopo) => {
-    const resultado = construirRelatorioMovimentacoes(escopo);
-
-    if (resultado?.error) {
-      setErroRelatorio(resultado.error);
+  const handleGerarRelatorio = async (escopo) => {
+    if (escopo === "selecionada" && !maquinaSelecionada) {
+      setErroRelatorio("Selecione uma máquina para gerar o relatório individual.");
       setRelatorioGerado(null);
       return;
     }
 
+    setGerandoRelatorio(true);
     setErroRelatorio("");
-    setRelatorioGerado(resultado);
+    try {
+      const params =
+        escopo === "selecionada"
+          ? { maquinaId: maquinaSelecionada.id, pageSize: 5000 }
+          : { lojaId: id, pageSize: 5000 };
+      const res = await api.get("/movimentacoes", { params });
+      const lista = Array.isArray(res.data?.data) ? res.data.data : [];
+
+      const resultado = construirRelatorioMovimentacoes(escopo, lista);
+
+      if (resultado?.error) {
+        setErroRelatorio(resultado.error);
+        setRelatorioGerado(null);
+        return;
+      }
+
+      setRelatorioGerado(resultado);
+    } catch (error) {
+      console.error("Erro ao gerar relatório:", error);
+      setErroRelatorio("Erro ao buscar movimentações para o relatório.");
+      setRelatorioGerado(null);
+    } finally {
+      setGerandoRelatorio(false);
+    }
   };
 
   const handleEnviarRelatorioWhatsApp = () => {
@@ -940,21 +940,26 @@ export function LojaDetalhes() {
                   <button
                     type="button"
                     onClick={() => handleGerarRelatorio("selecionada")}
-                    disabled={!maquinaSelecionada}
+                    disabled={!maquinaSelecionada || gerandoRelatorio}
                     className={
                       maquinaSelecionada
                         ? "btn-secondary w-full lg:w-auto"
                         : "w-full lg:w-auto px-4 py-2 rounded-lg font-semibold bg-gray-200 text-gray-500 cursor-not-allowed"
                     }
                   >
-                    Gerar relatório da máquina selecionada
+                    {gerandoRelatorio
+                      ? "Gerando..."
+                      : "Gerar relatório da máquina selecionada"}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleGerarRelatorio("todas")}
+                    disabled={gerandoRelatorio}
                     className="btn-primary w-full lg:w-auto"
                   >
-                    Gerar relatório de todas as máquinas
+                    {gerandoRelatorio
+                      ? "Gerando..."
+                      : "Gerar relatório de todas as máquinas"}
                   </button>
                 </div>
 
