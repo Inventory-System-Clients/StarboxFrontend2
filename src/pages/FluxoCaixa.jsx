@@ -908,27 +908,29 @@ function ItemFluxoCaixa({ fluxo, onConferir, isAdmin }) {
     >
       <td className="px-4 py-4 text-sm text-gray-900">
         <div className="font-semibold">
-          {fluxo.movimentacao.maquina.loja.nome}
+          {fluxo.movimentacao?.maquina?.loja?.nome || "-"}
         </div>
         <div className="text-xs text-gray-600">
           {[
-            fluxo.movimentacao.maquina.loja.endereco,
-            fluxo.movimentacao.maquina.loja.numero &&
+            fluxo.movimentacao?.maquina?.loja?.endereco,
+            fluxo.movimentacao?.maquina?.loja?.numero &&
               `nº ${fluxo.movimentacao.maquina.loja.numero}`,
-            fluxo.movimentacao.maquina.loja.bairro,
+            fluxo.movimentacao?.maquina?.loja?.bairro,
           ]
             .filter(Boolean)
             .join(", ")}
         </div>
         <div className="text-xs text-gray-500 mt-1">
-          <strong>{fluxo.movimentacao.maquina.nome}</strong> (
-          {fluxo.movimentacao.maquina.codigo})
+          <strong>{fluxo.movimentacao?.maquina?.nome || "-"}</strong>
+          {fluxo.movimentacao?.maquina?.codigo
+            ? ` (${fluxo.movimentacao.maquina.codigo})`
+            : ""}
         </div>
       </td>
       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-        <div>{fluxo.movimentacao.usuario.nome}</div>
+        <div>{fluxo.movimentacao?.usuario?.nome || "-"}</div>
         <div className="text-xs text-gray-500">
-          {fluxo.movimentacao.usuario.email}
+          {fluxo.movimentacao?.usuario?.email || ""}
         </div>
       </td>
       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
