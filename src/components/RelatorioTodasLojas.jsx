@@ -49,6 +49,8 @@ const calcularLargura = (valor, maximo) => {
   return `${Math.max(percentual, 4).toFixed(2)}%`;
 };
 
+const LIMITE_RANKING_PADRAO = 15;
+
 const GraficoBarras = ({
   titulo,
   itens,
@@ -57,11 +59,17 @@ const GraficoBarras = ({
   classeBarra,
   formatter,
   vazio,
+  limite = LIMITE_RANKING_PADRAO,
 }) => {
+  const [mostrarTudo, setMostrarTudo] = useState(false);
+
   const maximo = Math.max(
     ...(itens || []).map((item) => Number(item[chaveValor] || 0)),
     0,
   );
+
+  const temMais = (itens || []).length > limite;
+  const itensExibidos = mostrarTudo ? itens : (itens || []).slice(0, limite);
 
   return (
     <div className="card bg-white border border-gray-200">
@@ -69,26 +77,39 @@ const GraficoBarras = ({
       {!itens || itens.length === 0 ? (
         <p className="text-gray-500">{vazio}</p>
       ) : (
-        <div className="space-y-3 w-full">
-          {itens.map((item) => (
-            <div key={`${item[chaveNome]}-${item[chaveValor]}`}>
-              <div className="flex items-center justify-between text-sm mb-1 gap-2">
-                <span className="font-medium text-gray-800 truncate flex-1 min-w-0">
-                  {item[chaveNome]}
-                </span>
-                <span className="font-bold text-gray-900 whitespace-nowrap">
-                  {formatter(item[chaveValor])}
-                </span>
+        <>
+          <div className="space-y-3 w-full">
+            {itensExibidos.map((item) => (
+              <div key={`${item[chaveNome]}-${item[chaveValor]}`}>
+                <div className="flex items-center justify-between text-sm mb-1 gap-2">
+                  <span className="font-medium text-gray-800 truncate flex-1 min-w-0">
+                    {item[chaveNome]}
+                  </span>
+                  <span className="font-bold text-gray-900 whitespace-nowrap">
+                    {formatter(item[chaveValor])}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                  <div
+                    className={`${classeBarra} h-3 rounded-full`}
+                    style={{ width: calcularLargura(item[chaveValor], maximo) }}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                <div
-                  className={`${classeBarra} h-3 rounded-full`}
-                  style={{ width: calcularLargura(item[chaveValor], maximo) }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          {temMais && (
+            <button
+              type="button"
+              onClick={() => setMostrarTudo((prev) => !prev)}
+              className="mt-4 text-sm font-semibold text-primary hover:underline"
+            >
+              {mostrarTudo
+                ? "Ver menos"
+                : `Ver mais (${itens.length - limite} restantes)`}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
