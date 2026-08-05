@@ -2,7 +2,7 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL:
-    import.meta.env.VITE_API_URL || "https://starboxbackend.onrender.com/api",
+    import.meta.env.VITE_API_URL || "https://starboxbackend2.onrender.com/api",
   headers: {
     "Content-Type": "application/json",
   },

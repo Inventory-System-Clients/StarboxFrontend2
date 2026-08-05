@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://starboxbackend.onrender.com/api";
+  import.meta.env.VITE_API_URL || "https://starboxbackend2.onrender.com/api";
 
 export default function SecurityLockPage() {
   const [senha, setSenha] = useState("");
