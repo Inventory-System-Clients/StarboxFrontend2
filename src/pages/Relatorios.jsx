@@ -7,6 +7,8 @@ import Footer from "../components/Footer.jsx";
 import { PageHeader } from "../components/UIComponents";
 import { PageLoader } from "../components/Loading";
 import { RelatorioTodasLojas } from "../components/RelatorioTodasLojas";
+import { AutocompleteSelect } from "../components/AutocompleteSelect";
+import { MultiSelectAutocomplete } from "../components/MultiSelectAutocomplete";
 
 const TODAS_LOJAS_VALUE = "__TODAS_AS_LOJAS__";
 const SELECAO_MANUAL_LOJAS_VALUE = "__SELECAO_MANUAL_LOJAS__";
@@ -16,12 +18,8 @@ export function Relatorios() {
   const [dashboard, setDashboard] = useState(null);
   const [lojas, setLojas] = useState([]);
   const [lojaSelecionada, setLojaSelecionada] = useState("");
-  const [buscaLoja, setBuscaLoja] = useState("");
-  const [buscaLojaConsolidado, setBuscaLojaConsolidado] = useState("");
   const [cidadeSelecionada, setCidadeSelecionada] = useState("");
   const [mesReferencia, setMesReferencia] = useState("");
-  const [buscaRoteiro, setBuscaRoteiro] = useState("");
-  const [buscaUsuario, setBuscaUsuario] = useState("");
   const [lojasSelecionadasConsolidado, setLojasSelecionadasConsolidado] =
     useState([]);
   const [roteiros, setRoteiros] = useState([]);
@@ -41,11 +39,6 @@ export function Relatorios() {
   const [error, setError] = useState("");
   const [gastosFixosLoja, setGastosFixosLoja] = useState([]);
   const [comparativoMensal, setComparativoMensal] = useState(null);
-  const termoBuscaLoja = buscaLoja.trim().toLowerCase();
-  const termoBuscaLojaConsolidado = buscaLojaConsolidado.trim().toLowerCase();
-  const termoBuscaRoteiro = buscaRoteiro.trim().toLowerCase();
-  const termoBuscaUsuario = buscaUsuario.trim().toLowerCase();
-
   const cidadesDisponiveis = useMemo(() => {
     return Array.from(
       new Set(lojas.map((loja) => loja?.cidade).filter(Boolean)),
@@ -57,51 +50,76 @@ export function Relatorios() {
       ? lista.filter((loja) => loja?.cidade === cidadeSelecionada)
       : lista;
 
-  const lojasFiltradasBusca = useMemo(() => {
+  // IDs marcados no filtro de loja: um único id = loja específica; múltiplos
+  // = consolidado manual; TODAS_LOJAS_VALUE = "todas as lojas".
+  const lojaCheckedIds = useMemo(() => {
+    if (lojaSelecionada === TODAS_LOJAS_VALUE) return [TODAS_LOJAS_VALUE];
+    if (lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE)
+      return lojasSelecionadasConsolidado;
+    if (lojaSelecionada) return [lojaSelecionada];
+    return [];
+  }, [lojaSelecionada, lojasSelecionadasConsolidado]);
+
+  const opcoesLoja = useMemo(() => {
     const porCidade = filtrarPorCidade(lojas);
-    if (!termoBuscaLoja) return porCidade;
-    return porCidade.filter((loja) =>
-      [loja?.nome, loja?.cidade, loja?.endereco, loja?.razaoSocial]
-        .filter(Boolean)
-        .some((valor) => String(valor).toLowerCase().includes(termoBuscaLoja)),
-    );
+    return [
+      { id: TODAS_LOJAS_VALUE, label: "✅ Todas as lojas" },
+      ...porCidade.map((loja) => ({
+        id: String(loja.id),
+        label: `${loja.nome}${loja.cidade ? ` — ${loja.cidade}` : ""}`,
+      })),
+    ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lojas, termoBuscaLoja, cidadeSelecionada]);
+  }, [lojas, cidadeSelecionada]);
 
-  const lojasFiltradasConsolidado = useMemo(() => {
-    const porCidade = filtrarPorCidade(lojas);
-    if (!termoBuscaLojaConsolidado) return porCidade;
-    return porCidade.filter((loja) =>
-      [loja?.nome, loja?.cidade, loja?.endereco, loja?.razaoSocial]
-        .filter(Boolean)
-        .some((valor) =>
-          String(valor).toLowerCase().includes(termoBuscaLojaConsolidado),
-        ),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lojas, termoBuscaLojaConsolidado, cidadeSelecionada]);
+  const opcoesRoteiro = useMemo(
+    () =>
+      roteiros.map((roteiro) => ({
+        id: roteiro.id,
+        label: `${roteiro.nome}${roteiro.funcionario?.nome ? ` — ${roteiro.funcionario.nome}` : ""}`,
+      })),
+    [roteiros],
+  );
 
-  const roteirosFiltradosBusca = useMemo(() => {
-    if (!termoBuscaRoteiro) return roteiros;
-    return roteiros.filter((roteiro) =>
-      [roteiro?.nome, roteiro?.descricao, roteiro?.funcionario?.nome]
-        .filter(Boolean)
-        .some((valor) =>
-          String(valor).toLowerCase().includes(termoBuscaRoteiro),
-        ),
-    );
-  }, [roteiros, termoBuscaRoteiro]);
+  const opcoesUsuario = useMemo(
+    () =>
+      usuarios.map((usuario) => ({
+        id: usuario.id,
+        label: `${usuario.nome}${usuario.email ? ` (${usuario.email})` : ""}`,
+      })),
+    [usuarios],
+  );
 
-  const usuariosFiltradosBusca = useMemo(() => {
-    if (!termoBuscaUsuario) return usuarios;
-    return usuarios.filter((usuario) =>
-      [usuario?.nome, usuario?.email, usuario?.role]
-        .filter(Boolean)
-        .some((valor) =>
-          String(valor).toLowerCase().includes(termoBuscaUsuario),
-        ),
-    );
-  }, [usuarios, termoBuscaUsuario]);
+  // Marcar/desmarcar lojas no filtro unificado, mapeando de volta pro
+  // trio de estados (lojaSelecionada/lojasSelecionadasConsolidado) que o
+  // resto da geração de relatório já sabe consumir.
+  const handleAlterarLojasSelecionadas = (novosIds) => {
+    const marcouTodas =
+      novosIds.includes(TODAS_LOJAS_VALUE) &&
+      !lojaCheckedIds.includes(TODAS_LOJAS_VALUE);
+
+    if (marcouTodas) {
+      setLojaSelecionada(TODAS_LOJAS_VALUE);
+      setLojasSelecionadasConsolidado([]);
+      setRoteiroSelecionado("");
+      return;
+    }
+
+    const especificos = novosIds.filter((id) => id !== TODAS_LOJAS_VALUE);
+
+    if (especificos.length === 0) {
+      setLojaSelecionada("");
+      setLojasSelecionadasConsolidado([]);
+    } else if (especificos.length === 1) {
+      setLojaSelecionada(especificos[0]);
+      setLojasSelecionadasConsolidado([]);
+      setRoteiroSelecionado("");
+    } else {
+      setLojaSelecionada(SELECAO_MANUAL_LOJAS_VALUE);
+      setLojasSelecionadasConsolidado(especificos);
+      setRoteiroSelecionado("");
+    }
+  };
 
   const montarParamsComUsuario = (params = {}, usuarioId = usuarioSelecionado) =>
     usuarioId ? { ...params, usuarioId } : { ...params };
@@ -217,16 +235,6 @@ export function Relatorios() {
     const ultimoDia = new Date(ano, mes, 0);
     setDataInicio(primeiroDia.toISOString().split("T")[0]);
     setDataFim(ultimoDia.toISOString().split("T")[0]);
-  };
-
-  const toggleLojaConsolidado = (lojaId) => {
-    const lojaIdNormalizado = String(lojaId);
-
-    setLojasSelecionadasConsolidado((prev) =>
-      prev.includes(lojaIdNormalizado)
-        ? prev.filter((idAtual) => idAtual !== lojaIdNormalizado)
-        : [...prev, lojaIdNormalizado],
-    );
   };
 
   const formatarDataISO = (data) => {
@@ -3064,99 +3072,43 @@ export function Relatorios() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🗂️ Roteiro
               </label>
-              <input
-                type="text"
-                value={buscaRoteiro}
-                onChange={(e) => setBuscaRoteiro(e.target.value)}
-                className="input-field w-full mb-2"
-                placeholder="Digite o nome do roteiro"
-                disabled={
-                  lojaSelecionada === TODAS_LOJAS_VALUE ||
-                  lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE
-                }
-              />
-              <select
+              <AutocompleteSelect
                 value={roteiroSelecionado}
-                onChange={(e) => {
-                  setRoteiroSelecionado(e.target.value);
+                onChange={(id) => {
+                  setRoteiroSelecionado(id);
                   setLojaSelecionada("");
                   setLojasSelecionadasConsolidado([]);
                 }}
-                className="input-field w-full"
-                disabled={
-                  lojaSelecionada === TODAS_LOJAS_VALUE ||
-                  lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE
-                }
-              >
-                <option value="">Selecione um roteiro (opcional)</option>
-                {roteirosFiltradosBusca.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.nome}
-                  </option>
-                ))}
-              </select>
+                options={opcoesRoteiro}
+                placeholder="Digite o nome do roteiro..."
+                disabled={lojaCheckedIds.length > 0}
+                emptyLabel="Nenhum roteiro encontrado"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🏪 Loja
               </label>
-              <input
-                type="text"
-                value={buscaLoja}
-                onChange={(e) => setBuscaLoja(e.target.value)}
-                className="input-field w-full mb-2"
-                placeholder="Digite o nome da loja"
+              <MultiSelectAutocomplete
+                selectedIds={lojaCheckedIds}
+                onChange={handleAlterarLojasSelecionadas}
+                options={opcoesLoja}
+                placeholder="Digite o nome da loja e marque uma ou mais..."
                 disabled={!!roteiroSelecionado}
+                emptyLabel="Nenhuma loja encontrada"
               />
-              <select
-                value={lojaSelecionada}
-                onChange={(e) => {
-                  const valorSelecionado = e.target.value;
-                  setLojaSelecionada(valorSelecionado);
-                  setRoteiroSelecionado("");
-
-                  if (valorSelecionado !== SELECAO_MANUAL_LOJAS_VALUE) {
-                    setLojasSelecionadasConsolidado([]);
-                  }
-                }}
-                className="input-field w-full"
-                disabled={!!roteiroSelecionado}
-              >
-                <option value="">Selecione uma loja</option>
-                <option value={TODAS_LOJAS_VALUE}>Todas as lojas</option>
-                <option value={SELECAO_MANUAL_LOJAS_VALUE}>
-                  Selecionar lojas manualmente (consolidado)
-                </option>
-                {lojasFiltradasBusca.map((loja) => (
-                  <option key={loja.id} value={loja.id}>
-                    {loja.nome}
-                  </option>
-                ))}
-              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 👤 Funcionário
               </label>
-              <input
-                type="text"
-                value={buscaUsuario}
-                onChange={(e) => setBuscaUsuario(e.target.value)}
-                className="input-field w-full mb-2"
-                placeholder="Digite o nome do funcionário"
-              />
-              <select
+              <AutocompleteSelect
                 value={usuarioSelecionado}
-                onChange={(e) => setUsuarioSelecionado(e.target.value)}
-                className="input-field w-full"
-              >
-                <option value="">Todos os funcionários</option>
-                {usuariosFiltradosBusca.map((usuario) => (
-                  <option key={usuario.id} value={usuario.id}>
-                    {usuario.nome}
-                  </option>
-                ))}
-              </select>
+                onChange={setUsuarioSelecionado}
+                options={opcoesUsuario}
+                placeholder="Digite o nome do funcionário..."
+                emptyLabel="Nenhum funcionário encontrado"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3182,75 +3134,11 @@ export function Relatorios() {
             </div>
           </div>
 
-          {lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE &&
-            !roteiroSelecionado && (
-              <div className="mt-4 p-4 rounded-lg border border-indigo-200 bg-indigo-50/40">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                  <p className="text-sm font-semibold text-gray-800">
-                    Lojas selecionadas para o consolidado:{" "}
-                    {lojasSelecionadasConsolidado.length}
-                  </p>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLojasSelecionadasConsolidado(
-                          (lojas || []).map((loja) => String(loja.id)),
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 text-sm font-medium"
-                    >
-                      Selecionar todas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLojasSelecionadasConsolidado([])}
-                      className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 text-sm font-medium"
-                    >
-                      Limpar
-                    </button>
-                  </div>
-                </div>
-
-                <input
-                  type="text"
-                  value={buscaLojaConsolidado}
-                  onChange={(e) => setBuscaLojaConsolidado(e.target.value)}
-                  className="input-field w-full mb-3"
-                  placeholder="Digite o nome da loja para filtrar a lista"
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {(lojasFiltradasConsolidado || []).map((loja) => {
-                    const lojaIdNormalizado = String(loja.id);
-                    const selecionada =
-                      lojasSelecionadasConsolidado.includes(lojaIdNormalizado);
-
-                    return (
-                      <label
-                        key={loja.id}
-                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                          selecionada
-                            ? "bg-indigo-50 border-indigo-300"
-                            : "bg-white border-gray-200 hover:border-indigo-200"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selecionada}
-                          onChange={() => toggleLojaConsolidado(loja.id)}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-sm text-gray-800 truncate">
-                          {loja.nome}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+          {lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE && !roteiroSelecionado && (
+            <p className="mt-3 text-sm font-semibold text-gray-700">
+              {lojasSelecionadasConsolidado.length} loja(s) marcada(s) para o relatório consolidado.
+            </p>
+          )}
 
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
