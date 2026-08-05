@@ -5,6 +5,7 @@ import Footer from "../components/Footer.jsx";
 import { PageHeader, AlertBox } from "../components/UIComponents";
 import { PageLoader } from "../components/Loading";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { AutocompleteSelect } from "../components/AutocompleteSelect";
 
 const parseNumeroFluxo = (valor) => {
   const numero = Number(valor);
@@ -601,48 +602,45 @@ export default function FluxoCaixa() {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Ponto
               </label>
-              <select
+              <AutocompleteSelect
                 value={filtros.lojaId}
-                onChange={(e) =>
+                onChange={(id) =>
                   setFiltros((prev) => ({
                     ...prev,
-                    lojaId: e.target.value,
+                    lojaId: id,
                     maquinaId: "",
                   }))
                 }
-                className="select-field"
-              >
-                <option value="">Todos os pontos</option>
-                {lojas.map((loja) => (
-                  <option key={loja.id} value={loja.id}>
-                    {loja.nome}
-                  </option>
-                ))}
-              </select>
+                options={lojas.map((loja) => ({
+                  id: loja.id,
+                  label: loja.nome,
+                }))}
+                placeholder="Digite o nome do ponto..."
+                emptyLabel="Nenhum ponto encontrado"
+              />
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Máquina
               </label>
-              <select
+              <AutocompleteSelect
                 value={filtros.maquinaId}
-                onChange={(e) =>
-                  setFiltros((prev) => ({ ...prev, maquinaId: e.target.value }))
+                onChange={(id) =>
+                  setFiltros((prev) => ({ ...prev, maquinaId: id }))
                 }
-                className="select-field"
+                options={maquinasDoPonto.map((maquina) => ({
+                  id: maquina.id,
+                  label: `${maquina.codigo}${maquina.nome ? ` - ${maquina.nome}` : ""}`,
+                }))}
+                placeholder={
+                  filtros.lojaId
+                    ? "Digite o código ou nome da máquina..."
+                    : "Selecione um ponto"
+                }
                 disabled={!filtros.lojaId}
-              >
-                <option value="">
-                  {filtros.lojaId ? "Todas as máquinas" : "Selecione um ponto"}
-                </option>
-                {maquinasDoPonto.map((maquina) => (
-                  <option key={maquina.id} value={maquina.id}>
-                    {maquina.codigo}
-                    {maquina.nome ? ` - ${maquina.nome}` : ""}
-                  </option>
-                ))}
-              </select>
+                emptyLabel="Nenhuma máquina encontrada"
+              />
             </div>
 
             <div>
