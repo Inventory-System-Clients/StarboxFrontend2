@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
@@ -132,12 +132,30 @@ export default function FluxoCaixa() {
     lojaId: "",
     maquinaId: "",
     status: "todos",
+    cidade: "",
+    estado: "",
   });
   const [resumo, setResumo] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [lojas, setLojas] = useState([]);
   const [maquinasDoPonto, setMaquinasDoPonto] = useState([]);
+
+  const cidadesDisponiveis = useMemo(
+    () =>
+      Array.from(new Set(lojas.map((l) => l?.cidade).filter(Boolean))).sort(
+        (a, b) => a.localeCompare(b, "pt-BR"),
+      ),
+    [lojas],
+  );
+
+  const estadosDisponiveis = useMemo(
+    () =>
+      Array.from(new Set(lojas.map((l) => l?.estado).filter(Boolean))).sort(
+        (a, b) => a.localeCompare(b, "pt-BR"),
+      ),
+    [lojas],
+  );
 
   const roundTo2 = (valor) => {
     return arredondarMoeda(valor);
@@ -186,6 +204,8 @@ export default function FluxoCaixa() {
       params.append("dataFim", filtros.dataFim);
       if (filtros.lojaId) params.append("lojaId", filtros.lojaId);
       if (filtros.status !== "todos") params.append("status", filtros.status);
+      if (filtros.cidade) params.append("cidade", filtros.cidade);
+      if (filtros.estado) params.append("estado", filtros.estado);
 
       const response = await api.get(`/fluxo-caixa?${params}`);
       setFluxos(response.data || []);
@@ -203,6 +223,8 @@ export default function FluxoCaixa() {
       params.append("dataInicio", filtros.dataInicio);
       params.append("dataFim", filtros.dataFim);
       if (filtros.lojaId) params.append("lojaId", filtros.lojaId);
+      if (filtros.cidade) params.append("cidade", filtros.cidade);
+      if (filtros.estado) params.append("estado", filtros.estado);
 
       const response = await api.get(`/fluxo-caixa/resumo?${params}`);
       setResumo(response.data);
@@ -658,6 +680,46 @@ export default function FluxoCaixa() {
                 <option value="pendente">⏳ Pendentes</option>
                 <option value="bateu">✅ Bateu</option>
                 <option value="nao_bateu">❌ Não Bateu</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Cidade
+              </label>
+              <select
+                value={filtros.cidade}
+                onChange={(e) =>
+                  setFiltros((prev) => ({ ...prev, cidade: e.target.value }))
+                }
+                className="select-field"
+              >
+                <option value="">Todas</option>
+                {cidadesDisponiveis.map((cidade) => (
+                  <option key={cidade} value={cidade}>
+                    {cidade}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Estado
+              </label>
+              <select
+                value={filtros.estado}
+                onChange={(e) =>
+                  setFiltros((prev) => ({ ...prev, estado: e.target.value }))
+                }
+                className="select-field"
+              >
+                <option value="">Todos</option>
+                {estadosDisponiveis.map((estado) => (
+                  <option key={estado} value={estado}>
+                    {estado}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
