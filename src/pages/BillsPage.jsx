@@ -28,6 +28,7 @@ import {
   buildRecurringNextOpenUpdatePayload,
   isRecurringBill,
   getNextMonthKeys,
+  getMonthKeysWindow,
   getBillOccurrenceForMonth,
 } from "../lib/financeiroRecurringBills";
 import {
@@ -76,10 +77,18 @@ export default function BillsPage() {
     search: "",
   });
 
-  // Janela rolante de 12 meses (mês atual + próximos 11) para a visão em
-  // DDA. Calculada uma vez ao montar a página.
-  const monthKeys = useMemo(() => getNextMonthKeys(12), []);
-  const currentMonthKey = monthKeys[0]?.key || "";
+  // Mês real de hoje — usado pra decidir se uma ocorrência está vencida e
+  // deve "carregar" pro mês atual, independente de qual janela de meses
+  // está sendo exibida (o usuário pode navegar pra meses passados/futuros).
+  const currentMonthKey = useMemo(() => getNextMonthKeys(1)[0].key, []);
+
+  // Janela de 12 meses exibida nas abas, com deslocamento livre: offset 0 é
+  // mês atual + próximos 11; negativo desloca pra meses passados.
+  const [monthWindowOffset, setMonthWindowOffset] = useState(0);
+  const monthKeys = useMemo(
+    () => getMonthKeysWindow(12, new Date(), monthWindowOffset),
+    [monthWindowOffset],
+  );
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
 
   // Quando chegamos aqui a partir de um aviso (aba Avisos), a conta clicada
@@ -190,6 +199,12 @@ export default function BillsPage() {
     setDetailsModal({ open: true, bill });
   };
 
+  const cidadesDisponiveis = useMemo(() => {
+    return Array.from(new Set(bills.map((bill) => bill?.city).filter(Boolean))).sort(
+      (a, b) => a.localeCompare(b, "pt-BR"),
+    );
+  }, [bills]);
+
   // Linhas do mês selecionado na aba DDA: cada conta contribui com, no
   // máximo, uma ocorrência para o mês em foco (recorrente ou avulsa).
   const monthlyRows = useMemo(() => {
@@ -214,13 +229,7 @@ export default function BillsPage() {
 
     if (statusFilter && occurrence.status !== statusFilter) return false;
     if (categoryFilter && bill.category !== categoryFilter) return false;
-    if (
-      filters.city &&
-      !String(bill.city || "")
-        .toLowerCase()
-        .includes(filters.city.toLowerCase())
-    )
-      return false;
+    if (filters.city && bill.city !== filters.city) return false;
     if (
       filters.search &&
       !bill.name
@@ -313,13 +322,44 @@ export default function BillsPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-md p-4 mb-6 border border-purple-100">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                 Visão mensal (DDA)
               </h2>
-              <span className="text-xs text-gray-400">
-                Mês atual + próximos 11 meses
-              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMonthWindowOffset((prev) => prev - 3)}
+                  data-testid="btn-meses-anteriores"
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  ← Meses anteriores
+                </Button>
+                {monthWindowOffset !== 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMonthWindowOffset(0)}
+                    data-testid="btn-mes-atual"
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    Hoje
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMonthWindowOffset((prev) => prev + 3)}
+                  data-testid="btn-proximos-meses"
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  Próximos meses →
+                </Button>
+              </div>
             </div>
             <div
               className="flex gap-2 overflow-x-auto pb-1"
@@ -434,14 +474,24 @@ export default function BillsPage() {
                 <label className="text-sm text-gray-600 mb-1 block">
                   Cidade
                 </label>
-                <Input
-                  placeholder="Filtrar por cidade"
+                <Select
                   value={filters.city}
-                  onChange={(e) =>
-                    setFilters({ ...filters, city: e.target.value })
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, city: normalizeFilterValue(value) })
                   }
-                  data-testid="filter-city"
-                />
+                >
+                  <SelectTrigger data-testid="filter-city">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {cidadesDisponiveis.map((cidade) => (
+                      <SelectItem key={cidade} value={cidade}>
+                        {cidade}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             {(filters.status ||

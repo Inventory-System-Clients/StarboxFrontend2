@@ -43,13 +43,22 @@ export const MONTH_LABELS_PT = [
   "Dez",
 ];
 
-// Janela rolante de meses usada na visão de DDA das contas: sempre o mês
-// atual + os próximos 11, nunca fixa ao calendário (dez/jan não "reseta").
-export const getNextMonthKeys = (count = 12, fromDate = new Date()) => {
+// Janela de meses usada na visão de DDA das contas, com deslocamento livre
+// (startOffset negativo = meses passados, positivo = meses futuros), nunca
+// fixa ao calendário (dez/jan não "reseta").
+export const getMonthKeysWindow = (
+  count = 12,
+  fromDate = new Date(),
+  startOffset = 0,
+) => {
   const base = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
   const keys = [];
   for (let i = 0; i < count; i += 1) {
-    const current = new Date(base.getFullYear(), base.getMonth() + i, 1);
+    const current = new Date(
+      base.getFullYear(),
+      base.getMonth() + startOffset + i,
+      1,
+    );
     keys.push({
       key: `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`,
       label: `${MONTH_LABELS_PT[current.getMonth()]}/${String(current.getFullYear()).slice(-2)}`,
@@ -59,6 +68,11 @@ export const getNextMonthKeys = (count = 12, fromDate = new Date()) => {
   }
   return keys;
 };
+
+// Mantido para quem só precisa da janela "mês atual + próximos N" (ex.:
+// contador de alertas), sem deslocamento.
+export const getNextMonthKeys = (count = 12, fromDate = new Date()) =>
+  getMonthKeysWindow(count, fromDate, 0);
 
 // Desloca o due_date de uma conta recorrente para o mês alvo (mesmo dia,
 // ajustado para o último dia do mês quando necessário), sem depender de
