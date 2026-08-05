@@ -26,6 +26,8 @@ export default function RegistroVeiculos({
   loading,
   filtroDataInicio = "",
   filtroDataFim = "",
+  setFiltroDataInicio = () => {},
+  setFiltroDataFim = () => {},
 }) {
   const { usuario } = useContext(AuthContext);
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -69,6 +71,26 @@ export default function RegistroVeiculos({
             : "Escolha um filtro e clique em Buscar."}
       </div>
       <div className="mb-6 flex flex-col md:flex-row gap-4 items-stretch md:items-end">
+        <div>
+          <label className="block text-sm font-medium mb-1 text-[#24094E]">
+            Período
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              className="border border-[#62A1D9] rounded-lg p-2 focus:ring-2 focus:ring-[#62A1D9] text-sm"
+              value={filtroDataInicio}
+              onChange={(e) => setFiltroDataInicio(e.target.value)}
+            />
+            <span className="text-gray-500 text-sm">até</span>
+            <input
+              type="date"
+              className="border border-[#62A1D9] rounded-lg p-2 focus:ring-2 focus:ring-[#62A1D9] text-sm"
+              value={filtroDataFim}
+              onChange={(e) => setFiltroDataFim(e.target.value)}
+            />
+          </div>
+        </div>
         <div className="flex-1">
           <label className="block text-sm font-medium mb-1 text-[#24094E]">
             Filtrar por veículo
@@ -94,6 +116,18 @@ export default function RegistroVeiculos({
         >
           {carregandoMov ? "Buscando..." : "Buscar"}
         </button>
+        {(filtroDataInicio || filtroDataFim) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFiltroDataInicio("");
+              setFiltroDataFim("");
+            }}
+            className="text-sm text-red-500 hover:text-red-700 underline"
+          >
+            Limpar período
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto rounded-xl border border-[#62A1D9] shadow bg-white">
         <table className="min-w-full text-sm text-[#24094E]">

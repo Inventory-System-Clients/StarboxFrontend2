@@ -201,38 +201,13 @@ export default function Veiculos() {
 
           {abaPrincipal === "movimentacoes" && (
             <div className="bg-white/90 rounded-xl shadow p-6 border border-gray-100 backdrop-blur-sm">
-              <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-                <label className="text-blue-900 font-medium">Período:</label>
-                <input
-                  type="date"
-                  className="border rounded-lg p-2 focus:ring-2 focus:ring-blue-200 outline-none shadow-sm"
-                  value={filtroDataInicio}
-                  onChange={(e) => setFiltroDataInicio(e.target.value)}
-                />
-                <span className="text-gray-500">até</span>
-                <input
-                  type="date"
-                  className="border rounded-lg p-2 focus:ring-2 focus:ring-blue-200 outline-none shadow-sm"
-                  value={filtroDataFim}
-                  onChange={(e) => setFiltroDataFim(e.target.value)}
-                />
-                {(filtroDataInicio || filtroDataFim) && (
-                  <button
-                    onClick={() => {
-                      setFiltroDataInicio("");
-                      setFiltroDataFim("");
-                    }}
-                    className="text-sm text-red-500 hover:text-red-700 underline"
-                  >
-                    Limpar
-                  </button>
-                )}
-              </div>
               <RegistroVeiculosMovimentacao
                 veiculos={veiculos}
                 loading={loading}
                 filtroDataInicio={filtroDataInicio}
                 filtroDataFim={filtroDataFim}
+                setFiltroDataInicio={setFiltroDataInicio}
+                setFiltroDataFim={setFiltroDataFim}
               />
             </div>
           )}
