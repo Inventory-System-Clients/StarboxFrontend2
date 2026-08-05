@@ -18,7 +18,9 @@ import {
   XCircle,
   Filter,
   Search,
+  MessageCircle,
 } from "lucide-react";
+import { montarWhatsAppUrl } from "../lib/whatsapp";
 import BillModal from "../components/BillModal";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
@@ -246,6 +248,41 @@ export default function BillsPage() {
     const diffTime = due - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  };
+
+  // Mensagem de cobrança via WhatsApp: nome da conta, valor, onde pagar e
+  // data de vencimento — os dados que o usuário pediu explicitamente.
+  const montarMensagemCobranca = (bill, occurrence) => {
+    const valor =
+      bill.value !== undefined &&
+      bill.value !== null &&
+      !isNaN(Number(bill.value))
+        ? Number(bill.value)
+        : Number(bill.amount) || 0;
+    const dias = getDaysUntilDue(occurrence.dueDate);
+    const statusLabel =
+      occurrence.status === "paid"
+        ? "Paga"
+        : dias < 0
+          ? "Vencida"
+          : "Em aberto";
+    const ondePagar = bill.beneficiario || bill.city || "-";
+
+    return [
+      "STAR BOX",
+      "*Cobrança*",
+      "___________________________________",
+      `Conta: ${bill.name || "-"}`,
+      `Valor: R$ ${valor.toFixed(2)}`,
+      `Vencimento: ${new Date(occurrence.dueDate).toLocaleDateString("pt-BR")}`,
+      `Onde pagar: ${ondePagar}`,
+      `Status: ${statusLabel}`,
+    ].join("\n");
+  };
+
+  const handleEnviarCobranca = (bill, occurrence) => {
+    const mensagem = montarMensagemCobranca(bill, occurrence);
+    window.open(montarWhatsAppUrl(mensagem), "_blank");
   };
 
   // Vermelha somente quando o vencimento já passou (dias < 0) e a
@@ -665,6 +702,16 @@ export default function BillsPage() {
                               ) : (
                                 <CheckCircle size={18} />
                               )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEnviarCobranca(bill, occurrence)}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                              title="Enviar cobrança via WhatsApp"
+                              data-testid={`btn-cobranca-${bill.id}-${occurrence.monthKey}`}
+                            >
+                              <MessageCircle size={18} />
                             </Button>
                             <Button
                               size="sm"

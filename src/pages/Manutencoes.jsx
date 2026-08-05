@@ -11,6 +11,7 @@ import {
   useManutencoesPersistentes,
   INTERVALO_ALERTA_PERSISTENTE_DIAS,
 } from "../hooks/useManutencoesPersistentes";
+import { montarWhatsAppUrl } from "../lib/whatsapp";
 
 const STATUS_PERMITIDOS = [
   "pendente",
@@ -44,17 +45,6 @@ const abrirWhatsAppEmNovaAba = ({ whatsappUrl, popupReservado }) => {
   }
 
   return false;
-};
-
-const montarWhatsAppUrl = (mensagem) => {
-  const textoCodificado = encodeURIComponent(String(mensagem || ""));
-  const isMobile = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(
-    navigator.userAgent,
-  );
-
-  return isMobile
-    ? `whatsapp://send?text=${textoCodificado}`
-    : `https://web.whatsapp.com/send?text=${textoCodificado}`;
 };
 
 const montarMensagemDetalhesManutencao = (detalhe) => {
