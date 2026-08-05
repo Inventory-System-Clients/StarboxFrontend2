@@ -1902,8 +1902,19 @@ export function Relatorios() {
       return;
     }
 
-    if (!lojaSelecionada && !roteiroSelecionado) {
-      setError("Selecione um ponto (ou roteiro) para gerar o relatório");
+    // Cidade selecionada e nenhuma loja/roteiro específico marcado: gera um
+    // consolidado automático de todas as lojas dessa cidade.
+    const lojasDaCidadeSelecionada = cidadeSelecionada
+      ? filtrarPorCidade(lojas)
+      : [];
+    const usandoFiltroPorCidade =
+      !lojaSelecionada &&
+      !roteiroSelecionado &&
+      cidadeSelecionada &&
+      lojasDaCidadeSelecionada.length > 0;
+
+    if (!lojaSelecionada && !roteiroSelecionado && !usandoFiltroPorCidade) {
+      setError("Selecione um ponto, roteiro ou cidade para gerar o relatório");
       return;
     }
 
@@ -1933,7 +1944,11 @@ export function Relatorios() {
       setGastosFixosLoja([]);
       setComparativoMensal(null);
 
-      const consolidadoManual = lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE;
+      const idsLojasConsolidadoEfetivo = usandoFiltroPorCidade
+        ? lojasDaCidadeSelecionada.map((loja) => String(loja.id))
+        : lojasSelecionadasConsolidado;
+      const consolidadoManual =
+        lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE || usandoFiltroPorCidade;
       const consolidadoTodas = lojaSelecionada === TODAS_LOJAS_VALUE;
       const usuarioFiltroId = usuarioSelecionado || "";
       const filtroUsuarioRelatorio =
@@ -1941,7 +1956,7 @@ export function Relatorios() {
 
       if (consolidadoManual) {
         const relatorioTodasLojas = await construirConsolidadoManualPorLojas(
-          lojasSelecionadasConsolidado,
+          idsLojasConsolidadoEfetivo,
           dataInicio,
           dataFim,
           usuarioFiltroId,
@@ -1953,7 +1968,7 @@ export function Relatorios() {
           const dataFimMesAnterior = obterMesmoDiaNoMesAnterior(dataFim);
 
           const relatorioMesAnterior = await construirConsolidadoManualPorLojas(
-            lojasSelecionadasConsolidado,
+            idsLojasConsolidadoEfetivo,
             dataInicioMesAnterior,
             dataFimMesAnterior,
             usuarioFiltroId,
@@ -3137,6 +3152,13 @@ export function Relatorios() {
           {lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE && !roteiroSelecionado && (
             <p className="mt-3 text-sm font-semibold text-gray-700">
               {lojasSelecionadasConsolidado.length} loja(s) marcada(s) para o relatório consolidado.
+            </p>
+          )}
+
+          {!lojaSelecionada && !roteiroSelecionado && cidadeSelecionada && (
+            <p className="mt-3 text-sm font-semibold text-gray-700">
+              Nenhuma loja marcada — ao gerar, vai consolidar as{" "}
+              {filtrarPorCidade(lojas).length} loja(s) de {cidadeSelecionada}.
             </p>
           )}
 
