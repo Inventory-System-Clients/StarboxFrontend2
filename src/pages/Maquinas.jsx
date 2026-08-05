@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import api from "../services/api";
@@ -33,12 +33,24 @@ export function Maquinas() {
           lojaId: filtros.lojaId || undefined,
           busca: filtros.busca || undefined,
           incluirInativas: filtros.incluirInativas || undefined,
+          cidade: filtros.cidade || undefined,
+          estado: filtros.estado || undefined,
+          roteiroId: filtros.roteiroId || undefined,
           ...paginacao,
         },
       }),
-    initialFilters: { lojaId: "", busca: "", incluirInativas: "" },
+    initialFilters: {
+      lojaId: "",
+      busca: "",
+      incluirInativas: "",
+      cidade: "",
+      estado: "",
+      roteiroId: "",
+    },
     pageSize: 20,
   });
+
+  const [roteiros, setRoteiros] = useState([]);
 
   useEffect(() => {
     api
@@ -47,7 +59,54 @@ export function Maquinas() {
       .catch((err) =>
         console.error("Erro ao carregar lojas para filtro:", err),
       );
+    api
+      .get("/roteiros")
+      .then((res) => setRoteiros(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setRoteiros([]));
   }, []);
+
+  const cidadesDisponiveis = useMemo(
+    () =>
+      Array.from(new Set(lojas.map((l) => l?.cidade).filter(Boolean))).sort(
+        (a, b) => a.localeCompare(b, "pt-BR"),
+      ),
+    [lojas],
+  );
+
+  const estadosDisponiveis = useMemo(
+    () =>
+      Array.from(new Set(lojas.map((l) => l?.estado).filter(Boolean))).sort(
+        (a, b) => a.localeCompare(b, "pt-BR"),
+      ),
+    [lojas],
+  );
+
+  // Busca automática: a partir da 3ª letra digitada (com debounce) ou
+  // imediatamente quando outro filtro muda — sem precisar clicar em
+  // "Buscar" toda vez.
+  useEffect(() => {
+    const termo = listaMaquinas.filters.busca.trim();
+    if (termo.length < 3) return;
+    const timeout = setTimeout(() => listaMaquinas.search(), 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaMaquinas.filters.busca]);
+
+  const primeiraRenderFiltrosRef = useRef(true);
+  useEffect(() => {
+    if (primeiraRenderFiltrosRef.current) {
+      primeiraRenderFiltrosRef.current = false;
+      return;
+    }
+    listaMaquinas.search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    listaMaquinas.filters.lojaId,
+    listaMaquinas.filters.incluirInativas,
+    listaMaquinas.filters.cidade,
+    listaMaquinas.filters.estado,
+    listaMaquinas.filters.roteiroId,
+  ]);
 
   const handleDelete = async () => {
     try {
@@ -271,6 +330,54 @@ export function Maquinas() {
               placeholder="Digite nome ou código"
               className="input-field"
             />
+          </FilterField>
+          <FilterField label="Cidade">
+            <select
+              className="input-field"
+              value={listaMaquinas.filters.cidade}
+              onChange={(e) =>
+                listaMaquinas.setFilter("cidade", e.target.value)
+              }
+            >
+              <option value="">Todas</option>
+              {cidadesDisponiveis.map((cidade) => (
+                <option key={cidade} value={cidade}>
+                  {cidade}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Estado">
+            <select
+              className="input-field"
+              value={listaMaquinas.filters.estado}
+              onChange={(e) =>
+                listaMaquinas.setFilter("estado", e.target.value)
+              }
+            >
+              <option value="">Todos</option>
+              {estadosDisponiveis.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Rota">
+            <select
+              className="input-field"
+              value={listaMaquinas.filters.roteiroId}
+              onChange={(e) =>
+                listaMaquinas.setFilter("roteiroId", e.target.value)
+              }
+            >
+              <option value="">Todas</option>
+              {roteiros.map((roteiro) => (
+                <option key={roteiro.id} value={roteiro.id}>
+                  {roteiro.nome}
+                </option>
+              ))}
+            </select>
           </FilterField>
           <FilterField label="Status">
             <label className="flex items-center gap-2 cursor-pointer h-10.5">

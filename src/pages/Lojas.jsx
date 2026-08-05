@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
@@ -30,12 +30,79 @@ export function Lojas() {
         params: {
           busca: filtros.busca || undefined,
           ativo: filtros.ativo || undefined,
+          cidade: filtros.cidade || undefined,
+          estado: filtros.estado || undefined,
+          roteiroId: filtros.roteiroId || undefined,
           ...paginacao,
         },
       }),
-    initialFilters: { busca: "", ativo: "" },
+    initialFilters: {
+      busca: "",
+      ativo: "",
+      cidade: "",
+      estado: "",
+      roteiroId: "",
+    },
     pageSize: 20,
   });
+
+  // Cadastro leve de lojas (só para popular os filtros de cidade/estado) e
+  // lista de rotas — carregados uma vez, não a cada busca.
+  const [lojasCadastro, setLojasCadastro] = useState([]);
+  const [roteiros, setRoteiros] = useState([]);
+
+  useEffect(() => {
+    api
+      .get("/lojas", { params: { all: true } })
+      .then((res) => setLojasCadastro(res.data || []))
+      .catch(() => setLojasCadastro([]));
+    api
+      .get("/roteiros")
+      .then((res) => setRoteiros(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setRoteiros([]));
+  }, []);
+
+  const cidadesDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Set(lojasCadastro.map((l) => l?.cidade).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [lojasCadastro],
+  );
+
+  const estadosDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Set(lojasCadastro.map((l) => l?.estado).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [lojasCadastro],
+  );
+
+  // Busca automática: a partir da 3ª letra digitada (com debounce) ou
+  // imediatamente quando outro filtro (status/cidade/estado/rota) muda —
+  // sem precisar clicar em "Buscar" toda vez.
+  useEffect(() => {
+    const termo = listaLojas.filters.busca.trim();
+    if (termo.length < 3) return;
+    const timeout = setTimeout(() => listaLojas.search(), 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaLojas.filters.busca]);
+
+  const primeiraRenderFiltrosRef = useRef(true);
+  useEffect(() => {
+    if (primeiraRenderFiltrosRef.current) {
+      primeiraRenderFiltrosRef.current = false;
+      return;
+    }
+    listaLojas.search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    listaLojas.filters.ativo,
+    listaLojas.filters.cidade,
+    listaLojas.filters.estado,
+    listaLojas.filters.roteiroId,
+  ]);
 
   const handleDelete = async (id) => {
     try {
@@ -312,6 +379,50 @@ export function Lojas() {
               <option value="">Todos</option>
               <option value="true">Ativas</option>
               <option value="false">Inativas</option>
+            </select>
+          </FilterField>
+          <FilterField label="Cidade">
+            <select
+              className="input-field"
+              value={listaLojas.filters.cidade}
+              onChange={(e) => listaLojas.setFilter("cidade", e.target.value)}
+            >
+              <option value="">Todas</option>
+              {cidadesDisponiveis.map((cidade) => (
+                <option key={cidade} value={cidade}>
+                  {cidade}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Estado">
+            <select
+              className="input-field"
+              value={listaLojas.filters.estado}
+              onChange={(e) => listaLojas.setFilter("estado", e.target.value)}
+            >
+              <option value="">Todos</option>
+              {estadosDisponiveis.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Rota">
+            <select
+              className="input-field"
+              value={listaLojas.filters.roteiroId}
+              onChange={(e) =>
+                listaLojas.setFilter("roteiroId", e.target.value)
+              }
+            >
+              <option value="">Todas</option>
+              {roteiros.map((roteiro) => (
+                <option key={roteiro.id} value={roteiro.id}>
+                  {roteiro.nome}
+                </option>
+              ))}
             </select>
           </FilterField>
         </ListFilterBar>
