@@ -1902,15 +1902,13 @@ export function Relatorios() {
       return;
     }
 
-    // Cidade selecionada e nenhuma loja/roteiro específico marcado: gera um
-    // consolidado automático de todas as lojas dessa cidade.
-    const lojasDaCidadeSelecionada = cidadeSelecionada
-      ? filtrarPorCidade(lojas)
-      : [];
+    // Nenhuma loja/roteiro específico marcado: gera um consolidado
+    // automático das lojas da cidade selecionada — ou de todas as lojas,
+    // se "Todas as cidades" também estiver selecionado.
+    const lojasDaCidadeSelecionada = filtrarPorCidade(lojas);
     const usandoFiltroPorCidade =
       !lojaSelecionada &&
       !roteiroSelecionado &&
-      cidadeSelecionada &&
       lojasDaCidadeSelecionada.length > 0;
 
     if (!lojaSelecionada && !roteiroSelecionado && !usandoFiltroPorCidade) {
@@ -1924,6 +1922,28 @@ export function Relatorios() {
     ) {
       setError("Selecione pelo menos um ponto para gerar o consolidado manual");
       return;
+    }
+
+    const LIMITE_LOJAS_SEM_CONFIRMACAO = 15;
+    if (
+      (usandoFiltroPorCidade ||
+        lojaSelecionada === SELECAO_MANUAL_LOJAS_VALUE ||
+        lojaSelecionada === TODAS_LOJAS_VALUE) &&
+      (usandoFiltroPorCidade
+        ? lojasDaCidadeSelecionada.length
+        : lojaSelecionada === TODAS_LOJAS_VALUE
+          ? lojas.length
+          : lojasSelecionadasConsolidado.length) > LIMITE_LOJAS_SEM_CONFIRMACAO
+    ) {
+      const qtdLojas = usandoFiltroPorCidade
+        ? lojasDaCidadeSelecionada.length
+        : lojaSelecionada === TODAS_LOJAS_VALUE
+          ? lojas.length
+          : lojasSelecionadasConsolidado.length;
+      const confirmar = window.confirm(
+        `Isso vai consolidar ${qtdLojas} lojas de uma vez, o que pode demorar bastante. Continuar?`,
+      );
+      if (!confirmar) return;
     }
 
     const inicio = new Date(dataInicio);
@@ -3155,10 +3175,11 @@ export function Relatorios() {
             </p>
           )}
 
-          {!lojaSelecionada && !roteiroSelecionado && cidadeSelecionada && (
+          {!lojaSelecionada && !roteiroSelecionado && (
             <p className="mt-3 text-sm font-semibold text-gray-700">
               Nenhuma loja marcada — ao gerar, vai consolidar as{" "}
-              {filtrarPorCidade(lojas).length} loja(s) de {cidadeSelecionada}.
+              {filtrarPorCidade(lojas).length} loja(s){" "}
+              {cidadeSelecionada ? `de ${cidadeSelecionada}` : "de todas as cidades"}.
             </p>
           )}
 
