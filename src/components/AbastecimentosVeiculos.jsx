@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useState } from "react";
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
 
@@ -28,32 +28,29 @@ export default function AbastecimentosVeiculos({ veiculos = [] }) {
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [carregando, setCarregando] = useState(false);
+  const [buscou, setBuscou] = useState(false);
 
-  useEffect(() => {
-    if (!usuario || usuario.role !== "ADMIN") return;
-    const fetchAbastecimentos = async () => {
-      setCarregando(true);
-      try {
-        const params = {};
-        if (filtroVeiculo) params.veiculoId = filtroVeiculo;
-        if (filtroDataInicio) params.dataInicio = filtroDataInicio;
-        if (filtroDataFim) params.dataFim = filtroDataFim;
-        const { data } = await api.get(
-          "/movimentacao-veiculos/abastecimentos",
-          {
-            params,
-          },
-        );
-        setAbastecimentos(data);
-      } catch (e) {
-        setAbastecimentos([]);
-        console.error("Erro ao buscar abastecimentos:", e);
-      } finally {
-        setCarregando(false);
-      }
-    };
-    fetchAbastecimentos();
-  }, [usuario, filtroVeiculo, filtroDataInicio, filtroDataFim]);
+  const buscarAbastecimentos = async () => {
+    if (!filtroVeiculo && !filtroDataInicio && !filtroDataFim) return;
+
+    setCarregando(true);
+    setBuscou(true);
+    try {
+      const params = {};
+      if (filtroVeiculo) params.veiculoId = filtroVeiculo;
+      if (filtroDataInicio) params.dataInicio = filtroDataInicio;
+      if (filtroDataFim) params.dataFim = filtroDataFim;
+      const { data } = await api.get("/movimentacao-veiculos/abastecimentos", {
+        params,
+      });
+      setAbastecimentos(data);
+    } catch (e) {
+      setAbastecimentos([]);
+      console.error("Erro ao buscar abastecimentos:", e);
+    } finally {
+      setCarregando(false);
+    }
+  };
 
   if (!usuario || usuario.role !== "ADMIN") return null;
 
@@ -178,6 +175,14 @@ export default function AbastecimentosVeiculos({ veiculos = [] }) {
             onChange={(e) => setFiltroDataFim(e.target.value)}
           />
         </div>
+        <button
+          type="button"
+          onClick={buscarAbastecimentos}
+          disabled={carregando}
+          className="px-6 py-2 rounded-lg bg-[#62A1D9] text-white font-semibold hover:bg-[#4d8bc4] transition disabled:opacity-60 self-end"
+        >
+          {carregando ? "Buscando..." : "Buscar"}
+        </button>
         {(filtroVeiculo || filtroDataInicio || filtroDataFim) && (
           <button
             className="text-sm text-red-500 hover:text-red-700 underline self-end"
@@ -185,6 +190,8 @@ export default function AbastecimentosVeiculos({ veiculos = [] }) {
               setFiltroVeiculo("");
               setFiltroDataInicio("");
               setFiltroDataFim("");
+              setAbastecimentos([]);
+              setBuscou(false);
             }}
           >
             Limpar filtros
@@ -195,7 +202,9 @@ export default function AbastecimentosVeiculos({ veiculos = [] }) {
       <div className="mb-2 text-sm text-[#A6806A]">
         {carregando
           ? "Buscando registros..."
-          : `Registros encontrados: ${abastecimentos.length}`}
+          : buscou
+            ? `Registros encontrados: ${abastecimentos.length}`
+            : "Escolha um filtro e clique em Buscar."}
       </div>
 
       {/* Tabela */}
@@ -220,6 +229,12 @@ export default function AbastecimentosVeiculos({ veiculos = [] }) {
                   className="text-center p-6 text-[#62A1D9] font-semibold animate-pulse"
                 >
                   Carregando...
+                </td>
+              </tr>
+            ) : !buscou ? (
+              <tr>
+                <td colSpan={7} className="text-center p-6 text-[#A6806A]">
+                  Escolha um filtro e clique em "Buscar".
                 </td>
               </tr>
             ) : abastecimentos.length === 0 ? (

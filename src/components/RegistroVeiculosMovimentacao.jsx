@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useState } from "react";
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
 
@@ -31,34 +31,27 @@ export default function RegistroVeiculos({
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [filtroVeiculo, setFiltroVeiculo] = useState("");
   const [carregandoMov, setCarregandoMov] = useState(false);
+  const [buscou, setBuscou] = useState(false);
 
-  useEffect(() => {
-    if (!usuario || usuario.role !== "ADMIN") return;
-    console.log(
-      "[RegistroVeiculos] filtroDataInicio:",
-      filtroDataInicio,
-      "filtroDataFim:",
-      filtroDataFim,
-    );
-    const fetchMov = async () => {
-      setCarregandoMov(true);
-      try {
-        const params = {};
-        if (filtroVeiculo) params.veiculoId = filtroVeiculo;
-        if (filtroDataInicio) params.dataInicio = filtroDataInicio;
-        if (filtroDataFim) params.dataFim = filtroDataFim;
-        const { data } = await api.get("/movimentacao-veiculos", { params });
-        console.log("[RegistroVeiculos] dados recebidos:", data);
-        setMovimentacoes(data);
-      } catch (e) {
-        setMovimentacoes([]);
-        console.error("Erro ao buscar movimentações:", e);
-      } finally {
-        setCarregandoMov(false);
-      }
-    };
-    fetchMov();
-  }, [usuario, filtroVeiculo, filtroDataInicio, filtroDataFim]);
+  const buscarMovimentacoes = async () => {
+    if (!filtroVeiculo && !filtroDataInicio && !filtroDataFim) return;
+
+    setCarregandoMov(true);
+    setBuscou(true);
+    try {
+      const params = {};
+      if (filtroVeiculo) params.veiculoId = filtroVeiculo;
+      if (filtroDataInicio) params.dataInicio = filtroDataInicio;
+      if (filtroDataFim) params.dataFim = filtroDataFim;
+      const { data } = await api.get("/movimentacao-veiculos", { params });
+      setMovimentacoes(data);
+    } catch (e) {
+      setMovimentacoes([]);
+      console.error("Erro ao buscar movimentações:", e);
+    } finally {
+      setCarregandoMov(false);
+    }
+  };
 
   if (!usuario || usuario.role !== "ADMIN") return null;
   if (loading) return <div className="p-6">Carregando veículos...</div>;
@@ -71,7 +64,9 @@ export default function RegistroVeiculos({
       <div className="mb-2 text-sm text-[#A6806A]">
         {carregandoMov
           ? "Buscando registros..."
-          : `Registros encontrados: ${movimentacoes.length}`}
+          : buscou
+            ? `Registros encontrados: ${movimentacoes.length}`
+            : "Escolha um filtro e clique em Buscar."}
       </div>
       <div className="mb-6 flex flex-col md:flex-row gap-4 items-stretch md:items-end">
         <div className="flex-1">
@@ -91,6 +86,14 @@ export default function RegistroVeiculos({
             ))}
           </select>
         </div>
+        <button
+          type="button"
+          onClick={buscarMovimentacoes}
+          disabled={carregandoMov}
+          className="px-6 py-2 rounded-lg bg-[#62A1D9] text-white font-semibold hover:bg-[#4d8bc4] transition disabled:opacity-60"
+        >
+          {carregandoMov ? "Buscando..." : "Buscar"}
+        </button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-[#62A1D9] shadow bg-white">
         <table className="min-w-full text-sm text-[#24094E]">
@@ -119,6 +122,15 @@ export default function RegistroVeiculos({
                   className="text-center p-6 text-[#62A1D9] font-semibold animate-pulse"
                 >
                   Carregando movimentações...
+                </td>
+              </tr>
+            ) : !buscou ? (
+              <tr>
+                <td
+                  colSpan={11}
+                  className="text-center p-6 text-[#A6806A] font-medium"
+                >
+                  Escolha um período ou veículo e clique em "Buscar".
                 </td>
               </tr>
             ) : movimentacoes.length === 0 ? (
