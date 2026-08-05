@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React from "react";
 import {
   BrowserRouter,
   Routes,
@@ -33,23 +33,17 @@ import RoteiroAndamento from "./pages/RoteiroAndamento";
 import MovimentacaoMaquina from "./pages/MovimentacaoMaquina";
 import Manutencoes from "./pages/Manutencoes.jsx";
 import PecasPage from "./pages/PecasPage.jsx";
-import PecasForm from "./pages/PecasForm.jsx";
 import Veiculos from "./pages/Veiculos";
 import RevisoesPendentes from "./pages/RevisoesPendentes.jsx";
 import FinanceiroRoutes from "./pages/FinanceiroRoutes.jsx";
 import Alertas from "./pages/Alertas";
 import SecurityLockPage from "./pages/SecurityLockPage.jsx";
-import GerenciarCarrinhosPage from "./pages/GerenciarCarrinhosPage.jsx";
 import { QuebraOrdemPage } from "./pages/QuebraOrdemPage.jsx";
 import EstoqueUsuarios from "./pages/EstoqueUsuarios.jsx";
 import FluxoCaixa from "./pages/FluxoCaixa.jsx";
 import PecasDefeituosasDashboard from "./pages/PecasDefeituosasDashboard.jsx";
 import PecasDefeituosasAdminPage from "./pages/PecasDefeituosasAdminPage.jsx";
 import "./App.css";
-
-const CarrinhoDetalhePage = lazy(
-  () => import("./pages/CarrinhoDetalhePage.jsx"),
-);
 
 function AppRoutes() {
   // ...existing code...
@@ -328,33 +322,16 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
-      <Route
-        path="/pecas/nova"
-        element={
-          <PrivateRoute
-            allowedRoles={["ADMIN", "GERENCIADOR", "CONTROLADOR_ESTOQUE"]}
-          >
-            <PecasForm />
-          </PrivateRoute>
-        }
-      />
+      {/* Nova peça, carrinhos de funcionários e detalhe de carrinho agora
+          vivem como abas dentro de /pecas (ver PecasPage.jsx) */}
+      <Route path="/pecas/nova" element={<Navigate to="/pecas" replace />} />
       <Route
         path="/gerenciar-carrinhos"
-        element={
-          <PrivateRoute adminOnly>
-            <GerenciarCarrinhosPage />
-          </PrivateRoute>
-        }
+        element={<Navigate to="/pecas" replace />}
       />
       <Route
         path="/carrinho/:funcionarioId"
-        element={
-          <PrivateRoute adminOnly>
-            <Suspense fallback={<div>Carregando...</div>}>
-              <CarrinhoDetalhePage />
-            </Suspense>
-          </PrivateRoute>
-        }
+        element={<Navigate to="/pecas" replace />}
       />
       <Route
         path="/fluxo-caixa"

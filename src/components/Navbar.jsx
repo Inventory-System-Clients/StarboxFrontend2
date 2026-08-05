@@ -51,12 +51,6 @@ const grupos = [
     icon: "🧩",
     itens: [
       { to: "/pecas", label: "Peças e Carrinhos", icon: "🧰" },
-      {
-        to: "/gerenciar-carrinhos",
-        label: "Gerenciar Carrinhos",
-        icon: "🛒",
-        adminOnly: true,
-      },
       { to: "/deposito-principal", label: "Depósito Principal", icon: "🏭" },
       {
         to: "/dashboard/pecas-defeituosas",
