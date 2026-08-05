@@ -2165,11 +2165,16 @@ export function Dashboard() {
   };
 
   // Filtrar lojas conforme busca e garantir restrição para CONTROLADOR_ESTOQUE
-  let lojasFiltradas = lojas.filter(
-    (loja) =>
-      loja.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      loja.endereco?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  // Só mostra resultado depois que o usuário digita algo — sem isso a lista
+  // renderizava todos os pontos cadastrados de uma vez (pesado com muitos).
+  const termoBuscaPontos = searchTerm.trim().toLowerCase();
+  let lojasFiltradas = termoBuscaPontos
+    ? lojas.filter(
+        (loja) =>
+          loja.nome.toLowerCase().includes(termoBuscaPontos) ||
+          loja.endereco?.toLowerCase().includes(termoBuscaPontos),
+      )
+    : [];
 
   // Restrição extra para CONTROLADOR_ESTOQUE (defensivo)
   if (usuario?.role === "CONTROLADOR_ESTOQUE") {
