@@ -1,8 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { AlertBox, Modal } from "./UIComponents";
+
+const LIMITE_PARA_FILTRO = 6;
+
+const normalizarTexto = (valor) =>
+  String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
 
 export default function AlertAdmin() {
   const { usuario } = useAuth();
@@ -12,6 +20,15 @@ export default function AlertAdmin() {
   const [alertaSelecionado, setAlertaSelecionado] = useState(null);
   const [removendo, setRemovendo] = useState(false);
   const [erro, setErro] = useState("");
+  const [filtro, setFiltro] = useState("");
+
+  const alertasFiltrados = useMemo(() => {
+    const termo = normalizarTexto(filtro);
+    if (!termo) return alertas;
+    return alertas.filter((alerta) =>
+      normalizarTexto(alerta.maquinaNome || alerta.maquinaId).includes(termo),
+    );
+  }, [alertas, filtro]);
 
   useEffect(() => {
     if (usuario?.role === "ADMIN") {
@@ -62,19 +79,27 @@ export default function AlertAdmin() {
   if (usuario?.role !== "ADMIN") return null;
 
   return (
-    <div className="max-w-3xl mx-auto mt-8 px-4">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-[#24094E]">
-        <span className="bg-yellow-100 p-2 rounded-lg">⚠️</span> 
-        Alertas de Inconsistência
-      </h2>
-
+    <div>
       {erro && <AlertBox type="error" message={erro} className="mb-4" />}
 
       {alertas.length === 0 ? (
         <AlertBox type="success" message="Tudo certo! Nenhum alerta encontrado." />
       ) : (
+        <>
+          {alertas.length > LIMITE_PARA_FILTRO && (
+            <input
+              type="text"
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              placeholder="Buscar por máquina..."
+              className="input-field mb-4 w-full sm:w-80"
+            />
+          )}
+          {alertasFiltrados.length === 0 ? (
+            <p className="text-sm text-gray-500">Nenhum alerta encontrado para essa busca.</p>
+          ) : (
         <div className="grid gap-4">
-          {alertas.map((alerta) => (
+          {alertasFiltrados.map((alerta) => (
             <div
               key={alerta.id}
               className="bg-white border-l-4 border-[#62A1D9] rounded-xl p-5 shadow-md hover:shadow-lg transition-shadow"
@@ -121,8 +146,10 @@ export default function AlertAdmin() {
             </div>
           ))}
         </div>
+          )}
+        </>
       )}
-      
+
       {/* ... Modal se mantém similar ... */}
     </div>
   );
