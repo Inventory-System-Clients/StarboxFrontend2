@@ -763,150 +763,26 @@ export function Dashboard() {
     }
   };
 
-  const carregarAlertaInatividadeLojas = useCallback(
-    async (lojasData) => {
-      let lojasParaAnalise = Array.isArray(lojasData) ? lojasData : [];
+  // O cálculo (última movimentação/retirada por loja) roda no backend em
+  // 2 queries agregadas, em vez de baixar aqui todas as movimentações e todo
+  // o fluxo de caixa dos últimos 90 dias só para achar o máximo por loja.
+  const carregarAlertaInatividadeLojas = useCallback(async () => {
+    setAlertaInatividadeLojas((prev) => ({ ...prev, carregando: true }));
 
-      if (
-        lojasParaAnalise.length === 0 &&
-        (usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR")
-      ) {
-        try {
-          const lojasRes = await api.get("/lojas", { params: { all: true } });
-          lojasParaAnalise = Array.isArray(lojasRes.data) ? lojasRes.data : [];
-        } catch {
-          lojasParaAnalise = [];
-        }
-      }
-
-      if (lojasParaAnalise.length === 0) {
-        setAlertaInatividadeLojas({ lojas: [], carregando: false });
-        return;
-      }
-
-      setAlertaInatividadeLojas((prev) => ({ ...prev, carregando: true }));
-
-      try {
-        const hoje = new Date();
-        const dataInicioBusca = new Date(
-          hoje.getTime() - 90 * 24 * 60 * 60 * 1000,
-        )
-          .toISOString()
-          .split("T")[0];
-        const dataFimBusca = hoje.toISOString().split("T")[0];
-
-        const paramsFluxo = new URLSearchParams({
-          dataInicio: dataInicioBusca,
-          dataFim: dataFimBusca,
-        });
-
-        const [movRes, fluxoRes] = await Promise.all([
-          api
-            .get("/movimentacoes", {
-              params: {
-                dataInicio: dataInicioBusca,
-                dataFim: `${dataFimBusca}T23:59:59`,
-                limite: 50000,
-              },
-            })
-            .catch(() => ({ data: [] })),
-          api
-            .get(`/fluxo-caixa?${paramsFluxo.toString()}`)
-            .catch(() => ({ data: [] })),
-        ]);
-
-        const movimentacoes = Array.isArray(movRes?.data)
-          ? movRes.data
-          : movRes?.data?.movimentacoes || movRes?.data?.rows || [];
-        const fluxos = Array.isArray(fluxoRes?.data)
-          ? fluxoRes.data
-          : fluxoRes?.data?.fluxos || fluxoRes?.data?.rows || [];
-
-        const ultimaMovPorLoja = new Map();
-        const ultimaRetiradaPorLoja = new Map();
-
-        movimentacoes.forEach((mov) => {
-          const lojaId = String(
-            mov?.lojaId || mov?.maquina?.lojaId || mov?.maquina?.loja?.id || "",
-          );
-          if (!lojaId) return;
-
-          const dataMov = new Date(
-            mov?.dataColeta ||
-              mov?.data ||
-              mov?.dataMovimentacao ||
-              mov?.createdAt,
-          );
-          if (Number.isNaN(dataMov.getTime())) return;
-
-          const anterior = ultimaMovPorLoja.get(lojaId);
-          if (!anterior || dataMov > anterior) {
-            ultimaMovPorLoja.set(lojaId, dataMov);
-          }
-        });
-
-        fluxos.forEach((fluxo) => {
-          const lojaId = String(
-            fluxo?.lojaId ||
-              fluxo?.movimentacao?.maquina?.lojaId ||
-              fluxo?.movimentacao?.maquina?.loja?.id ||
-              "",
-          );
-          if (!lojaId) return;
-
-          const dataRetirada = new Date(
-            fluxo?.movimentacao?.dataColeta ||
-              fluxo?.dataRetirada ||
-              fluxo?.dataConferencia ||
-              fluxo?.createdAt ||
-              fluxo?.updatedAt,
-          );
-          if (Number.isNaN(dataRetirada.getTime())) return;
-
-          const anterior = ultimaRetiradaPorLoja.get(lojaId);
-          if (!anterior || dataRetirada > anterior) {
-            ultimaRetiradaPorLoja.set(lojaId, dataRetirada);
-          }
-        });
-
-        const MS_DIA = 24 * 60 * 60 * 1000;
-        const lojasComAlerta = lojasParaAnalise
-          .filter((loja) => !loja?.isDepositoPrincipal)
-          .map((loja) => {
-            const id = String(loja?.id || "");
-            const ultimaMov = ultimaMovPorLoja.get(id) || null;
-            const ultimaRetirada = ultimaRetiradaPorLoja.get(id) || null;
-
-            const diasSemMov = ultimaMov
-              ? Math.floor((hoje - ultimaMov) / MS_DIA)
-              : 9999;
-            const diasSemRetirada = ultimaRetirada
-              ? Math.floor((hoje - ultimaRetirada) / MS_DIA)
-              : 9999;
-
-            return {
-              lojaId: loja.id,
-              lojaNome: loja.nome,
-              ultimaMovimentacao: ultimaMov,
-              ultimaRetirada,
-              diasSemMov,
-              diasSemRetirada,
-            };
-          })
-          .filter((loja) => loja.diasSemMov > 15 && loja.diasSemRetirada > 15)
-          .sort((a, b) => b.diasSemMov - a.diasSemMov);
-
-        setAlertaInatividadeLojas({ lojas: lojasComAlerta, carregando: false });
-      } catch (error) {
-        console.error(
-          "Erro ao calcular alerta de inatividade das lojas:",
-          error,
-        );
-        setAlertaInatividadeLojas({ lojas: [], carregando: false });
-      }
-    },
-    [usuario?.role],
-  );
+    try {
+      const res = await api.get("/relatorios/alertas-inatividade-lojas");
+      const lojasComAlerta = Array.isArray(res.data?.lojas)
+        ? res.data.lojas
+        : [];
+      setAlertaInatividadeLojas({ lojas: lojasComAlerta, carregando: false });
+    } catch (error) {
+      console.error(
+        "Erro ao calcular alerta de inatividade das lojas:",
+        error,
+      );
+      setAlertaInatividadeLojas({ lojas: [], carregando: false });
+    }
+  }, []);
 
   const carregarDados = useCallback(async () => {
     try {
@@ -943,105 +819,43 @@ export function Dashboard() {
 
       // Adicionar requisições de relatórios apenas para ADMIN
       if (isAdmin) {
-        // Calcular datas da última semana
-        const hoje = new Date();
-        const seteDiasAtras = new Date(
-          hoje.getTime() - 7 * 24 * 60 * 60 * 1000,
-        );
-        const dataInicioSemana = seteDiasAtras.toISOString().split("T")[0];
-        const dataFimSemana = hoje.toISOString().split("T")[0];
-
         requisicoes.unshift(
           api.get("/relatorios/alertas-estoque").catch((err) => {
             console.error("Erro ao carregar alertas de máquinas:", err.message);
             return { data: { alertas: [] } };
           }),
+          // Já vem com totalDinheiro/totalCartaoPix/receitaReal calculados
+          // no backend — não precisa mais buscar as movimentações da semana
+          // aqui só pra somar esses dois campos.
           api.get("/relatorios/balanco-semanal").catch((err) => {
             console.error("Erro ao carregar balanço:", err.message);
             return { data: null };
           }),
-          // Buscar movimentações da semana para calcular faturamento real
-          api
-            .get("/movimentacoes", {
-              params: {
-                dataInicio: dataInicioSemana,
-                dataFim: `${dataFimSemana}T23:59:59`,
-                pageSize: 1000,
-              },
-            })
-            .catch((err) => {
-              console.error(
-                "Erro ao carregar movimentações semanais:",
-                err.message,
-              );
-              return { data: [] };
-            }),
         );
       }
 
       const resultados = await Promise.all(requisicoes);
 
-      let alertasRes,
-        balancoRes,
-        movSemanaisRes,
-        lojasRes,
-        maquinasRes,
-        produtosRes;
+      let alertasRes, balancoRes, lojasRes, maquinasRes, produtosRes;
 
       if (isAdmin) {
-        [
-          alertasRes,
-          balancoRes,
-          movSemanaisRes,
-          lojasRes,
-          maquinasRes,
-          produtosRes,
-        ] = resultados;
+        [alertasRes, balancoRes, lojasRes, maquinasRes, produtosRes] =
+          resultados;
       } else {
         [lojasRes, maquinasRes, produtosRes] = resultados;
         alertasRes = { data: { alertas: [] } };
         balancoRes = { data: null };
-        movSemanaisRes = { data: [] };
       }
-
-      // Calcular faturamento semanal real a partir das movimentações
-      const movsList = Array.isArray(movSemanaisRes.data?.data)
-        ? movSemanaisRes.data.data
-        : Array.isArray(movSemanaisRes.data)
-          ? movSemanaisRes.data
-          : movSemanaisRes.data?.movimentacoes ||
-            movSemanaisRes.data?.rows ||
-            [];
-      let totalDinheiroSemanal = 0;
-      let totalCartaoPixSemanal = 0;
-      movsList.forEach((mov) => {
-        totalDinheiroSemanal += parseFloat(mov.quantidade_notas_entrada || 0);
-        totalCartaoPixSemanal += parseFloat(
-          mov.valor_entrada_maquininha_pix || 0,
-        );
-      });
 
       console.log("Lojas carregadas:", lojasRes.data);
       console.log("Máquinas carregadas:", maquinasRes.data);
       console.log("Produtos carregados:", produtosRes.data);
       if (isAdmin) {
         console.log("Balanço semanal:", balancoRes.data);
-        console.log("Movimentações semanais:", movsList.length, "movs");
-        console.log(
-          "Faturamento semanal calculado - Dinheiro:",
-          totalDinheiroSemanal,
-          "Cartão/Pix:",
-          totalCartaoPixSemanal,
-        );
       }
 
-      // Injetar totais de dinheiro/cartão no balanço
       const balancoData = balancoRes.data || { totais: {} };
       if (!balancoData.totais) balancoData.totais = {};
-      balancoData.totais.totalDinheiro = totalDinheiroSemanal;
-      balancoData.totais.totalCartaoPix = totalCartaoPixSemanal;
-      balancoData.totais.receitaReal =
-        totalDinheiroSemanal + totalCartaoPixSemanal;
 
       // Buscar lucro diário do backend
       try {
@@ -1130,7 +944,7 @@ export function Dashboard() {
         carregarAlertasEstoqueLoja();
       }
 
-      carregarAlertaInatividadeLojas(lojasVisiveis);
+      carregarAlertaInatividadeLojas();
 
       carregarAlertasEstoqueUsuario();
     } catch (error) {
