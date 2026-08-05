@@ -790,27 +790,8 @@ export function Dashboard() {
         usuario?.role === "ADMIN" ||
         usuario?.role === "GERENCIADOR" ||
         usuario?.role === "GERENTE";
-      const bloquearVisualizacaoLojasEMaquinas =
-        usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR";
 
-      // Para FUNCIONARIO/ABASTECEDOR, bloqueia o carregamento de lojas e máquinas.
       const requisicoes = [
-        bloquearVisualizacaoLojasEMaquinas
-          ? Promise.resolve({ data: [] })
-          : api
-              .get("/lojas", { params: { all: true } })
-              .catch((err) => {
-                console.error("Erro ao carregar lojas:", err.message);
-                return { data: [] };
-              }),
-        bloquearVisualizacaoLojasEMaquinas
-          ? Promise.resolve({ data: [] })
-          : api
-              .get("/maquinas", { params: { all: true } })
-              .catch((err) => {
-                console.error("Erro ao carregar máquinas:", err.message);
-                return { data: [] };
-              }),
         api.get("/produtos", { params: { all: true } }).catch((err) => {
           console.error("Erro ao carregar produtos:", err.message);
           return { data: [] };
@@ -836,19 +817,16 @@ export function Dashboard() {
 
       const resultados = await Promise.all(requisicoes);
 
-      let alertasRes, balancoRes, lojasRes, maquinasRes, produtosRes;
+      let alertasRes, balancoRes, produtosRes;
 
       if (isAdmin) {
-        [alertasRes, balancoRes, lojasRes, maquinasRes, produtosRes] =
-          resultados;
+        [alertasRes, balancoRes, produtosRes] = resultados;
       } else {
-        [lojasRes, maquinasRes, produtosRes] = resultados;
+        [produtosRes] = resultados;
         alertasRes = { data: { alertas: [] } };
         balancoRes = { data: null };
       }
 
-      console.log("Lojas carregadas:", lojasRes.data);
-      console.log("Máquinas carregadas:", maquinasRes.data);
       console.log("Produtos carregados:", produtosRes.data);
       if (isAdmin) {
         console.log("Balanço semanal:", balancoRes.data);
@@ -871,6 +849,57 @@ export function Dashboard() {
         balanco: balancoData,
         loading: false,
       });
+      setProdutos(produtosRes.data || []);
+
+      // Alertas de estoque dos pontos só aparecem pra admin/gerenciador,
+      // então só vale a pena buscar pra quem realmente vê o widget.
+      if (isAdminLike) {
+        carregarAlertasEstoqueLoja();
+      }
+
+      carregarAlertaInatividadeLojas();
+
+      carregarAlertasEstoqueUsuario();
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+      setStats({ alertas: [], balanco: null, loading: false });
+    }
+  }, [carregarAlertaInatividadeLojas, usuario]);
+
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
+
+  // Lojas e máquinas (252/432 registros em produção) só são buscadas quando
+  // o usuário efetivamente abre a busca de "Pontos e Máquinas" — não no
+  // carregamento inicial do Dashboard.
+  const lojasMaquinasSolicitadoRef = useRef(false);
+  const [carregandoLojasEMaquinas, setCarregandoLojasEMaquinas] =
+    useState(false);
+
+  const carregarLojasEMaquinas = useCallback(async () => {
+    if (lojasMaquinasSolicitadoRef.current) return;
+    lojasMaquinasSolicitadoRef.current = true;
+
+    if (usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR") {
+      setLojas([]);
+      setMaquinas([]);
+      return;
+    }
+
+    setCarregandoLojasEMaquinas(true);
+    try {
+      const [lojasRes, maquinasRes] = await Promise.all([
+        api.get("/lojas", { params: { all: true } }).catch((err) => {
+          console.error("Erro ao carregar lojas:", err.message);
+          return { data: [] };
+        }),
+        api.get("/maquinas", { params: { all: true } }).catch((err) => {
+          console.error("Erro ao carregar máquinas:", err.message);
+          return { data: [] };
+        }),
+      ]);
+
       // Filtrar lojas permitidas para CONTROLADOR_ESTOQUE
       let lojasVisiveis = lojasRes.data || [];
       if (usuario?.role === "CONTROLADOR_ESTOQUE") {
@@ -936,28 +965,14 @@ export function Dashboard() {
 
       setLojas(lojasVisiveis);
       setMaquinas(maquinasVisiveis);
-      setProdutos(produtosRes.data || []);
-
-      // Alertas de estoque dos pontos só aparecem pra admin/gerenciador,
-      // então só vale a pena buscar pra quem realmente vê o widget.
-      if (isAdminLike) {
-        carregarAlertasEstoqueLoja();
-      }
-
-      carregarAlertaInatividadeLojas();
-
-      carregarAlertasEstoqueUsuario();
     } catch (error) {
-      console.error("Erro ao carregar dados:", error);
-      setStats({ alertas: [], balanco: null, loading: false });
+      console.error("Erro ao carregar lojas/máquinas:", error);
       setLojas([]);
       setMaquinas([]);
+    } finally {
+      setCarregandoLojasEMaquinas(false);
     }
-  }, [carregarAlertaInatividadeLojas, usuario]);
-
-  useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
+  }, [usuario]);
 
   // Carregar revisões pendentes
   useEffect(() => {
@@ -3203,6 +3218,7 @@ export function Dashboard() {
             <div className="mb-6 flex justify-center">
               <button
                 onClick={() => {
+                  carregarLojasEMaquinas();
                   buscaLojasRef.current?.scrollIntoView({
                     behavior: "smooth",
                     block: "start",
@@ -3277,7 +3293,10 @@ export function Dashboard() {
                       : "Imprimir Relatório Consolidado"}
                   </button>
                   <button
-                    onClick={() => setMostrarModalMovimentacao(true)}
+                    onClick={() => {
+                      carregarLojasEMaquinas();
+                      setMostrarModalMovimentacao(true);
+                    }}
                     className="px-4 py-2 bg-linear-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold text-sm flex items-center gap-2"
                   >
                     <svg
@@ -3665,6 +3684,7 @@ export function Dashboard() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onFocus={carregarLojasEMaquinas}
                   placeholder="Digite o nome do ponto ou endereço..."
                   className="w-full input-field pl-12 text-lg"
                 />
@@ -3737,9 +3757,11 @@ export function Dashboard() {
                   <div className="text-center py-12">
                     <p className="text-6xl mb-4">🔍</p>
                     <p className="text-gray-600">
-                      {searchTerm
-                        ? "Nenhum ponto encontrado"
-                        : "Digite para buscar pontos"}
+                      {carregandoLojasEMaquinas
+                        ? "Carregando pontos..."
+                        : searchTerm
+                          ? "Nenhum ponto encontrado"
+                          : "Digite para buscar pontos"}
                     </p>
                   </div>
                 )}
