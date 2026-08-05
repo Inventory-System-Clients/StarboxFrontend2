@@ -17,7 +17,7 @@ async function buscarSaldosDepositoPrincipal(produtoIds, api) {
     return {};
   }
 }
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import api, { basesSecundariasAPI } from "../services/api";
@@ -135,6 +135,8 @@ export function Dashboard() {
   // Estados para busca e navegação (deve vir antes do uso em modais)
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroEstoqueLoja, setFiltroEstoqueLoja] = useState("");
+  const [filtroEstoqueCidade, setFiltroEstoqueCidade] = useState("");
+  const [filtroEstoqueEstado, setFiltroEstoqueEstado] = useState("");
   const buscaLojasRef = useRef(null);
   const [lojas, setLojas] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -714,8 +716,12 @@ export function Dashboard() {
   });
 
   // Estados para estoque das lojas
+  const [lojasCadastroEstoque, setLojasCadastroEstoque] = useState([]);
   const [lojasComEstoque, setLojasComEstoque] = useState([]);
   const [loadingEstoque, setLoadingEstoque] = useState(false);
+  const [buscouEstoqueDepositos, setBuscouEstoqueDepositos] = useState(false);
+  const [gerandoRelatorioConsolidado, setGerandoRelatorioConsolidado] =
+    useState(false);
   const [lojaEstoqueExpanded, setLojaEstoqueExpanded] = useState({});
 
   // Estados para edição de estoque
@@ -724,43 +730,20 @@ export function Dashboard() {
 
   // Função para remover produto do estoque da loja (usando o id do registro)
 
-  const carregarAlertasEstoqueLoja = async (lojasData) => {
+  const carregarAlertasEstoqueLoja = async () => {
     try {
-      // Buscar alertas de todas as lojas
-      const alertasPromises = lojasData.map((loja) =>
-        api
-          .get(`/estoque-lojas/${loja.id}/alertas`)
-          .then((res) => ({
-            lojaId: loja.id,
-            lojaNome: loja.nome,
-            alertas: res.data || [],
-          }))
-          .catch((err) => {
-            console.error(
-              `Erro ao carregar alertas da loja ${loja.nome}:`,
-              err.message,
-            );
-            return { lojaId: loja.id, lojaNome: loja.nome, alertas: [] };
-          }),
-      );
+      // Uma única chamada batched no backend em vez de 1 requisição por loja.
+      const res = await api.get("/estoque-lojas/alertas");
+      const alertas = Array.isArray(res.data?.alertas) ? res.data.alertas : [];
 
-      const alertasTodasLojas = await Promise.all(alertasPromises);
-
-      // Agrupar todos os alertas
-      const todosAlertas = alertasTodasLojas.flatMap((lojaAlertas) => {
-        // Garantir que alertas seja um array
-        const alertasArray = Array.isArray(lojaAlertas.alertas)
-          ? lojaAlertas.alertas
-          : [];
-
-        return alertasArray.map((alerta) => ({
+      setAlertasEstoqueLoja(
+        alertas.map((alerta) => ({
           ...alerta,
-          lojaNome: lojaAlertas.lojaNome,
-        }));
-      });
-
-      setAlertasEstoqueLoja(todosAlertas);
-      console.log("Alertas de estoque de lojas:", todosAlertas);
+          lojaId: alerta.loja?.id,
+          lojaNome: alerta.loja?.nome,
+          produtoId: alerta.produto?.id,
+        })),
+      );
     } catch (error) {
       console.error("Erro ao carregar alertas de estoque de lojas:", error);
       setAlertasEstoqueLoja([]);
@@ -1141,9 +1124,10 @@ export function Dashboard() {
       setMaquinas(maquinasVisiveis);
       setProdutos(produtosRes.data || []);
 
-      // Carregar alertas de estoque de lojas (para todos os usuários)
-      if (lojasVisiveis.length > 0) {
-        carregarAlertasEstoqueLoja(lojasVisiveis);
+      // Alertas de estoque dos pontos só aparecem pra admin/gerenciador,
+      // então só vale a pena buscar pra quem realmente vê o widget.
+      if (isAdminLike) {
+        carregarAlertasEstoqueLoja();
       }
 
       carregarAlertaInatividadeLojas(lojasVisiveis);
@@ -1234,41 +1218,96 @@ export function Dashboard() {
     });
   };
 
-  const carregarEstoqueDasLojas = async () => {
+  // Busca o estoque de um conjunto pontual de lojas (nunca todas de uma vez
+  // sem o usuário pedir) — usado tanto pela busca filtrada quanto pelo
+  // relatório consolidado, que precisa mesmo dos dados de todas as lojas.
+  const buscarEstoquePorLojas = async (lojasAlvo) => {
+    const lojasComEstoquePromises = lojasAlvo.map(async (loja) => {
+      try {
+        const estoqueRes = await api.get(`/estoque-lojas/${loja.id}`);
+        const estoque = estoqueRes.data || [];
+
+        return {
+          ...loja,
+          estoque,
+          totalProdutos: estoque.length,
+          totalUnidades: estoque.reduce(
+            (sum, item) => sum + item.quantidade,
+            0,
+          ),
+        };
+      } catch (error) {
+        console.error(`Erro ao carregar estoque da loja ${loja.id}:`, error);
+        return {
+          ...loja,
+          estoque: [],
+          totalProdutos: 0,
+          totalUnidades: 0,
+        };
+      }
+    });
+
+    return Promise.all(lojasComEstoquePromises);
+  };
+
+  // Cadastro leve das lojas (sem estoque), só para popular os filtros.
+  const carregarLojasCadastroEstoque = async () => {
+    try {
+      const lojasRes = await api.get("/lojas", { params: { all: true } });
+      setLojasCadastroEstoque(
+        Array.isArray(lojasRes.data) ? lojasRes.data : [],
+      );
+    } catch (error) {
+      console.error("Erro ao carregar lojas para filtro de estoque:", error);
+      setLojasCadastroEstoque([]);
+    }
+  };
+
+  const cidadesEstoqueDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          lojasCadastroEstoque.map((loja) => loja?.cidade).filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [lojasCadastroEstoque],
+  );
+
+  const estadosEstoqueDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          lojasCadastroEstoque.map((loja) => loja?.estado).filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [lojasCadastroEstoque],
+  );
+
+  const buscarEstoqueDosDepositos = async (e) => {
+    e?.preventDefault?.();
+
+    const nome = filtroEstoqueLoja.trim().toLowerCase();
+    if (!nome && !filtroEstoqueCidade && !filtroEstoqueEstado) {
+      return;
+    }
+
+    const lojasFiltradas = lojasCadastroEstoque.filter((loja) => {
+      if (nome && !(loja.nome || "").toLowerCase().includes(nome)) {
+        return false;
+      }
+      if (filtroEstoqueCidade && loja.cidade !== filtroEstoqueCidade) {
+        return false;
+      }
+      if (filtroEstoqueEstado && loja.estado !== filtroEstoqueEstado) {
+        return false;
+      }
+      return true;
+    });
+
     try {
       setLoadingEstoque(true);
-
-      // 1. Buscar todas as lojas
-      const lojasRes = await api.get("/lojas", { params: { all: true } });
-      const lojas = lojasRes.data || [];
-
-      // 2. Para cada loja, buscar seu estoque
-      const lojasComEstoquePromises = lojas.map(async (loja) => {
-        try {
-          const estoqueRes = await api.get(`/estoque-lojas/${loja.id}`);
-          const estoque = estoqueRes.data || [];
-
-          return {
-            ...loja,
-            estoque: estoque,
-            totalProdutos: estoque.length,
-            totalUnidades: estoque.reduce(
-              (sum, item) => sum + item.quantidade,
-              0,
-            ),
-          };
-        } catch (error) {
-          console.error(`Erro ao carregar estoque da loja ${loja.id}:`, error);
-          return {
-            ...loja,
-            estoque: [],
-            totalProdutos: 0,
-            totalUnidades: 0,
-          };
-        }
-      });
-
-      const resultado = await Promise.all(lojasComEstoquePromises);
+      setBuscouEstoqueDepositos(true);
+      const resultado = await buscarEstoquePorLojas(lojasFiltradas);
       setLojasComEstoque(resultado);
     } catch (error) {
       console.error("Erro ao carregar estoque das lojas:", error);
@@ -1278,14 +1317,25 @@ export function Dashboard() {
     }
   };
 
-  // Carregar estoque das lojas
+  const limparFiltrosEstoqueDepositos = () => {
+    setFiltroEstoqueLoja("");
+    setFiltroEstoqueCidade("");
+    setFiltroEstoqueEstado("");
+    setLojasComEstoque([]);
+    setBuscouEstoqueDepositos(false);
+  };
+
+  // Carregar cadastro leve das lojas (para os filtros) — o estoque em si só
+  // é buscado quando o usuário aplica um filtro.
   useEffect(() => {
     if (isAdminLike) {
-      carregarEstoqueDasLojas();
+      carregarLojasCadastroEstoque();
       return;
     }
 
+    setLojasCadastroEstoque([]);
     setLojasComEstoque([]);
+    setBuscouEstoqueDepositos(false);
   }, [isAdminLike]);
 
   const carregarDetalhesMaquina = async (maquinaId) => {
@@ -1718,11 +1768,31 @@ export function Dashboard() {
   };
 
   // Função para imprimir relatório consolidado de todas as lojas
-  const imprimirRelatorioConsolidado = () => {
+  // O relatório consolidado precisa mesmo do estoque de todas as lojas (é
+  // uma ação explícita do usuário, não um carregamento automático da
+  // página), então busca tudo sob demanda em vez de depender do que já
+  // estiver carregado na busca filtrada.
+  const handleImprimirRelatorioConsolidado = async () => {
+    try {
+      setGerandoRelatorioConsolidado(true);
+      const baseLojas =
+        lojasCadastroEstoque.length > 0
+          ? lojasCadastroEstoque
+          : (await api.get("/lojas", { params: { all: true } })).data || [];
+      const todasComEstoque = await buscarEstoquePorLojas(baseLojas);
+      imprimirRelatorioConsolidado(todasComEstoque);
+    } catch (error) {
+      console.error("Erro ao gerar relatório consolidado:", error);
+    } finally {
+      setGerandoRelatorioConsolidado(false);
+    }
+  };
+
+  const imprimirRelatorioConsolidado = (lojasParaRelatorio) => {
     // Consolidar necessidades por produto
     const necessidadesPorProduto = {};
 
-    lojasComEstoque.forEach((loja) => {
+    lojasParaRelatorio.forEach((loja) => {
       loja.estoque.forEach((item) => {
         const falta = item.estoqueMinimo - item.quantidade;
         if (falta > 0) {
@@ -1855,7 +1925,7 @@ export function Dashboard() {
             <p><strong>Tipos de Produtos:</strong> ${
               produtosNecessarios.length
             }</p>
-            <p><strong>Pontos Atendidos:</strong> ${lojasComEstoque.length}</p>
+            <p><strong>Pontos Atendidos:</strong> ${lojasParaRelatorio.length}</p>
           </div>
 
           ${
@@ -2015,8 +2085,10 @@ export function Dashboard() {
         }
       }
 
-      // Recarregar os dados
-      await carregarEstoqueDasLojas();
+      // Recarregar os dados (só se já havia uma busca ativa na tela)
+      if (buscouEstoqueDepositos) {
+        await buscarEstoqueDosDepositos();
+      }
       fecharEdicaoEstoque();
     } catch (error) {
       console.error("Erro ao salvar estoque:", error);
@@ -2966,32 +3038,6 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Alerta de Movimentação Inconsistente - ADMIN */}
-        {isAdminLike && (
-          <div className="card-gradient mb-8 border-l-4 border-yellow-500 p-4 sm:p-8 rounded-xl shadow-md  sm:flex-row items-center justify-between gap-6">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                <span className="bg-linear-to-br from-yellow-400 to-yellow-600 p-2 sm:p-3 rounded-xl text-white">
-                  ⚠️
-                </span>
-                Alertas de Movimentação Inconsistente
-              </h2>
-              <p className="text-gray-600 text-sm sm:text-base">
-                Avisos de inconsistência entre OUT, IN e fichas nas máquinas.
-                Clique para ver detalhes e corrigir.
-              </p>
-            </div>
-            <div className="text-left sm:text-right mt-4 sm:mt-0 flex flex-col items-end">
-              <button
-                className="btn-warning font-bold text-yellow-900 px-6 py-2 rounded-lg shadow hover:bg-yellow-400 transition-colors flex items-center gap-2"
-                onClick={() => navigate("/alertas")}
-              >
-                <span className="text-2xl">⚠️</span> Ver Alertas
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Card do Depósito Principal - Apenas ADMIN */}
         {isAdminLike && (
           <div className="card-gradient mb-8 border-l-4 border-orange-500 p-4 sm:p-8 rounded-xl shadow-md sm:flex-row items-center justify-between gap-6">
@@ -3332,7 +3378,7 @@ export function Dashboard() {
         )}
 
         {/* Estoque dos Depósitos - Apenas para ADMIN */}
-        {isAdminLike && lojasComEstoque.length > 0 && (
+        {isAdminLike && (
           <>
             {/* Botão para ir para busca de pontos */}
             <div className="mb-6 flex justify-center">
@@ -3383,44 +3429,15 @@ export function Dashboard() {
                     Estoque dos Depósitos
                   </h2>
                   <p className="text-gray-600 mt-1">
-                    Visualização rápida do estoque em cada ponto
+                    Use os filtros abaixo e clique em "Buscar" para ver o
+                    estoque dos pontos.
                   </p>
-                  {/* Campo de busca por nome do ponto */}
-                  <div className="relative mt-4">
-                    <input
-                      type="text"
-                      value={filtroEstoqueLoja}
-                      onChange={(e) => setFiltroEstoqueLoja(e.target.value)}
-                      placeholder="Buscar ponto pelo nome..."
-                      className="w-full md:w-96 input-field pl-10 text-sm"
-                    />
-                    <svg
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-                    {filtroEstoqueLoja && (
-                      <button
-                        onClick={() => setFiltroEstoqueLoja("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={imprimirRelatorioConsolidado}
-                    className="w-full sm:w-auto px-3 py-2 bg-linear-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 wrap-break-word"
+                    onClick={handleImprimirRelatorioConsolidado}
+                    disabled={gerandoRelatorioConsolidado}
+                    className="w-full sm:w-auto px-3 py-2 bg-linear-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 wrap-break-word disabled:opacity-60"
                     style={{ minWidth: 0, maxWidth: "100%" }}
                   >
                     <svg
@@ -3436,7 +3453,9 @@ export function Dashboard() {
                         d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                       />
                     </svg>
-                    Imprimir Relatório Consolidado
+                    {gerandoRelatorioConsolidado
+                      ? "Gerando..."
+                      : "Imprimir Relatório Consolidado"}
                   </button>
                   <button
                     onClick={() => setMostrarModalMovimentacao(true)}
@@ -3463,14 +3482,97 @@ export function Dashboard() {
                 </div>
               </div>
 
+              <form
+                onSubmit={buscarEstoqueDosDepositos}
+                className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">
+                    Nome do ponto
+                  </label>
+                  <input
+                    type="text"
+                    value={filtroEstoqueLoja}
+                    onChange={(e) => setFiltroEstoqueLoja(e.target.value)}
+                    placeholder="Buscar pelo nome..."
+                    className="w-full input-field text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">
+                    Cidade
+                  </label>
+                  <select
+                    value={filtroEstoqueCidade}
+                    onChange={(e) => setFiltroEstoqueCidade(e.target.value)}
+                    className="w-full input-field text-sm"
+                  >
+                    <option value="">Todas</option>
+                    {cidadesEstoqueDisponiveis.map((cidade) => (
+                      <option key={cidade} value={cidade}>
+                        {cidade}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">
+                    Estado
+                  </label>
+                  <select
+                    value={filtroEstoqueEstado}
+                    onChange={(e) => setFiltroEstoqueEstado(e.target.value)}
+                    className="w-full input-field text-sm"
+                  >
+                    <option value="">Todos</option>
+                    {estadosEstoqueDisponiveis.map((estado) => (
+                      <option key={estado} value={estado}>
+                        {estado}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="submit"
+                    disabled={loadingEstoque}
+                    className="flex-1 px-4 py-2 rounded-lg bg-primary text-black font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
+                  >
+                    {loadingEstoque ? "Buscando..." : "Buscar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={limparFiltrosEstoqueDepositos}
+                    className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </form>
+
               <div className="space-y-4">
-                {lojasComEstoque
-                  .filter((loja) =>
-                    loja.nome
-                      .toLowerCase()
-                      .includes(filtroEstoqueLoja.toLowerCase()),
-                  )
-                  .map((loja) => (
+                {!buscouEstoqueDepositos ? (
+                  <div className="text-center py-12">
+                    <p className="text-5xl mb-3">🔍</p>
+                    <p className="text-gray-500 font-medium">
+                      Informe ao menos um filtro (nome, cidade ou estado) e
+                      clique em "Buscar".
+                    </p>
+                  </div>
+                ) : loadingEstoque ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando estoque...</p>
+                  </div>
+                ) : lojasComEstoque.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-5xl mb-3">📭</p>
+                    <p className="text-gray-500 font-medium">
+                      Nenhum ponto encontrado para os filtros informados.
+                    </p>
+                  </div>
+                ) : (
+                  lojasComEstoque.map((loja) => (
                     <div
                       key={loja.id}
                       className="border-2 border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors"
@@ -3687,7 +3789,8 @@ export function Dashboard() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  ))
+                )}
               </div>
             </div>
           </>

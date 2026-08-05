@@ -36,18 +36,13 @@ const formatarDataHora = (dataIso) => {
   };
 };
 
-const getFiltrosPadrao = () => {
-  const hoje = new Date();
-  const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-  return {
-    dataInicio: seteDiasAtras.toISOString().slice(0, 10),
-    dataFim: hoje.toISOString().slice(0, 10),
-    roteiroId: "",
-    usuarioId: "",
-    categoria: "",
-  };
-};
+const getFiltrosPadrao = () => ({
+  dataInicio: "",
+  dataFim: "",
+  roteiroId: "",
+  usuarioId: "",
+  categoria: "",
+});
 
 export default function DashboardGastosRoteirosTab() {
   const [filtros, setFiltros] = useState(() => getFiltrosPadrao());
@@ -61,6 +56,7 @@ export default function DashboardGastosRoteirosTab() {
   const [loading, setLoading] = useState(false);
   const [loadingFiltros, setLoadingFiltros] = useState(false);
   const [error, setError] = useState("");
+  const [buscou, setBuscou] = useState(false);
 
   const resumoSobraRotasFiltradas = useMemo(() => {
     const mapa = new Map();
@@ -161,6 +157,7 @@ export default function DashboardGastosRoteirosTab() {
     try {
       setLoading(true);
       setError("");
+      setBuscou(true);
 
       const params = {
         dataInicio: filtrosAlvo.dataInicio || undefined,
@@ -216,7 +213,6 @@ export default function DashboardGastosRoteirosTab() {
     };
 
     carregarDadosIniciais();
-    buscarGastos();
   }, []);
 
   const handleAplicarFiltros = async (e) => {
@@ -224,10 +220,10 @@ export default function DashboardGastosRoteirosTab() {
     await buscarGastos();
   };
 
-  const handleLimparFiltros = async () => {
-    const novosFiltros = getFiltrosPadrao();
-    setFiltros(novosFiltros);
-    await buscarGastos(novosFiltros);
+  const handleLimparFiltros = () => {
+    setFiltros(getFiltrosPadrao());
+    setBuscou(false);
+    setResumo({ totalRegistros: 0, totalValor: 0, gastos: [] });
   };
 
   return (
@@ -415,6 +411,16 @@ export default function DashboardGastosRoteirosTab() {
               <tr>
                 <td colSpan={7} className="px-3 py-4 text-center text-gray-500">
                   Carregando gastos...
+                </td>
+              </tr>
+            ) : !buscou ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-3 py-4 text-center text-gray-500 italic"
+                >
+                  Use os filtros acima e clique em "Aplicar filtros" para
+                  buscar os gastos.
                 </td>
               </tr>
             ) : resumo.gastos.length > 0 ? (
