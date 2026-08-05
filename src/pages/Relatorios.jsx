@@ -18,6 +18,8 @@ export function Relatorios() {
   const [lojaSelecionada, setLojaSelecionada] = useState("");
   const [buscaLoja, setBuscaLoja] = useState("");
   const [buscaLojaConsolidado, setBuscaLojaConsolidado] = useState("");
+  const [cidadeSelecionada, setCidadeSelecionada] = useState("");
+  const [mesReferencia, setMesReferencia] = useState("");
   const [buscaRoteiro, setBuscaRoteiro] = useState("");
   const [buscaUsuario, setBuscaUsuario] = useState("");
   const [lojasSelecionadasConsolidado, setLojasSelecionadasConsolidado] =
@@ -44,25 +46,40 @@ export function Relatorios() {
   const termoBuscaRoteiro = buscaRoteiro.trim().toLowerCase();
   const termoBuscaUsuario = buscaUsuario.trim().toLowerCase();
 
+  const cidadesDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(lojas.map((loja) => loja?.cidade).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [lojas]);
+
+  const filtrarPorCidade = (lista) =>
+    cidadeSelecionada
+      ? lista.filter((loja) => loja?.cidade === cidadeSelecionada)
+      : lista;
+
   const lojasFiltradasBusca = useMemo(() => {
-    if (!termoBuscaLoja) return lojas;
-    return lojas.filter((loja) =>
+    const porCidade = filtrarPorCidade(lojas);
+    if (!termoBuscaLoja) return porCidade;
+    return porCidade.filter((loja) =>
       [loja?.nome, loja?.cidade, loja?.endereco, loja?.razaoSocial]
         .filter(Boolean)
         .some((valor) => String(valor).toLowerCase().includes(termoBuscaLoja)),
     );
-  }, [lojas, termoBuscaLoja]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lojas, termoBuscaLoja, cidadeSelecionada]);
 
   const lojasFiltradasConsolidado = useMemo(() => {
-    if (!termoBuscaLojaConsolidado) return lojas;
-    return lojas.filter((loja) =>
+    const porCidade = filtrarPorCidade(lojas);
+    if (!termoBuscaLojaConsolidado) return porCidade;
+    return porCidade.filter((loja) =>
       [loja?.nome, loja?.cidade, loja?.endereco, loja?.razaoSocial]
         .filter(Boolean)
         .some((valor) =>
           String(valor).toLowerCase().includes(termoBuscaLojaConsolidado),
         ),
     );
-  }, [lojas, termoBuscaLojaConsolidado]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lojas, termoBuscaLojaConsolidado, cidadeSelecionada]);
 
   const roteirosFiltradosBusca = useMemo(() => {
     if (!termoBuscaRoteiro) return roteiros;
@@ -187,6 +204,19 @@ export function Relatorios() {
     seteDiasAtras.setDate(hoje.getDate() - 7);
     setDataFim(hoje.toISOString().split("T")[0]);
     setDataInicio(seteDiasAtras.toISOString().split("T")[0]);
+  };
+
+  // Atalho "Mês": preenche Data Inicial/Final com o mês inteiro escolhido,
+  // pra não precisar montar o intervalo manualmente toda vez.
+  const handleMesReferenciaChange = (valor) => {
+    setMesReferencia(valor);
+    if (!valor) return;
+    const [ano, mes] = valor.split("-").map(Number);
+    if (!ano || !mes) return;
+    const primeiroDia = new Date(ano, mes - 1, 1);
+    const ultimoDia = new Date(ano, mes, 0);
+    setDataInicio(primeiroDia.toISOString().split("T")[0]);
+    setDataFim(ultimoDia.toISOString().split("T")[0]);
   };
 
   const toggleLojaConsolidado = (lojaId) => {
@@ -2999,7 +3029,37 @@ export function Relatorios() {
         {/* Formulário de Filtros */}
         <div className="card mb-6 no-print">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Filtros</h3>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              📅 Preencher período pelo mês
+            </label>
+            <input
+              type="month"
+              value={mesReferencia}
+              onChange={(e) => handleMesReferenciaChange(e.target.value)}
+              className="input-field w-full max-w-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                🏙️ Cidade
+              </label>
+              <select
+                value={cidadeSelecionada}
+                onChange={(e) => setCidadeSelecionada(e.target.value)}
+                className="input-field w-full"
+              >
+                <option value="">Todas as cidades</option>
+                {cidadesDisponiveis.map((cidade) => (
+                  <option key={cidade} value={cidade}>
+                    {cidade}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🗂️ Roteiro

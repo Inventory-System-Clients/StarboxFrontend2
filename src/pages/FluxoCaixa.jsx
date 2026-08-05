@@ -129,12 +129,14 @@ export default function FluxoCaixa() {
     ),
     dataFim: formatDate(new Date()),
     lojaId: "",
+    maquinaId: "",
     status: "todos",
   });
   const [resumo, setResumo] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [lojas, setLojas] = useState([]);
+  const [maquinasDoPonto, setMaquinasDoPonto] = useState([]);
 
   const roundTo2 = (valor) => {
     return arredondarMoeda(valor);
@@ -149,6 +151,21 @@ export default function FluxoCaixa() {
     carregarResumo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros]);
+
+  // Filtro de máquina em cascata: só busca as máquinas do ponto selecionado
+  useEffect(() => {
+    if (!filtros.lojaId) {
+      setMaquinasDoPonto([]);
+      return;
+    }
+    api
+      .get("/maquinas", { params: { lojaId: filtros.lojaId, all: true } })
+      .then((res) => setMaquinasDoPonto(res.data || []))
+      .catch((err) => {
+        console.error("Erro ao carregar máquinas do ponto:", err);
+        setMaquinasDoPonto([]);
+      });
+  }, [filtros.lojaId]);
 
   const carregarLojas = async () => {
     try {
@@ -252,6 +269,17 @@ export default function FluxoCaixa() {
 
     if (filtros.lojaId && lojaFluxoId !== String(filtros.lojaId)) {
       return false;
+    }
+
+    if (filtros.maquinaId) {
+      const maquinaFluxoId = String(
+        fluxo?.movimentacao?.maquina?.id ||
+          fluxo?.movimentacao?.maquinaId ||
+          "",
+      );
+      if (maquinaFluxoId !== String(filtros.maquinaId)) {
+        return false;
+      }
     }
 
     const dataFluxo =
@@ -537,7 +565,7 @@ export default function FluxoCaixa() {
 
         {/* Filtros */}
         <div className="card-gradient mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Data Início
@@ -576,7 +604,11 @@ export default function FluxoCaixa() {
               <select
                 value={filtros.lojaId}
                 onChange={(e) =>
-                  setFiltros((prev) => ({ ...prev, lojaId: e.target.value }))
+                  setFiltros((prev) => ({
+                    ...prev,
+                    lojaId: e.target.value,
+                    maquinaId: "",
+                  }))
                 }
                 className="select-field"
               >
@@ -584,6 +616,30 @@ export default function FluxoCaixa() {
                 {lojas.map((loja) => (
                   <option key={loja.id} value={loja.id}>
                     {loja.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Máquina
+              </label>
+              <select
+                value={filtros.maquinaId}
+                onChange={(e) =>
+                  setFiltros((prev) => ({ ...prev, maquinaId: e.target.value }))
+                }
+                className="select-field"
+                disabled={!filtros.lojaId}
+              >
+                <option value="">
+                  {filtros.lojaId ? "Todas as máquinas" : "Selecione um ponto"}
+                </option>
+                {maquinasDoPonto.map((maquina) => (
+                  <option key={maquina.id} value={maquina.id}>
+                    {maquina.codigo}
+                    {maquina.nome ? ` - ${maquina.nome}` : ""}
                   </option>
                 ))}
               </select>
