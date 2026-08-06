@@ -39,6 +39,8 @@ export function Relatorios() {
   const [error, setError] = useState("");
   const [gastosFixosLoja, setGastosFixosLoja] = useState([]);
   const [comparativoMensal, setComparativoMensal] = useState(null);
+  const [filtroMaquina, setFiltroMaquina] = useState("");
+  const [maquinasExpandidas, setMaquinasExpandidas] = useState(() => new Set());
   const cidadesDisponiveis = useMemo(() => {
     return Array.from(
       new Set(lojas.map((loja) => loja?.cidade).filter(Boolean)),
@@ -1599,6 +1601,14 @@ export function Relatorios() {
               toNumber(fluxo.cartaoPixFluxoLiquido),
           );
 
+          const maquinasDaLoja = Array.isArray(dadosLoja?.maquinas)
+            ? dadosLoja.maquinas.map((maquina) => ({
+                ...maquina,
+                lojaId,
+                lojaNome,
+              }))
+            : [];
+
           return {
             lojaId,
             lojaNome,
@@ -1621,6 +1631,7 @@ export function Relatorios() {
             ticketPorPremio,
             taxaDeCartao,
             produtosSairamLista,
+            maquinasDaLoja,
           };
         } catch (erroLoja) {
           console.warn(
@@ -1840,6 +1851,9 @@ export function Relatorios() {
         produtosSairam: toNumber(item?.produtosSairam),
       })),
       lojasSemDados,
+      maquinas: lojasComDadosDetalhado.flatMap(
+        (item) => item?.maquinasDaLoja || [],
+      ),
       totais: {
         lucroBrutoTotal,
         lucroLiquidoTotal,
@@ -3968,7 +3982,51 @@ export function Relatorios() {
             )}
 
             {/* Detalhamento por máquina */}
-            {relatorio.maquinas && relatorio.maquinas.length > 0 && (
+            {relatorio.maquinas && relatorio.maquinas.length > 0 && (() => {
+              const obterLojaDaMaquina = (maquina) =>
+                maquina?.lojaNome || maquina?.loja?.nome || maquina?.maquina?.loja?.nome || null;
+
+              const maquinasComLoja = relatorio.maquinas.map((maquina) => ({
+                ...maquina,
+                __lojaNome: obterLojaDaMaquina(maquina),
+              }));
+
+              const mostrarColunaLoja =
+                new Set(maquinasComLoja.map((m) => m.__lojaNome).filter(Boolean)).size > 1;
+
+              const termoBuscaMaquina = filtroMaquina.trim().toLowerCase();
+              const maquinasFiltradas = termoBuscaMaquina
+                ? maquinasComLoja.filter((maquina) =>
+                    [maquina.maquina?.nome, maquina.maquina?.codigo, maquina.__lojaNome]
+                      .filter(Boolean)
+                      .some((campo) =>
+                        String(campo).toLowerCase().includes(termoBuscaMaquina),
+                      ),
+                  )
+                : maquinasComLoja;
+
+              const alternarMaquina = (id) => {
+                setMaquinasExpandidas((prev) => {
+                  const proximo = new Set(prev);
+                  if (proximo.has(id)) {
+                    proximo.delete(id);
+                  } else {
+                    proximo.add(id);
+                  }
+                  return proximo;
+                });
+              };
+
+              const abrirEIrParaMaquina = (id) => {
+                setMaquinasExpandidas((prev) => new Set(prev).add(id));
+                requestAnimationFrame(() => {
+                  document
+                    .getElementById(`maquina-detalhe-${id}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+              };
+
+              return (
               <div className="space-y-6">
                 <div className="card bg-linear-to-r from-indigo-500 to-purple-600 text-white">
                   <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold flex items-center gap-2 sm:gap-3">
@@ -3978,24 +4036,141 @@ export function Relatorios() {
                     </span>
                   </h2>
                   <p className="text-xs sm:text-sm opacity-90 mt-2">
-                    Visualize abaixo as informações detalhadas de cada máquina
-                    desta loja no período selecionado
+                    {relatorio.maquinas.length} máquina(s) no período
+                    selecionado — use a tabela abaixo pra achar rápido e clique
+                    em "Ver detalhes" pra abrir uma máquina específica.
                   </p>
                 </div>
 
-                {relatorio.maquinas.map((maquina, index) => {
+                {relatorio.maquinas.length > 6 && (
+                  <input
+                    type="text"
+                    value={filtroMaquina}
+                    onChange={(e) => setFiltroMaquina(e.target.value)}
+                    placeholder="Buscar máquina por código, nome ou loja..."
+                    className="input-field w-full max-w-md"
+                  />
+                )}
+
+                {/* Tabela resumo — visão rápida de todas as máquinas */}
+                <div className="overflow-x-auto rounded-xl border border-indigo-200 shadow">
+                  <table className="min-w-full bg-white">
+                    <thead className="bg-indigo-100 text-indigo-900">
+                      <tr>
+                        {mostrarColunaLoja && (
+                          <th className="px-4 py-3 text-left text-sm font-bold">
+                            Loja
+                          </th>
+                        )}
+                        <th className="px-4 py-3 text-left text-sm font-bold">
+                          Código
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-bold">
+                          Máquina
+                        </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Dinheiro
+                        </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Produtos Saíram
+                        </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Lucro Líquido
+                        </th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {maquinasFiltradas.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={mostrarColunaLoja ? 7 : 6}
+                            className="px-4 py-6 text-center text-sm text-gray-500"
+                          >
+                            Nenhuma máquina encontrada para essa busca.
+                          </td>
+                        </tr>
+                      ) : (
+                        maquinasFiltradas.map((maquina) => {
+                          const expandida = maquinasExpandidas.has(
+                            maquina.maquina.id,
+                          );
+                          return (
+                            <tr
+                              key={maquina.maquina.id}
+                              className="border-t border-indigo-100 hover:bg-indigo-50 transition-colors"
+                            >
+                              {mostrarColunaLoja && (
+                                <td className="px-4 py-2 text-sm text-gray-700">
+                                  {maquina.__lojaNome || "-"}
+                                </td>
+                              )}
+                              <td className="px-4 py-2 text-sm font-mono text-gray-900">
+                                {maquina.maquina.codigo}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-semibold text-gray-900">
+                                {maquina.maquina.nome || "-"}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-800">
+                                R${" "}
+                                {Number(maquina.totais.dinheiro || 0).toLocaleString(
+                                  "pt-BR",
+                                  { minimumFractionDigits: 2 },
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-800">
+                                {Number(
+                                  maquina.totais.produtosSairam || 0,
+                                ).toLocaleString("pt-BR")}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right font-bold text-indigo-700">
+                                R${" "}
+                                {Number(
+                                  maquina.totais.lucroLiquido || 0,
+                                ).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    expandida
+                                      ? alternarMaquina(maquina.maquina.id)
+                                      : abrirEIrParaMaquina(maquina.maquina.id)
+                                  }
+                                  className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                >
+                                  {expandida ? "Ocultar" : "Ver detalhes"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {maquinasFiltradas.map((maquina, index) => {
                   const resumoProdutosMaquina = calcularResumoProdutos(
                     maquina?.produtosSairam,
                     maquina?.totais,
                   );
+                  const expandida = maquinasExpandidas.has(maquina.maquina.id);
 
                   return (
                     <div
                       key={maquina.maquina.id}
-                      className="card border-4 border-indigo-300 shadow-2xl page-break-before"
+                      id={`maquina-detalhe-${maquina.maquina.id}`}
+                      className="card border-4 border-indigo-300 shadow-2xl page-break-before scroll-mt-4"
                     >
-                      {/* Header da Máquina com destaque */}
-                      <div className="bg-linear-to-r from-indigo-600 to-purple-600 text-white p-4 sm:p-6 rounded-xl mb-4 sm:mb-6 shadow-lg">
+                      {/* Header da Máquina com destaque — clique pra abrir/fechar */}
+                      <button
+                        type="button"
+                        onClick={() => alternarMaquina(maquina.maquina.id)}
+                        className="w-full text-left bg-linear-to-r from-indigo-600 to-purple-600 text-white p-4 sm:p-6 rounded-xl mb-4 sm:mb-6 shadow-lg"
+                      >
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                           <div className="flex-1">
                             <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-2">
@@ -4007,21 +4182,41 @@ export function Relatorios() {
                               <span className="font-mono font-bold">
                                 {maquina.maquina.codigo}
                               </span>
+                              {maquina.__lojaNome && (
+                                <> · 🏪 {maquina.__lojaNome}</>
+                              )}
                             </p>
                           </div>
-                          <div className="text-right shrink-0">
-                            <div className="bg-white/20 backdrop-blur-sm px-3 sm:px-4 py-2 rounded-lg">
-                              <div className="text-xs sm:text-sm opacity-90">
-                                Máquina
-                              </div>
-                              <div className="text-2xl sm:text-3xl font-bold">
-                                {index + 1}/{relatorio.maquinas.length}
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <div className="bg-white/20 backdrop-blur-sm px-3 sm:px-4 py-2 rounded-lg">
+                                <div className="text-xs sm:text-sm opacity-90">
+                                  Máquina
+                                </div>
+                                <div className="text-2xl sm:text-3xl font-bold">
+                                  {index + 1}/{maquinasFiltradas.length}
+                                </div>
                               </div>
                             </div>
+                            <svg
+                              className={`w-6 h-6 transition-transform ${expandida ? "rotate-180" : ""}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
+                            </svg>
                           </div>
                         </div>
-                      </div>
+                      </button>
 
+                      {expandida && (
+                        <>
                       {/* Totais da Máquina em destaque */}
                       <div className="mb-4 sm:mb-6">
                         <h4 className="text-base sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
@@ -4264,20 +4459,14 @@ export function Relatorios() {
                           )}
                         </div>
                       </div>
-
-                      {/* Separador entre máquinas */}
-                      {index < relatorio.maquinas.length - 1 && (
-                        <div className="mt-8 pt-6 border-t-4 border-dashed border-gray-300">
-                          <p className="text-center text-gray-500 text-sm font-medium">
-                            ⬇️ Próxima Máquina ⬇️
-                          </p>
-                        </div>
+                        </>
                       )}
                     </div>
                   );
                 })}
               </div>
-            )}
+              );
+            })()}
 
             {/* Gráfico de saída por máquina */}
             {relatorio.graficoSaidaPorMaquina &&
