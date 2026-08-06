@@ -1038,11 +1038,12 @@ export function Relatorios() {
 
   const carregarFluxosCaixa = async (filtros = {}) => {
     const params = new URLSearchParams();
-    const { inicio, fim, lojaId, roteiroId, usuarioId } = filtros;
+    const { inicio, fim, lojaId, lojaIds, roteiroId, usuarioId } = filtros;
 
     if (inicio) params.append("dataInicio", inicio);
     if (fim) params.append("dataFim", fim);
     if (lojaId) params.append("lojaId", lojaId);
+    if (lojaIds) params.append("lojaIds", lojaIds);
     if (roteiroId) params.append("roteiroId", roteiroId);
     if (usuarioId) params.append("usuarioId", usuarioId);
 
@@ -1467,46 +1468,55 @@ export function Relatorios() {
       return consolidadoBaseVazio;
     }
 
-    const respostasPorLoja = await Promise.all(
-      idsNormalizados.map(async (lojaId) => {
-        const nomeFallback = lojaNomePorId.get(lojaId) || `Loja ${lojaId}`;
+    // Busca os 3 pedaços do relatório de TODAS as lojas de uma vez (em vez de
+    // 1 requisição por loja por pedaço) — com muitas lojas, o fan-out antigo
+    // chegava a centenas de requisições simultâneas e travava o backend.
+    const idsLojasCsv = idsNormalizados.join(",");
+    const [relatorioLoteResponse, gastosLoteResponse, fluxosTodasLojas] =
+      await Promise.all([
+        api
+          .get("/relatorios/impressao-lote", {
+            params: montarParamsComUsuario(
+              {
+                lojaIds: idsLojasCsv,
+                dataInicio: periodoInicio,
+                dataFim: periodoFim,
+              },
+              usuarioId,
+            ),
+          })
+          .catch(() => ({ data: { porLoja: {} } })),
+        api
+          .get("/gastos-fixos-loja/lote", { params: { lojaIds: idsLojasCsv } })
+          .catch(() => ({ data: { porLoja: {} } })),
+        carregarFluxosCaixa({
+          inicio: periodoInicio,
+          fim: periodoFim,
+          lojaIds: idsLojasCsv,
+          usuarioId,
+        }).catch(() => []),
+      ]);
 
-        try {
-          const [relatorioResponse, gastosFixosResponse, fluxosLoja] =
-            await Promise.all([
-              api
-                .get("/relatorios/impressao", {
-                  params: montarParamsComUsuario(
-                    {
-                      lojaId,
-                      dataInicio: periodoInicio,
-                      dataFim: periodoFim,
-                    },
-                    usuarioId,
-                  ),
-                })
-                .catch(() => null),
-              api
-                .get(`/gastos-fixos-loja/${lojaId}`)
-                .catch(() => ({ data: [] })),
-              carregarFluxosCaixa({
-                inicio: periodoInicio,
-                fim: periodoFim,
-                lojaId,
-                usuarioId,
-              }).catch(() => []),
-            ]);
+    const relatoriosPorLoja = relatorioLoteResponse?.data?.porLoja || {};
+    const gastosPorLoja = gastosLoteResponse?.data?.porLoja || {};
 
-          const dadosLoja = relatorioResponse?.data;
-          if (!dadosLoja) {
-            return {
-              lojaId,
-              lojaNome: nomeFallback,
-              semDados: true,
-            };
-          }
+    const respostasPorLoja = idsNormalizados.map((lojaId) => {
+      const nomeFallback = lojaNomePorId.get(lojaId) || `Loja ${lojaId}`;
 
-          const lojaNome = dadosLoja?.loja?.nome || nomeFallback;
+      try {
+        const dadosLoja = relatoriosPorLoja[lojaId];
+        const gastosFixosResponse = { data: gastosPorLoja[lojaId] || [] };
+        const fluxosLoja = fluxosTodasLojas;
+
+        if (!dadosLoja) {
+          return {
+            lojaId,
+            lojaNome: nomeFallback,
+            semDados: true,
+          };
+        }
+
+        const lojaNome = dadosLoja?.loja?.nome || nomeFallback;
           const fluxosDaLoja = filtrarFluxosPorLoja(fluxosLoja, lojaId);
           const custoQuebraCaixa = calcularQuebraCaixaComoCusto(
             fluxosDaLoja,
@@ -1645,8 +1655,7 @@ export function Relatorios() {
             semDados: true,
           };
         }
-      }),
-    );
+      });
 
     const lojasComDadosDetalhado = respostasPorLoja.filter(
       (item) => !item?.semDados,
