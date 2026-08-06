@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { Modal, AlertBox } from "../components/UIComponents";
+import { MultiSelectAutocomplete } from "../components/MultiSelectAutocomplete";
 import {
   abrirWhatsAppComMensagem,
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
@@ -110,7 +111,6 @@ export function Roteiros() {
   const [novaObservacaoRoteiro, setNovaObservacaoRoteiro] = useState("");
   const [filtroNomeRoteiro, setFiltroNomeRoteiro] = useState("");
   const [roteiroParaAdicionar, setRoteiroParaAdicionar] = useState(null);
-  const [filtroLojaAdicionar, setFiltroLojaAdicionar] = useState("");
   const [observacoesPendentes, setObservacoesPendentes] = useState({});
   const [salvandoObservacao, setSalvandoObservacao] = useState({});
   const [orcamentosPendentes, setOrcamentosPendentes] = useState({});
@@ -122,6 +122,13 @@ export function Roteiros() {
   const [desfinalizandoRoteiros, setDesfinalizandoRoteiros] = useState({});
   const [lojasExpandidasPorRoteiro, setLojasExpandidasPorRoteiro] =
     useState({});
+  // Card de roteiro colapsado por padrão: só cabeçalho + ação principal
+  // ficam sempre visíveis, o resto (responsável, veículo, dias, orçamento,
+  // observação e lista de pontos) fica atrás deste toggle.
+  const [cardsExpandidos, setCardsExpandidos] = useState({});
+  const [lojasParaAdicionarSelecionadas, setLojasParaAdicionarSelecionadas] =
+    useState([]);
+  const [adicionandoLotePontos, setAdicionandoLotePontos] = useState(false);
   const [modalFinalizar, setModalFinalizar] = useState({
     aberto: false,
     etapa: 1,
@@ -401,6 +408,15 @@ export function Roteiros() {
     }));
   };
 
+  const cardEstaExpandido = (roteiroId) => Boolean(cardsExpandidos[roteiroId]);
+
+  const toggleExpandirCard = (roteiroId) => {
+    setCardsExpandidos((prev) => ({
+      ...prev,
+      [roteiroId]: !prev[roteiroId],
+    }));
+  };
+
   const roteiroTemVeiculoAssociado = (roteiroAtual) =>
     Boolean(
       String(roteiroAtual?.veiculoId || roteiroAtual?.veiculo?.id || "").trim(),
@@ -669,29 +685,22 @@ export function Roteiros() {
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
 
-  const termoBuscaLoja = normalizarTextoFiltro(filtroLojaAdicionar);
   const idsLojasNoRoteiro = new Set(
     (roteiroParaAdicionar?.lojas || []).map((l) => String(l.id)),
   );
-  const lojasFiltradasParaAdicionar = todasLojas.filter((loja) => {
-    // Excluir lojas já presentes no roteiro
-    if (idsLojasNoRoteiro.has(String(loja.id))) return false;
-
-    if (!termoBuscaLoja) return true;
-
-    const textoBuscaLoja = [
-      loja?.nome,
-      loja?.codigo,
-      loja?.cidade,
-      loja?.bairro,
-      loja?.id,
-    ]
-      .filter(Boolean)
-      .map((campo) => normalizarTextoFiltro(campo))
-      .join(" ");
-
-    return textoBuscaLoja.includes(termoBuscaLoja);
-  });
+  // Base pro seletor múltiplo do modal "Adicionar Ponto" — a busca em si é
+  // feita pelo próprio MultiSelectAutocomplete.
+  const lojasDisponiveisParaAdicionar = todasLojas.filter(
+    (loja) => !idsLojasNoRoteiro.has(String(loja.id)),
+  );
+  const opcoesLojasParaAdicionar = lojasDisponiveisParaAdicionar.map(
+    (loja) => ({
+      id: String(loja.id),
+      label: [loja?.nome, loja?.cidade, loja?.bairro]
+        .filter(Boolean)
+        .join(" — "),
+    }),
+  );
 
   const roteirosDoUsuario = isGestorRoteiro
     ? roteiros
@@ -1206,7 +1215,12 @@ export function Roteiros() {
     }
   };
 
-  const handleMoverLoja = async (lojaId, origemId, destinoId) => {
+  const handleMoverLoja = async (
+    lojaId,
+    origemId,
+    destinoId,
+    { recarregar = true } = {},
+  ) => {
     const roteiroOrigem = origemId ? getRoteiroById(origemId) : null;
     const roteiroDestino = getRoteiroById(destinoId);
 
@@ -1217,7 +1231,7 @@ export function Roteiros() {
       setError(
         "Roteiro finalizado não permite adicionar, remover ou mover pontos.",
       );
-      return;
+      return false;
     }
 
     try {
@@ -1226,9 +1240,43 @@ export function Roteiros() {
         roteiroOrigemId: origemId,
         roteiroDestinoId: destinoId,
       });
-      carregarDadosIniciais();
+      if (recarregar) {
+        carregarDadosIniciais();
+      }
+      return true;
     } catch (err) {
       setError("Erro ao mover ponto.");
+      return false;
+    }
+  };
+
+  // Adiciona várias lojas de uma vez a um roteiro — chama o mesmo endpoint
+  // por loja, mas recarrega os dados só uma vez no final em vez de a cada
+  // item, pra não precisar reabrir o modal pra cada ponto adicionado.
+  const handleAdicionarPontosEmLote = async (roteiroId, lojaIds) => {
+    if (!lojaIds || lojaIds.length === 0) return;
+
+    setAdicionandoLotePontos(true);
+    try {
+      const resultados = await Promise.all(
+        lojaIds.map((lojaId) =>
+          handleMoverLoja(lojaId, null, roteiroId, { recarregar: false }),
+        ),
+      );
+      const sucessos = resultados.filter(Boolean).length;
+      await carregarDadosIniciais();
+
+      if (sucessos === lojaIds.length) {
+        setSuccess(
+          `${sucessos} ponto${sucessos === 1 ? "" : "s"} adicionado${sucessos === 1 ? "" : "s"} ao roteiro.`,
+        );
+      } else if (sucessos > 0) {
+        setError(
+          `${sucessos} de ${lojaIds.length} ponto(s) adicionado(s). Alguns falharam — tente novamente.`,
+        );
+      }
+    } finally {
+      setAdicionandoLotePontos(false);
     }
   };
 
@@ -1256,27 +1304,16 @@ export function Roteiros() {
       return;
     }
 
-    const primeiraConfirmacao = await Swal.fire({
+    const confirmacao = await Swal.fire({
       icon: "warning",
       title: "Remover ponto do roteiro?",
-      html: `Deseja remover <b>${loja.nome}</b> deste roteiro?`,
+      html: `Deseja remover <b>${loja.nome}</b> deste roteiro? Essa ação não pode ser desfeita.`,
       showCancelButton: true,
       confirmButtonText: "Sim, remover",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#dc2626",
     });
-    if (!primeiraConfirmacao.isConfirmed) return;
-
-    const segundaConfirmacao = await Swal.fire({
-      icon: "error",
-      title: "Confirmar remoção",
-      html: `Essa ação não pode ser desfeita.<br/>Confirma a remoção de <b>${loja.nome}</b>?`,
-      showCancelButton: true,
-      confirmButtonText: "Sim, tenho certeza",
-      cancelButtonText: "Cancelar",
-      confirmButtonColor: "#dc2626",
-    });
-    if (!segundaConfirmacao.isConfirmed) return;
+    if (!confirmacao.isConfirmed) return;
 
     try {
       await api.delete(`/roteiros/${roteiro.id}/lojas/${loja.id}`);
@@ -1675,43 +1712,57 @@ export function Roteiros() {
                 ${draggedLoja && draggedFromRoteiro !== roteiro.id && !isRoteiroFinalizado(roteiro) ? "border-blue-400 border-dashed bg-blue-50" : ""}
               `}
             >
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-extrabold flex items-center gap-2 flex-wrap">
-                  {roteiro.nome}
-                  {roteiroEstaFinalizado && (
-                    <span className="ml-2 px-2 py-1 rounded-full bg-green-200 text-green-800 text-xs font-bold uppercase">
-                      Finalizado
-                    </span>
-                  )}
-                  {execucaoEmAndamento && !roteiroEstaFinalizado && (
-                    <span
-                      className={`ml-2 px-2 py-1 rounded-full text-xs font-bold uppercase ${
-                        andamentoPorOutroUsuario
+              {(() => {
+                // Um badge só (antes tinha até 3 indicadores de status
+                // diferentes no mesmo card, redundantes entre si).
+                const statusBadge = roteiroEstaFinalizado
+                  ? { label: "Finalizado", className: "bg-green-200 text-green-800" }
+                  : execucaoEmAndamento
+                    ? {
+                        label: execucaoPertenceOutroUsuario
+                          ? `Em andamento por ${nomeResponsavel}`
+                          : "Em andamento",
+                        className: andamentoPorOutroUsuario
                           ? "bg-emerald-100 text-emerald-700"
-                          : "bg-blue-100 text-blue-700"
-                      }`}
-                    >
-                      {execucaoPertenceOutroUsuario
-                        ? `Em andamento por ${nomeResponsavel}`
-                        : "Seu roteiro em andamento"}
-                    </span>
-                  )}
-                </h2>
-                <span
-                  className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${isRoteiroEmAndamento(roteiro) || roteiroTemPontosConcluidos(roteiro) ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"}`}
-                >
-                  {isRoteiroEmAndamento(roteiro) || roteiroTemPontosConcluidos(roteiro)
-                    ? "Ativo"
-                    : "Pendente"}
-                </span>
-              </div>
+                          : "bg-blue-100 text-blue-700",
+                      }
+                    : isRoteiroEmAndamento(roteiro) ||
+                        roteiroTemPontosConcluidos(roteiro)
+                      ? { label: "Ativo", className: "bg-blue-100 text-blue-600" }
+                      : { label: "Pendente", className: "bg-gray-100 text-gray-500" };
 
-              {!roteiroEhDeAbastecedor(roteiro) && (
-                <p className="text-xs text-gray-500 mb-3">
-                  🚗 {getVeiculoResumoRoteiro(roteiro)}
-                </p>
-              )}
+                return (
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <h2 className="text-xl font-extrabold flex items-center gap-2 flex-wrap">
+                      {roteiro.nome}
+                      <span
+                        className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusBadge.className}`}
+                      >
+                        {statusBadge.label}
+                      </span>
+                    </h2>
+                  </div>
+                );
+              })()}
 
+              <p className="text-xs text-gray-500 mb-3">
+                {!roteiroEhDeAbastecedor(roteiro) && (
+                  <>🚗 {getVeiculoResumoRoteiro(roteiro)} · </>
+                )}
+                {(roteiro.lojas || []).length} ponto
+                {(roteiro.lojas || []).length === 1 ? "" : "s"}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => toggleExpandirCard(roteiro.id)}
+                className="mb-4 text-xs font-bold text-[#24094E] hover:underline flex items-center gap-1"
+              >
+                {cardEstaExpandido(roteiro.id) ? "▲ Ocultar detalhes" : "▾ Ver detalhes"}
+              </button>
+
+              {cardEstaExpandido(roteiro.id) && (
+                <>
               {/* Seção de Funcionário */}
               <div className="mb-4">
                 <label className="text-xs font-bold text-gray-400 block mb-1">
@@ -1951,7 +2002,7 @@ export function Roteiros() {
                     <button
                       onClick={() => {
                         setRoteiroParaAdicionar(roteiro);
-                        setFiltroLojaAdicionar("");
+                        setLojasParaAdicionarSelecionadas([]);
                         setShowModalAdicionarLoja(true);
                       }}
                       className="text-blue-600 text-xs font-bold hover:underline"
@@ -1992,8 +2043,38 @@ export function Roteiros() {
                                 ${draggedOverIndex === index && draggedFromRoteiro === roteiro.id ? "border-blue-500 border-2 bg-blue-50" : "border-gray-200"}
                               `}
                             >
-                              <span className="text-gray-400">☰</span>
-                              <span className="bg-[#24094E] text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                              <span className="text-gray-400 hidden sm:inline">☰</span>
+                              {isGestorRoteiro && !isRoteiroFinalizado(roteiro) && (
+                                <div className="flex flex-col shrink-0">
+                                  <button
+                                    type="button"
+                                    draggable={false}
+                                    disabled={index === 0}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReordenarLoja(roteiro.id, loja.id, index - 1);
+                                    }}
+                                    title="Mover pra cima"
+                                    className="text-gray-500 hover:text-[#24094E] disabled:opacity-20 disabled:cursor-not-allowed w-5 h-4 flex items-center justify-center text-[10px] leading-none"
+                                  >
+                                    ▲
+                                  </button>
+                                  <button
+                                    type="button"
+                                    draggable={false}
+                                    disabled={index === lojasOrdenadas.length - 1}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReordenarLoja(roteiro.id, loja.id, index + 1);
+                                    }}
+                                    title="Mover pra baixo"
+                                    className="text-gray-500 hover:text-[#24094E] disabled:opacity-20 disabled:cursor-not-allowed w-5 h-4 flex items-center justify-center text-[10px] leading-none"
+                                  >
+                                    ▼
+                                  </button>
+                                </div>
+                              )}
+                              <span className="bg-[#24094E] text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">
                                 {index + 1}
                               </span>
                               <span className="flex-1">🏪 {loja.nome}</span>
@@ -2038,6 +2119,8 @@ export function Roteiros() {
                   )}
                 </div>
               </div>
+                </>
+              )}
 
               {/* Botões de Ação com lógica dinâmica */}
               <div className="flex flex-wrap gap-2 mt-auto">
@@ -2270,68 +2353,63 @@ export function Roteiros() {
       {showModalAdicionarLoja && roteiroParaAdicionar && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col">
-            <h2 className="text-xl font-bold mb-4">
-              Adicionar Ponto a {roteiroParaAdicionar.nome}
+            <h2 className="text-xl font-bold mb-1">
+              Adicionar Pontos a {roteiroParaAdicionar.nome}
             </h2>
-            <div className="mb-3">
-              <input
-                autoFocus
-                type="text"
-                value={filtroLojaAdicionar}
-                onChange={(e) => setFiltroLojaAdicionar(e.target.value)}
-                placeholder="Buscar ponto por nome, cidade, bairro ou código..."
-                className="w-full p-3 border rounded-xl text-sm focus:ring-2 focus:ring-[#24094E] outline-none"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {lojasFiltradasParaAdicionar.length} ponto
-                {lojasFiltradasParaAdicionar.length === 1 ? "" : "s"} disponível
-                {lojasFiltradasParaAdicionar.length === 1 ? "" : "is"} para
-                adicionar
-              </p>
-            </div>
-            {isRoteiroFinalizado(roteiroParaAdicionar) && (
+            <p className="text-xs text-gray-500 mb-4">
+              Digite pra buscar e marque quantos pontos quiser antes de
+              adicionar — não precisa reabrir esse modal a cada ponto.
+            </p>
+
+            {isRoteiroFinalizado(roteiroParaAdicionar) ? (
               <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
                 Esta rota está finalizada. Não é permitido adicionar pontos.
               </div>
+            ) : (
+              <div className="mb-4">
+                <MultiSelectAutocomplete
+                  selectedIds={lojasParaAdicionarSelecionadas}
+                  onChange={setLojasParaAdicionarSelecionadas}
+                  options={opcoesLojasParaAdicionar}
+                  placeholder="Buscar ponto por nome, cidade ou bairro..."
+                  emptyLabel="Nenhum ponto encontrado (ou todos já estão no roteiro)"
+                />
+              </div>
             )}
-            <div className="overflow-y-auto space-y-2 mb-4">
-              {lojasFiltradasParaAdicionar.length > 0 ? (
-                lojasFiltradasParaAdicionar.map((loja) => (
-                  <button
-                    key={loja.id}
-                    onClick={() => {
-                      handleMoverLoja(loja.id, null, roteiroParaAdicionar.id);
-                      setFiltroLojaAdicionar("");
-                      setRoteiroParaAdicionar(null);
-                      setShowModalAdicionarLoja(false);
-                    }}
-                    disabled={isRoteiroFinalizado(roteiroParaAdicionar)}
-                    className="w-full text-left p-3 hover:bg-gray-50 rounded-xl border flex justify-between items-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="font-medium text-sm">🏪 {loja.nome}</span>
-                    <span className="text-blue-500 opacity-0 group-hover:opacity-100 font-bold text-xs">
-                      + ADICIONAR
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center text-sm text-gray-500">
-                  {filtroLojaAdicionar
-                    ? "Nenhum ponto encontrado para este filtro."
-                    : "Todos os pontos já foram adicionados a este roteiro."}
-                </div>
+
+            <div className="mt-auto flex gap-2">
+              <button
+                onClick={() => {
+                  setLojasParaAdicionarSelecionadas([]);
+                  setRoteiroParaAdicionar(null);
+                  setShowModalAdicionarLoja(false);
+                }}
+                className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500"
+              >
+                Fechar
+              </button>
+              {!isRoteiroFinalizado(roteiroParaAdicionar) && (
+                <button
+                  onClick={async () => {
+                    const roteiroId = roteiroParaAdicionar.id;
+                    const lojaIds = lojasParaAdicionarSelecionadas;
+                    setLojasParaAdicionarSelecionadas([]);
+                    setRoteiroParaAdicionar(null);
+                    setShowModalAdicionarLoja(false);
+                    await handleAdicionarPontosEmLote(roteiroId, lojaIds);
+                  }}
+                  disabled={
+                    lojasParaAdicionarSelecionadas.length === 0 ||
+                    adicionandoLotePontos
+                  }
+                  className="flex-1 py-3 bg-[#24094E] text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {adicionandoLotePontos
+                    ? "Adicionando..."
+                    : `Adicionar${lojasParaAdicionarSelecionadas.length > 0 ? ` (${lojasParaAdicionarSelecionadas.length})` : ""}`}
+                </button>
               )}
             </div>
-            <button
-              onClick={() => {
-                setFiltroLojaAdicionar("");
-                setRoteiroParaAdicionar(null);
-                setShowModalAdicionarLoja(false);
-              }}
-              className="w-full py-3 bg-gray-100 rounded-xl font-bold text-gray-500"
-            >
-              Fechar
-            </button>
           </div>
         </div>
       )}
