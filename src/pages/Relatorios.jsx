@@ -41,6 +41,7 @@ export function Relatorios() {
   const [comparativoMensal, setComparativoMensal] = useState(null);
   const [filtroMaquina, setFiltroMaquina] = useState("");
   const [maquinasExpandidas, setMaquinasExpandidas] = useState(() => new Set());
+  const [mostrarTodasMaquinas, setMostrarTodasMaquinas] = useState(false);
   const cidadesDisponiveis = useMemo(() => {
     return Array.from(
       new Set(lojas.map((loja) => loja?.cidade).filter(Boolean)),
@@ -4004,7 +4005,7 @@ export function Relatorios() {
                 new Set(maquinasComLoja.map((m) => m.__lojaNome).filter(Boolean)).size > 1;
 
               const termoBuscaMaquina = filtroMaquina.trim().toLowerCase();
-              const maquinasFiltradas = termoBuscaMaquina
+              const maquinasCorrespondentes = termoBuscaMaquina
                 ? maquinasComLoja.filter((maquina) =>
                     [maquina.maquina?.nome, maquina.maquina?.codigo, maquina.__lojaNome]
                       .filter(Boolean)
@@ -4013,6 +4014,22 @@ export function Relatorios() {
                       ),
                   )
                 : maquinasComLoja;
+
+              // Ordenado por lucro líquido — com muitas máquinas (ex.: relatório
+              // consolidado de várias lojas), mostra só as 10 melhores por
+              // padrão, com um botão pra ver o resto.
+              const LIMITE_TOP_MAQUINAS = 10;
+              const maquinasOrdenadas = [...maquinasCorrespondentes].sort(
+                (a, b) =>
+                  Number(b.totais?.lucroLiquido || 0) -
+                  Number(a.totais?.lucroLiquido || 0),
+              );
+              const haMaisQueOLimite =
+                maquinasOrdenadas.length > LIMITE_TOP_MAQUINAS;
+              const maquinasFiltradas =
+                !termoBuscaMaquina && !mostrarTodasMaquinas && haMaisQueOLimite
+                  ? maquinasOrdenadas.slice(0, LIMITE_TOP_MAQUINAS)
+                  : maquinasOrdenadas;
 
               const alternarMaquina = (id) => {
                 setMaquinasExpandidas((prev) => {
@@ -4046,8 +4063,12 @@ export function Relatorios() {
                   </h2>
                   <p className="text-xs sm:text-sm opacity-90 mt-2">
                     {relatorio.maquinas.length} máquina(s) no período
-                    selecionado — use a tabela abaixo pra achar rápido e clique
-                    em "Ver detalhes" pra abrir uma máquina específica.
+                    selecionado
+                    {!termoBuscaMaquina && haMaisQueOLimite && !mostrarTodasMaquinas
+                      ? ` — mostrando as ${LIMITE_TOP_MAQUINAS} com maior lucro líquido`
+                      : ""}
+                    . Use a busca pra achar rápido e clique em "Ver detalhes"
+                    pra abrir uma máquina específica.
                   </p>
                 </div>
 
@@ -4160,6 +4181,18 @@ export function Relatorios() {
                     </tbody>
                   </table>
                 </div>
+
+                {!termoBuscaMaquina && haMaisQueOLimite && (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarTodasMaquinas((prev) => !prev)}
+                    className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 underline"
+                  >
+                    {mostrarTodasMaquinas
+                      ? "Ver só as 10 melhores"
+                      : `Ver mais (${maquinasOrdenadas.length - LIMITE_TOP_MAQUINAS} máquina(s) a mais)`}
+                  </button>
+                )}
 
                 {maquinasFiltradas.map((maquina, index) => {
                   const resumoProdutosMaquina = calcularResumoProdutos(
