@@ -3250,6 +3250,527 @@ export function Relatorios() {
           <RelatorioTodasLojas relatorio={relatorio} />
         )}
 
+            {/* Detalhamento por máquina — mostra pra qualquer tipo de
+                relatório (loja única, roteiro ou consolidado) */}
+            {relatorio && !loading && relatorio.maquinas && relatorio.maquinas.length > 0 && (() => {
+              const obterLojaDaMaquina = (maquina) =>
+                maquina?.lojaNome || maquina?.loja?.nome || maquina?.maquina?.loja?.nome || null;
+
+              const maquinasComLoja = relatorio.maquinas.map((maquina) => ({
+                ...maquina,
+                __lojaNome: obterLojaDaMaquina(maquina),
+              }));
+
+              const mostrarColunaLoja =
+                new Set(maquinasComLoja.map((m) => m.__lojaNome).filter(Boolean)).size > 1;
+
+              const termoBuscaMaquina = filtroMaquina.trim().toLowerCase();
+              const maquinasCorrespondentes = termoBuscaMaquina
+                ? maquinasComLoja.filter((maquina) =>
+                    [maquina.maquina?.nome, maquina.maquina?.codigo, maquina.__lojaNome]
+                      .filter(Boolean)
+                      .some((campo) =>
+                        String(campo).toLowerCase().includes(termoBuscaMaquina),
+                      ),
+                  )
+                : maquinasComLoja;
+
+              // Ordenado por lucro líquido — com muitas máquinas (ex.: relatório
+              // consolidado de várias lojas), mostra só as 10 melhores por
+              // padrão, com um botão pra ver o resto.
+              const LIMITE_TOP_MAQUINAS = 10;
+              const maquinasOrdenadas = [...maquinasCorrespondentes].sort(
+                (a, b) =>
+                  Number(b.totais?.lucroLiquido || 0) -
+                  Number(a.totais?.lucroLiquido || 0),
+              );
+              const haMaisQueOLimite =
+                maquinasOrdenadas.length > LIMITE_TOP_MAQUINAS;
+              const maquinasFiltradas =
+                !termoBuscaMaquina && !mostrarTodasMaquinas && haMaisQueOLimite
+                  ? maquinasOrdenadas.slice(0, LIMITE_TOP_MAQUINAS)
+                  : maquinasOrdenadas;
+
+              const alternarMaquina = (id) => {
+                setMaquinasExpandidas((prev) => {
+                  const proximo = new Set(prev);
+                  if (proximo.has(id)) {
+                    proximo.delete(id);
+                  } else {
+                    proximo.add(id);
+                  }
+                  return proximo;
+                });
+              };
+
+              const abrirEIrParaMaquina = (id) => {
+                setMaquinasExpandidas((prev) => new Set(prev).add(id));
+                requestAnimationFrame(() => {
+                  document
+                    .getElementById(`maquina-detalhe-${id}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+              };
+
+              return (
+              <div className="space-y-6">
+                <div className="card bg-linear-to-r from-indigo-500 to-purple-600 text-white">
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold flex items-center gap-2 sm:gap-3">
+                    <span className="text-3xl sm:text-4xl">🎰</span>
+                    <span className="wrap-break-word">
+                      RELATÓRIO DETALHADO POR MÁQUINA
+                    </span>
+                  </h2>
+                  <p className="text-xs sm:text-sm opacity-90 mt-2">
+                    {relatorio.maquinas.length} máquina(s) no período
+                    selecionado
+                    {!termoBuscaMaquina && haMaisQueOLimite && !mostrarTodasMaquinas
+                      ? ` — mostrando as ${LIMITE_TOP_MAQUINAS} com maior lucro líquido`
+                      : ""}
+                    . Use a busca pra achar rápido e clique em "Ver detalhes"
+                    pra abrir uma máquina específica.
+                  </p>
+                </div>
+
+                {relatorio.maquinas.length > 6 && (
+                  <input
+                    type="text"
+                    value={filtroMaquina}
+                    onChange={(e) => setFiltroMaquina(e.target.value)}
+                    placeholder="Buscar máquina por código, nome ou loja..."
+                    className="input-field w-full max-w-md"
+                  />
+                )}
+
+                {/* Tabela resumo — visão rápida de todas as máquinas */}
+                <div className="overflow-x-auto rounded-xl border border-indigo-200 shadow">
+                  <table className="min-w-full bg-white">
+                    <thead className="bg-indigo-100 text-indigo-900">
+                      <tr>
+                        {mostrarColunaLoja && (
+                          <th className="px-4 py-3 text-left text-sm font-bold">
+                            Loja
+                          </th>
+                        )}
+                        <th className="px-4 py-3 text-left text-sm font-bold">
+                          Código
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-bold">
+                          Máquina
+                        </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Dinheiro
+                        </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Produtos Saíram
+                        </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Lucro Líquido
+                        </th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {maquinasFiltradas.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={mostrarColunaLoja ? 7 : 6}
+                            className="px-4 py-6 text-center text-sm text-gray-500"
+                          >
+                            Nenhuma máquina encontrada para essa busca.
+                          </td>
+                        </tr>
+                      ) : (
+                        maquinasFiltradas.map((maquina) => {
+                          const expandida = maquinasExpandidas.has(
+                            maquina.maquina.id,
+                          );
+                          return (
+                            <tr
+                              key={maquina.maquina.id}
+                              className="border-t border-indigo-100 hover:bg-indigo-50 transition-colors"
+                            >
+                              {mostrarColunaLoja && (
+                                <td className="px-4 py-2 text-sm text-gray-700">
+                                  {maquina.__lojaNome || "-"}
+                                </td>
+                              )}
+                              <td className="px-4 py-2 text-sm font-mono text-gray-900">
+                                {maquina.maquina.codigo}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-semibold text-gray-900">
+                                {maquina.maquina.nome || "-"}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-800">
+                                R${" "}
+                                {Number(maquina.totais.dinheiro || 0).toLocaleString(
+                                  "pt-BR",
+                                  { minimumFractionDigits: 2 },
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-800">
+                                {Number(
+                                  maquina.totais.produtosSairam || 0,
+                                ).toLocaleString("pt-BR")}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right font-bold text-indigo-700">
+                                R${" "}
+                                {Number(
+                                  maquina.totais.lucroLiquido || 0,
+                                ).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    expandida
+                                      ? alternarMaquina(maquina.maquina.id)
+                                      : abrirEIrParaMaquina(maquina.maquina.id)
+                                  }
+                                  className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                >
+                                  {expandida ? "Ocultar" : "Ver detalhes"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {!termoBuscaMaquina && haMaisQueOLimite && (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarTodasMaquinas((prev) => !prev)}
+                    className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 underline"
+                  >
+                    {mostrarTodasMaquinas
+                      ? "Ver só as 10 melhores"
+                      : `Ver mais (${maquinasOrdenadas.length - LIMITE_TOP_MAQUINAS} máquina(s) a mais)`}
+                  </button>
+                )}
+
+                {maquinasFiltradas.map((maquina, index) => {
+                  const resumoProdutosMaquina = calcularResumoProdutos(
+                    maquina?.produtosSairam,
+                    maquina?.totais,
+                  );
+                  const expandida = maquinasExpandidas.has(maquina.maquina.id);
+
+                  return (
+                    <div
+                      key={maquina.maquina.id}
+                      id={`maquina-detalhe-${maquina.maquina.id}`}
+                      className="card border-4 border-indigo-300 shadow-2xl page-break-before scroll-mt-4"
+                    >
+                      {/* Header da Máquina com destaque — clique pra abrir/fechar */}
+                      <button
+                        type="button"
+                        onClick={() => alternarMaquina(maquina.maquina.id)}
+                        className="w-full text-left bg-linear-to-r from-indigo-600 to-purple-600 text-white p-4 sm:p-6 rounded-xl mb-4 sm:mb-6 shadow-lg"
+                      >
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div className="flex-1">
+                            <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-2">
+                              🎰{" "}
+                              {maquina.maquina.nome || `Máquina ${index + 1}`}
+                            </h3>
+                            <p className="text-sm sm:text-lg opacity-90">
+                              📋 Código:{" "}
+                              <span className="font-mono font-bold">
+                                {maquina.maquina.codigo}
+                              </span>
+                              {maquina.__lojaNome && (
+                                <> · 🏪 {maquina.__lojaNome}</>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <div className="bg-white/20 backdrop-blur-sm px-3 sm:px-4 py-2 rounded-lg">
+                                <div className="text-xs sm:text-sm opacity-90">
+                                  Máquina
+                                </div>
+                                <div className="text-2xl sm:text-3xl font-bold">
+                                  {index + 1}/{maquinasFiltradas.length}
+                                </div>
+                              </div>
+                            </div>
+                            <svg
+                              className={`w-6 h-6 transition-transform ${expandida ? "rotate-180" : ""}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+
+                      {expandida && (
+                        <>
+                      {/* Totais da Máquina em destaque */}
+                      <div className="mb-4 sm:mb-6">
+                        <h4 className="text-base sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+                          <span className="text-xl sm:text-2xl">📊</span>
+                          <span className="text-sm sm:text-base">
+                            Resumo de Movimentações desta Máquina
+                          </span>
+                        </h4>
+                        <div className="flex flex-wrap gap-4 sm:gap-6">
+                          {/* Dinheiro máquina */}
+                          <div className="bg-linear-to-br from-yellow-400 to-yellow-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              💵
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              R${" "}
+                              {Number(
+                                maquina.totais.dinheiro || 0,
+                              ).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Dinheiro
+                            </div>
+                          </div>
+                          {/* Produtos Saíram */}
+                          <div className="bg-linear-to-br from-red-500 to-red-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              📤
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              {Number(
+                                resumoProdutosMaquina.totalQuantidadeItens || 0,
+                              ).toLocaleString("pt-BR")}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Produtos Saíram
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-90 leading-tight">
+                              {resumoProdutosMaquina.itens.length > 0
+                                ? resumoProdutosMaquina.itens
+                                    .map((produto) =>
+                                      produto?.nome
+                                        ? `${produto.nome} (${Number(produto?.quantidade || 0).toLocaleString("pt-BR")})`
+                                        : null,
+                                    )
+                                    .filter(Boolean)
+                                    .join(" | ")
+                                : "Sem detalhamento de produto"}
+                            </div>
+                          </div>
+                          {/* Produtos Entraram */}
+                          <div className="bg-linear-to-br from-green-500 to-green-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              📥
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              {Number(
+                                maquina.totais.produtosEntraram || 0,
+                              ).toLocaleString("pt-BR")}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Produtos Entraram
+                            </div>
+                          </div>
+                          {/* Movimentações */}
+                          <div className="bg-linear-to-br from-purple-500 to-purple-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              🔄
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              {maquina.totais.movimentacoes || 0}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Total de Movimentações
+                            </div>
+                          </div>
+                          {/* Custo dos produtos que saíram */}
+                          <div className="bg-linear-to-br from-purple-500 to-purple-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              ➖💸
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              R${" "}
+                              {Number(
+                                resumoProdutosMaquina.custoTotalItens || 0,
+                              ).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Custo dos Produtos que Saíram
+                            </div>
+                          </div>
+                          {/* Lucro da Máquina */}
+                          <div className="bg-linear-to-br from-yellow-500 to-orange-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              💰
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              R${" "}
+                              {(() => {
+                                const fichas = Number(
+                                  maquina.totais.fichas || 0,
+                                );
+                                const valorFicha = Number(
+                                  maquina.maquina?.valorFicha ||
+                                    relatorio.loja?.valorFichaPadrao ||
+                                    2.5,
+                                );
+                                return (fichas * valorFicha).toLocaleString(
+                                  "pt-BR",
+                                  { minimumFractionDigits: 2 },
+                                );
+                              })()}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Lucro da Máquina
+                            </div>
+                          </div>
+                          {/* Lucro Líquido da Máquina */}
+                          <div className="bg-linear-to-br from-green-700 to-green-400 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              🟩
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              R${" "}
+                              {Number(
+                                maquina.totais.lucroLiquido || 0,
+                              ).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Lucro Líquido da Máquina
+                            </div>
+                          </div>
+                          {/* Ticket por Prêmio */}
+                          <div className="bg-linear-to-br from-indigo-600 to-blue-700 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              🎯
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              R${" "}
+                              {Number(
+                                maquina.totais.ticketPorPremio || 0,
+                              ).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Ticket por Prêmio
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-80">
+                              Faturamento Bruto ÷ Produtos Saíram
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-80">
+                              {`R$ ${Number(maquina.totais.faturamentoBruto || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / ${Number(resumoProdutosMaquina.totalQuantidadeItens || 0).toLocaleString("pt-BR")} saídas`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Produtos da Máquina */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                        {/* Produtos que Saíram */}
+                        <div className="bg-red-50 p-3 sm:p-5 rounded-xl border-2 border-red-200">
+                          <h4 className="text-base sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2 bg-red-500 text-white p-2 sm:p-3 rounded-lg">
+                            <span className="text-xl sm:text-2xl">📤</span>
+                            <span className="text-sm sm:text-base">
+                              Produtos que SAÍRAM
+                            </span>
+                            <span className="ml-auto bg-white text-red-500 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold">
+                              {resumoProdutosMaquina.totalQuantidadeItens.toLocaleString(
+                                "pt-BR",
+                              )}
+                            </span>
+                          </h4>
+                          {renderTabelaProdutosSaidos({
+                            resumoProdutos: resumoProdutosMaquina,
+                            contexto: `máquina ${maquina?.maquina?.codigo || ""}`,
+                          })}
+                        </div>
+
+                        {/* Produtos que Entraram */}
+                        <div className="bg-green-50 p-3 sm:p-5 rounded-xl border-2 border-green-200">
+                          <h4 className="text-base sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2 bg-green-500 text-white p-2 sm:p-3 rounded-lg">
+                            <span className="text-xl sm:text-2xl">📥</span>
+                            <span className="text-sm sm:text-base">
+                              Produtos que ENTRARAM
+                            </span>
+                            <span className="ml-auto bg-white text-green-500 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold">
+                              {maquina.totais.produtosEntraram}
+                            </span>
+                          </h4>
+                          {maquina.produtosEntraram &&
+                          maquina.produtosEntraram.length > 0 ? (
+                            <div className="space-y-2 sm:space-y-3">
+                              {maquina.produtosEntraram
+                                .sort((a, b) => b.quantidade - a.quantidade)
+                                .map((produto) => (
+                                  <div
+                                    key={produto.id}
+                                    className="bg-white p-3 sm:p-4 rounded-lg border-2 border-green-300 shadow-md"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                                        <span className="text-2xl sm:text-4xl shrink-0">
+                                          {produto.emoji || "📦"}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-bold text-sm sm:text-lg text-gray-900 truncate">
+                                            {produto.nome}
+                                          </div>
+                                          <div className="text-xs sm:text-sm text-gray-600 truncate">
+                                            📋 Cód:{" "}
+                                            <span className="font-mono">
+                                              {produto.codigo || "S/C"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="bg-green-500 text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl font-bold text-base sm:text-xl shrink-0">
+                                        {produto.quantidade.toLocaleString(
+                                          "pt-BR",
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 sm:py-8 bg-white rounded-lg">
+                              <p className="text-4xl sm:text-6xl mb-2">📭</p>
+                              <p className="text-sm sm:text-base text-gray-500 font-medium">
+                                Nenhum produto entrou
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              );
+            })()}
+
+
         {relatorio && !loading && relatorio.tipo !== "todas-lojas" && (
           <div className="space-y-6">
             {relatorio?.filtroUsuario && (
@@ -3990,525 +4511,6 @@ export function Relatorios() {
                     })()}
               </div>
             )}
-
-            {/* Detalhamento por máquina */}
-            {relatorio.maquinas && relatorio.maquinas.length > 0 && (() => {
-              const obterLojaDaMaquina = (maquina) =>
-                maquina?.lojaNome || maquina?.loja?.nome || maquina?.maquina?.loja?.nome || null;
-
-              const maquinasComLoja = relatorio.maquinas.map((maquina) => ({
-                ...maquina,
-                __lojaNome: obterLojaDaMaquina(maquina),
-              }));
-
-              const mostrarColunaLoja =
-                new Set(maquinasComLoja.map((m) => m.__lojaNome).filter(Boolean)).size > 1;
-
-              const termoBuscaMaquina = filtroMaquina.trim().toLowerCase();
-              const maquinasCorrespondentes = termoBuscaMaquina
-                ? maquinasComLoja.filter((maquina) =>
-                    [maquina.maquina?.nome, maquina.maquina?.codigo, maquina.__lojaNome]
-                      .filter(Boolean)
-                      .some((campo) =>
-                        String(campo).toLowerCase().includes(termoBuscaMaquina),
-                      ),
-                  )
-                : maquinasComLoja;
-
-              // Ordenado por lucro líquido — com muitas máquinas (ex.: relatório
-              // consolidado de várias lojas), mostra só as 10 melhores por
-              // padrão, com um botão pra ver o resto.
-              const LIMITE_TOP_MAQUINAS = 10;
-              const maquinasOrdenadas = [...maquinasCorrespondentes].sort(
-                (a, b) =>
-                  Number(b.totais?.lucroLiquido || 0) -
-                  Number(a.totais?.lucroLiquido || 0),
-              );
-              const haMaisQueOLimite =
-                maquinasOrdenadas.length > LIMITE_TOP_MAQUINAS;
-              const maquinasFiltradas =
-                !termoBuscaMaquina && !mostrarTodasMaquinas && haMaisQueOLimite
-                  ? maquinasOrdenadas.slice(0, LIMITE_TOP_MAQUINAS)
-                  : maquinasOrdenadas;
-
-              const alternarMaquina = (id) => {
-                setMaquinasExpandidas((prev) => {
-                  const proximo = new Set(prev);
-                  if (proximo.has(id)) {
-                    proximo.delete(id);
-                  } else {
-                    proximo.add(id);
-                  }
-                  return proximo;
-                });
-              };
-
-              const abrirEIrParaMaquina = (id) => {
-                setMaquinasExpandidas((prev) => new Set(prev).add(id));
-                requestAnimationFrame(() => {
-                  document
-                    .getElementById(`maquina-detalhe-${id}`)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                });
-              };
-
-              return (
-              <div className="space-y-6">
-                <div className="card bg-linear-to-r from-indigo-500 to-purple-600 text-white">
-                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold flex items-center gap-2 sm:gap-3">
-                    <span className="text-3xl sm:text-4xl">🎰</span>
-                    <span className="wrap-break-word">
-                      RELATÓRIO DETALHADO POR MÁQUINA
-                    </span>
-                  </h2>
-                  <p className="text-xs sm:text-sm opacity-90 mt-2">
-                    {relatorio.maquinas.length} máquina(s) no período
-                    selecionado
-                    {!termoBuscaMaquina && haMaisQueOLimite && !mostrarTodasMaquinas
-                      ? ` — mostrando as ${LIMITE_TOP_MAQUINAS} com maior lucro líquido`
-                      : ""}
-                    . Use a busca pra achar rápido e clique em "Ver detalhes"
-                    pra abrir uma máquina específica.
-                  </p>
-                </div>
-
-                {relatorio.maquinas.length > 6 && (
-                  <input
-                    type="text"
-                    value={filtroMaquina}
-                    onChange={(e) => setFiltroMaquina(e.target.value)}
-                    placeholder="Buscar máquina por código, nome ou loja..."
-                    className="input-field w-full max-w-md"
-                  />
-                )}
-
-                {/* Tabela resumo — visão rápida de todas as máquinas */}
-                <div className="overflow-x-auto rounded-xl border border-indigo-200 shadow">
-                  <table className="min-w-full bg-white">
-                    <thead className="bg-indigo-100 text-indigo-900">
-                      <tr>
-                        {mostrarColunaLoja && (
-                          <th className="px-4 py-3 text-left text-sm font-bold">
-                            Loja
-                          </th>
-                        )}
-                        <th className="px-4 py-3 text-left text-sm font-bold">
-                          Código
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-bold">
-                          Máquina
-                        </th>
-                        <th className="px-4 py-3 text-right text-sm font-bold">
-                          Dinheiro
-                        </th>
-                        <th className="px-4 py-3 text-right text-sm font-bold">
-                          Produtos Saíram
-                        </th>
-                        <th className="px-4 py-3 text-right text-sm font-bold">
-                          Lucro Líquido
-                        </th>
-                        <th className="px-4 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {maquinasFiltradas.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={mostrarColunaLoja ? 7 : 6}
-                            className="px-4 py-6 text-center text-sm text-gray-500"
-                          >
-                            Nenhuma máquina encontrada para essa busca.
-                          </td>
-                        </tr>
-                      ) : (
-                        maquinasFiltradas.map((maquina) => {
-                          const expandida = maquinasExpandidas.has(
-                            maquina.maquina.id,
-                          );
-                          return (
-                            <tr
-                              key={maquina.maquina.id}
-                              className="border-t border-indigo-100 hover:bg-indigo-50 transition-colors"
-                            >
-                              {mostrarColunaLoja && (
-                                <td className="px-4 py-2 text-sm text-gray-700">
-                                  {maquina.__lojaNome || "-"}
-                                </td>
-                              )}
-                              <td className="px-4 py-2 text-sm font-mono text-gray-900">
-                                {maquina.maquina.codigo}
-                              </td>
-                              <td className="px-4 py-2 text-sm font-semibold text-gray-900">
-                                {maquina.maquina.nome || "-"}
-                              </td>
-                              <td className="px-4 py-2 text-sm text-right text-gray-800">
-                                R${" "}
-                                {Number(maquina.totais.dinheiro || 0).toLocaleString(
-                                  "pt-BR",
-                                  { minimumFractionDigits: 2 },
-                                )}
-                              </td>
-                              <td className="px-4 py-2 text-sm text-right text-gray-800">
-                                {Number(
-                                  maquina.totais.produtosSairam || 0,
-                                ).toLocaleString("pt-BR")}
-                              </td>
-                              <td className="px-4 py-2 text-sm text-right font-bold text-indigo-700">
-                                R${" "}
-                                {Number(
-                                  maquina.totais.lucroLiquido || 0,
-                                ).toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 2,
-                                })}
-                              </td>
-                              <td className="px-4 py-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    expandida
-                                      ? alternarMaquina(maquina.maquina.id)
-                                      : abrirEIrParaMaquina(maquina.maquina.id)
-                                  }
-                                  className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                                >
-                                  {expandida ? "Ocultar" : "Ver detalhes"}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {!termoBuscaMaquina && haMaisQueOLimite && (
-                  <button
-                    type="button"
-                    onClick={() => setMostrarTodasMaquinas((prev) => !prev)}
-                    className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 underline"
-                  >
-                    {mostrarTodasMaquinas
-                      ? "Ver só as 10 melhores"
-                      : `Ver mais (${maquinasOrdenadas.length - LIMITE_TOP_MAQUINAS} máquina(s) a mais)`}
-                  </button>
-                )}
-
-                {maquinasFiltradas.map((maquina, index) => {
-                  const resumoProdutosMaquina = calcularResumoProdutos(
-                    maquina?.produtosSairam,
-                    maquina?.totais,
-                  );
-                  const expandida = maquinasExpandidas.has(maquina.maquina.id);
-
-                  return (
-                    <div
-                      key={maquina.maquina.id}
-                      id={`maquina-detalhe-${maquina.maquina.id}`}
-                      className="card border-4 border-indigo-300 shadow-2xl page-break-before scroll-mt-4"
-                    >
-                      {/* Header da Máquina com destaque — clique pra abrir/fechar */}
-                      <button
-                        type="button"
-                        onClick={() => alternarMaquina(maquina.maquina.id)}
-                        className="w-full text-left bg-linear-to-r from-indigo-600 to-purple-600 text-white p-4 sm:p-6 rounded-xl mb-4 sm:mb-6 shadow-lg"
-                      >
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                          <div className="flex-1">
-                            <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-2">
-                              🎰{" "}
-                              {maquina.maquina.nome || `Máquina ${index + 1}`}
-                            </h3>
-                            <p className="text-sm sm:text-lg opacity-90">
-                              📋 Código:{" "}
-                              <span className="font-mono font-bold">
-                                {maquina.maquina.codigo}
-                              </span>
-                              {maquina.__lojaNome && (
-                                <> · 🏪 {maquina.__lojaNome}</>
-                              )}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="text-right">
-                              <div className="bg-white/20 backdrop-blur-sm px-3 sm:px-4 py-2 rounded-lg">
-                                <div className="text-xs sm:text-sm opacity-90">
-                                  Máquina
-                                </div>
-                                <div className="text-2xl sm:text-3xl font-bold">
-                                  {index + 1}/{maquinasFiltradas.length}
-                                </div>
-                              </div>
-                            </div>
-                            <svg
-                              className={`w-6 h-6 transition-transform ${expandida ? "rotate-180" : ""}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 9l-7 7-7-7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </button>
-
-                      {expandida && (
-                        <>
-                      {/* Totais da Máquina em destaque */}
-                      <div className="mb-4 sm:mb-6">
-                        <h4 className="text-base sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                          <span className="text-xl sm:text-2xl">📊</span>
-                          <span className="text-sm sm:text-base">
-                            Resumo de Movimentações desta Máquina
-                          </span>
-                        </h4>
-                        <div className="flex flex-wrap gap-4 sm:gap-6">
-                          {/* Dinheiro máquina */}
-                          <div className="bg-linear-to-br from-yellow-400 to-yellow-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              💵
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              R${" "}
-                              {Number(
-                                maquina.totais.dinheiro || 0,
-                              ).toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Dinheiro
-                            </div>
-                          </div>
-                          {/* Produtos Saíram */}
-                          <div className="bg-linear-to-br from-red-500 to-red-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              📤
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              {Number(
-                                resumoProdutosMaquina.totalQuantidadeItens || 0,
-                              ).toLocaleString("pt-BR")}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Produtos Saíram
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-90 leading-tight">
-                              {resumoProdutosMaquina.itens.length > 0
-                                ? resumoProdutosMaquina.itens
-                                    .map((produto) =>
-                                      produto?.nome
-                                        ? `${produto.nome} (${Number(produto?.quantidade || 0).toLocaleString("pt-BR")})`
-                                        : null,
-                                    )
-                                    .filter(Boolean)
-                                    .join(" | ")
-                                : "Sem detalhamento de produto"}
-                            </div>
-                          </div>
-                          {/* Produtos Entraram */}
-                          <div className="bg-linear-to-br from-green-500 to-green-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              📥
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              {Number(
-                                maquina.totais.produtosEntraram || 0,
-                              ).toLocaleString("pt-BR")}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Produtos Entraram
-                            </div>
-                          </div>
-                          {/* Movimentações */}
-                          <div className="bg-linear-to-br from-purple-500 to-purple-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              🔄
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              {maquina.totais.movimentacoes || 0}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Total de Movimentações
-                            </div>
-                          </div>
-                          {/* Custo dos produtos que saíram */}
-                          <div className="bg-linear-to-br from-purple-500 to-purple-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              ➖💸
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              R${" "}
-                              {Number(
-                                resumoProdutosMaquina.custoTotalItens || 0,
-                              ).toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Custo dos Produtos que Saíram
-                            </div>
-                          </div>
-                          {/* Lucro da Máquina */}
-                          <div className="bg-linear-to-br from-yellow-500 to-orange-600 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              💰
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              R${" "}
-                              {(() => {
-                                const fichas = Number(
-                                  maquina.totais.fichas || 0,
-                                );
-                                const valorFicha = Number(
-                                  maquina.maquina?.valorFicha ||
-                                    relatorio.loja?.valorFichaPadrao ||
-                                    2.5,
-                                );
-                                return (fichas * valorFicha).toLocaleString(
-                                  "pt-BR",
-                                  { minimumFractionDigits: 2 },
-                                );
-                              })()}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Lucro da Máquina
-                            </div>
-                          </div>
-                          {/* Lucro Líquido da Máquina */}
-                          <div className="bg-linear-to-br from-green-700 to-green-400 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              🟩
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              R${" "}
-                              {Number(
-                                maquina.totais.lucroLiquido || 0,
-                              ).toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Lucro Líquido da Máquina
-                            </div>
-                          </div>
-                          {/* Ticket por Prêmio */}
-                          <div className="bg-linear-to-br from-indigo-600 to-blue-700 text-white p-3 sm:p-5 rounded-xl shadow-lg">
-                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
-                              🎯
-                            </div>
-                            <div className="text-xl sm:text-3xl font-bold text-center">
-                              R${" "}
-                              {Number(
-                                maquina.totais.ticketPorPremio || 0,
-                              ).toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                              })}
-                            </div>
-                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
-                              Ticket por Prêmio
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-80">
-                              Faturamento Bruto ÷ Produtos Saíram
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-80">
-                              {`R$ ${Number(maquina.totais.faturamentoBruto || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / ${Number(resumoProdutosMaquina.totalQuantidadeItens || 0).toLocaleString("pt-BR")} saídas`}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Produtos da Máquina */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                        {/* Produtos que Saíram */}
-                        <div className="bg-red-50 p-3 sm:p-5 rounded-xl border-2 border-red-200">
-                          <h4 className="text-base sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2 bg-red-500 text-white p-2 sm:p-3 rounded-lg">
-                            <span className="text-xl sm:text-2xl">📤</span>
-                            <span className="text-sm sm:text-base">
-                              Produtos que SAÍRAM
-                            </span>
-                            <span className="ml-auto bg-white text-red-500 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold">
-                              {resumoProdutosMaquina.totalQuantidadeItens.toLocaleString(
-                                "pt-BR",
-                              )}
-                            </span>
-                          </h4>
-                          {renderTabelaProdutosSaidos({
-                            resumoProdutos: resumoProdutosMaquina,
-                            contexto: `máquina ${maquina?.maquina?.codigo || ""}`,
-                          })}
-                        </div>
-
-                        {/* Produtos que Entraram */}
-                        <div className="bg-green-50 p-3 sm:p-5 rounded-xl border-2 border-green-200">
-                          <h4 className="text-base sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2 bg-green-500 text-white p-2 sm:p-3 rounded-lg">
-                            <span className="text-xl sm:text-2xl">📥</span>
-                            <span className="text-sm sm:text-base">
-                              Produtos que ENTRARAM
-                            </span>
-                            <span className="ml-auto bg-white text-green-500 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold">
-                              {maquina.totais.produtosEntraram}
-                            </span>
-                          </h4>
-                          {maquina.produtosEntraram &&
-                          maquina.produtosEntraram.length > 0 ? (
-                            <div className="space-y-2 sm:space-y-3">
-                              {maquina.produtosEntraram
-                                .sort((a, b) => b.quantidade - a.quantidade)
-                                .map((produto) => (
-                                  <div
-                                    key={produto.id}
-                                    className="bg-white p-3 sm:p-4 rounded-lg border-2 border-green-300 shadow-md"
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                                        <span className="text-2xl sm:text-4xl shrink-0">
-                                          {produto.emoji || "📦"}
-                                        </span>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="font-bold text-sm sm:text-lg text-gray-900 truncate">
-                                            {produto.nome}
-                                          </div>
-                                          <div className="text-xs sm:text-sm text-gray-600 truncate">
-                                            📋 Cód:{" "}
-                                            <span className="font-mono">
-                                              {produto.codigo || "S/C"}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="bg-green-500 text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl font-bold text-base sm:text-xl shrink-0">
-                                        {produto.quantidade.toLocaleString(
-                                          "pt-BR",
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-6 sm:py-8 bg-white rounded-lg">
-                              <p className="text-4xl sm:text-6xl mb-2">📭</p>
-                              <p className="text-sm sm:text-base text-gray-500 font-medium">
-                                Nenhum produto entrou
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              );
-            })()}
 
             {/* Gráfico de saída por máquina */}
             {relatorio.graficoSaidaPorMaquina &&
