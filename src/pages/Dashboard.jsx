@@ -298,7 +298,6 @@ export function Dashboard() {
   const podeVerDefeituosasNoDashboard =
     usuario?.role === "FUNCIONARIO_TODAS_LOJAS";
   const resumoCardsGridClass = "grid gap-4 md:gap-6 mb-8";
-  const atalhosAdminLikeGridClass = "grid gap-4 md:gap-6 mb-8";
   const [stats, setStats] = useState({
     alertas: [],
     balanco: null,
@@ -2353,17 +2352,17 @@ export function Dashboard() {
         </div>
 
         {/* Cards de Resumo com design moderno - Apenas para ADMIN */}
-        {isAdminLike && (
+        {isAdminLike ? (
           <div
             className={resumoCardsGridClass}
             style={{
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             }}
           >
-            {/* Faturamento Semanal - Ocupa 2 colunas */}
+            {/* Faturamento Semanal */}
             {usuario?.role === "ADMIN" && (
               <div
-                className="stat-card bg-linear-to-br from-yellow-500 to-orange-500 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer 2xl:col-span-2"
+                className="stat-card bg-linear-to-br from-yellow-500 to-orange-500 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
                 onClick={abrirDetalheComparativoMensal}
               >
                 <div className="relative z-10">
@@ -2552,17 +2551,8 @@ export function Dashboard() {
                 </p>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Financeiro, Veículos, Quebra de Ordem, Estoque e Manutenções */}
-        {isAdminLike ? (
-          <div
-            className={atalhosAdminLikeGridClass}
-            style={{
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            }}
-          >
+            {/* Financeiro, Veículos, Quebra de Ordem, Estoque, Manutenções, Pontos, Máquinas e Roteiros */}
             {/* Financeiro */}
             {usuario?.role === "ADMIN" && (
               <div
@@ -2739,6 +2729,90 @@ export function Dashboard() {
                 <p className="text-xs opacity-75 mt-1">
                   Confirmar devoluções e limpar base
                 </p>
+              </div>
+            </div>
+            {/* Pontos */}
+            <div
+              className="stat-card bg-linear-to-br from-teal-500 to-teal-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
+              onClick={() => navigate("/lojas")}
+            >
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium opacity-90">Pontos</h3>
+                  <svg
+                    className="w-8 h-8 opacity-80"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                </div>
+                <p className="text-3xl font-bold">🏪</p>
+                <p className="text-xs opacity-75 mt-1">Acessar tela de pontos</p>
+              </div>
+            </div>
+            {/* Máquinas */}
+            <div
+              className="stat-card bg-linear-to-br from-fuchsia-500 to-fuchsia-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
+              onClick={() => navigate("/maquinas")}
+            >
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium opacity-90">Máquinas</h3>
+                  <svg
+                    className="w-8 h-8 opacity-80"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2M5 21H3m16 0h-2M9 7h6M9 11h6M9 15h6"
+                    />
+                  </svg>
+                </div>
+                <p className="text-3xl font-bold">🎰</p>
+                <p className="text-xs opacity-75 mt-1">Acessar tela de máquinas</p>
+              </div>
+            </div>
+            {/* Roteiros */}
+            <div
+              className="stat-card bg-linear-to-br from-violet-600 to-purple-800 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
+              onClick={() => navigate("/roteiros")}
+            >
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium opacity-90">Roteiros</h3>
+                  <svg
+                    className="w-8 h-8 opacity-80"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                    />
+                  </svg>
+                </div>
+                <p className="text-3xl font-bold">🗺️</p>
+                <p className="text-xs opacity-75 mt-1">Acessar tela de roteiros</p>
               </div>
             </div>
           </div>

@@ -7,6 +7,7 @@ import Footer from "../components/Footer.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { Modal, AlertBox } from "../components/UIComponents";
 import { MultiSelectAutocomplete } from "../components/MultiSelectAutocomplete";
+import { AutocompleteSelect } from "../components/AutocompleteSelect";
 import { FinalizarRoteiroModal } from "../components/FinalizarRoteiroModal";
 import {
   abrirWhatsAppComMensagem,
@@ -111,6 +112,8 @@ export function Roteiros() {
   const [novosDiasRoteiro, setNovosDiasRoteiro] = useState([]);
   const [novaObservacaoRoteiro, setNovaObservacaoRoteiro] = useState("");
   const [filtroNomeRoteiro, setFiltroNomeRoteiro] = useState("");
+  const [filtroResponsavelId, setFiltroResponsavelId] = useState("");
+  const [filtroLojaId, setFiltroLojaId] = useState("");
   const [roteiroParaAdicionar, setRoteiroParaAdicionar] = useState(null);
   const [observacoesPendentes, setObservacoesPendentes] = useState({});
   const [salvandoObservacao, setSalvandoObservacao] = useState({});
@@ -708,9 +711,38 @@ export function Roteiros() {
     : roteiros.filter((r) => String(r.funcionarioId) === String(usuario?.id));
 
   const termoBuscaRoteiro = normalizarTextoFiltro(filtroNomeRoteiro);
-  const roteirosFiltrados = roteirosDoUsuario.filter((roteiro) =>
-    normalizarTextoFiltro(roteiro?.nome || "").includes(termoBuscaRoteiro),
-  );
+  const roteirosFiltrados = roteirosDoUsuario.filter((roteiro) => {
+    if (
+      termoBuscaRoteiro &&
+      !normalizarTextoFiltro(roteiro?.nome || "").includes(termoBuscaRoteiro)
+    ) {
+      return false;
+    }
+    if (
+      filtroResponsavelId &&
+      String(roteiro?.funcionarioId || "") !== filtroResponsavelId
+    ) {
+      return false;
+    }
+    if (
+      filtroLojaId &&
+      !(roteiro?.lojas || []).some(
+        (loja) => String(loja?.id || "") === filtroLojaId,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const opcoesFiltroResponsavel = funcionarios.map((f) => ({
+    id: String(f.id),
+    label: obterLabelResponsavelRoteiro(f),
+  }));
+  const opcoesFiltroLoja = todasLojas.map((loja) => ({
+    id: String(loja.id),
+    label: [loja?.nome, loja?.cidade, loja?.bairro].filter(Boolean).join(" — "),
+  }));
 
   // Depende de usuario?.role para esperar o AuthContext hidratar do localStorage
   useEffect(() => {
@@ -1502,18 +1534,6 @@ export function Roteiros() {
     }
   };
 
-  const abrirModalFinalizacao = async (roteiro) => {
-    const podeFinalizar = await exigirFinalizarPilotagemAntesDaRota(roteiro.id);
-    if (!podeFinalizar) return;
-
-    setModalFinalizar({
-      aberto: true,
-      etapa: 1,
-      roteiro,
-      loading: false,
-    });
-  };
-
   const fecharModalFinalizacao = () => {
     if (modalFinalizar.loading) return;
     setModalFinalizar({
@@ -1626,17 +1646,43 @@ export function Roteiros() {
           )}
         </div>
 
-        <div className="mb-6">
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Buscar rota por nome
-          </label>
-          <input
-            type="text"
-            value={filtroNomeRoteiro}
-            onChange={(e) => setFiltroNomeRoteiro(e.target.value)}
-            placeholder="Digite o nome do roteiro..."
-            className="w-full max-w-md p-3 border rounded-xl bg-white focus:ring-2 focus:ring-[#24094E] outline-none"
-          />
+        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Buscar rota por nome
+            </label>
+            <input
+              type="text"
+              value={filtroNomeRoteiro}
+              onChange={(e) => setFiltroNomeRoteiro(e.target.value)}
+              placeholder="Digite o nome do roteiro..."
+              className="w-full p-3 border rounded-xl bg-white focus:ring-2 focus:ring-[#24094E] outline-none"
+            />
+          </div>
+          {isGestorRoteiro && (
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Filtrar por responsável
+              </label>
+              <AutocompleteSelect
+                value={filtroResponsavelId}
+                onChange={setFiltroResponsavelId}
+                options={opcoesFiltroResponsavel}
+                placeholder="Digite o nome do responsável..."
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Filtrar por ponto
+            </label>
+            <AutocompleteSelect
+              value={filtroLojaId}
+              onChange={setFiltroLojaId}
+              options={opcoesFiltroLoja}
+              placeholder="Digite o nome do ponto..."
+            />
+          </div>
         </div>
 
         {error && (
@@ -1689,7 +1735,7 @@ export function Roteiros() {
 
         {roteirosDoUsuario.length > 0 && roteirosFiltrados.length === 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-600 font-medium mb-6">
-            Nenhuma rota encontrada com esse nome.
+            Nenhuma rota encontrada com esses filtros.
           </div>
         )}
 
@@ -2201,23 +2247,6 @@ export function Roteiros() {
                             ? "Continuar rota"
                             : "Começar Rota"}
                     </button>
-                    {roteiro.funcionarioId && !roteiroEhDeAbastecedor(roteiro) && (
-                      <button
-                        onClick={() => abrirModalFinalizacao(roteiro)}
-                        disabled={
-                          Boolean(desfinalizandoRoteiros[roteiro.id]) ||
-                          andamentoPorOutroUsuario
-                        }
-                        title={
-                          andamentoPorOutroUsuario
-                            ? "Roteiro em andamento por outro usuário."
-                            : ""
-                        }
-                        className="bg-green-600 text-white py-2 px-3 rounded-lg font-bold text-sm hover:bg-green-700 transition-colors"
-                      >
-                        Finalizar
-                      </button>
-                    )}
                     {isGestorRoteiro && (
                       <button
                         onClick={() => handleExcluirRoteiro(roteiro)}
