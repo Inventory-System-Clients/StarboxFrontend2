@@ -7,6 +7,7 @@ import Footer from "../components/Footer.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { Modal, AlertBox } from "../components/UIComponents";
 import { MultiSelectAutocomplete } from "../components/MultiSelectAutocomplete";
+import { FinalizarRoteiroModal } from "../components/FinalizarRoteiroModal";
 import {
   abrirWhatsAppComMensagem,
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
@@ -94,7 +95,7 @@ export function Roteiros() {
         delete c[roteiroId];
         return c;
       });
-      carregarDadosIniciais();
+      await atualizarListaRoteiros();
     } catch (err) {
       setError("Erro ao salvar dias do roteiro.");
     } finally {
@@ -839,6 +840,26 @@ export function Roteiros() {
     }
   };
 
+  // Atualiza só a lista de roteiros (sem lojas/funcionários/usuários/veículos,
+  // que não mudam quando você adiciona/reordena/remove um ponto) e sem passar
+  // por `loading`, que troca a tela inteira por "Carregando roteiros..." —
+  // usada depois de mover, reordenar ou remover um ponto, pra não recarregar
+  // a página e perder a posição do scroll a cada clique.
+  const atualizarListaRoteiros = async () => {
+    try {
+      const resRoteiros = await api.get("/roteiros/com-status");
+      const listaRoteiros = Array.isArray(resRoteiros.data)
+        ? resRoteiros.data
+        : [];
+      const listaComStatusExecucao = await aplicarStatusExecucaoRoteiros(
+        listaRoteiros,
+      );
+      setRoteiros(listaComStatusExecucao);
+    } catch (err) {
+      setError("Erro ao atualizar roteiros.");
+    }
+  };
+
   const handleAtualizarVeiculoRoteiro = async (roteiro, valorSelecionado) => {
     const veiculoId = normalizarIdOpcional(valorSelecionado);
     const veiculoIdAnterior = normalizarIdOpcional(roteiro?.veiculoId);
@@ -865,7 +886,7 @@ export function Roteiros() {
           ? `Veículo ${getVeiculoLabel(veiculoSelecionado)} associado com sucesso.`
           : "Veículo removido do roteiro com sucesso.",
       );
-      carregarDadosIniciais();
+      await atualizarListaRoteiros();
     } catch (err) {
       setError(
         getMensagemErroVeiculo(err, "Erro ao atualizar veículo do roteiro."),
@@ -1241,7 +1262,7 @@ export function Roteiros() {
         roteiroDestinoId: destinoId,
       });
       if (recarregar) {
-        carregarDadosIniciais();
+        await atualizarListaRoteiros();
       }
       return true;
     } catch (err) {
@@ -1264,7 +1285,7 @@ export function Roteiros() {
         ),
       );
       const sucessos = resultados.filter(Boolean).length;
-      await carregarDadosIniciais();
+      await atualizarListaRoteiros();
 
       if (sucessos === lojaIds.length) {
         setSuccess(
@@ -1292,7 +1313,7 @@ export function Roteiros() {
         lojaId,
         novaOrdem,
       });
-      carregarDadosIniciais();
+      await atualizarListaRoteiros();
     } catch (err) {
       setError("Erro ao reordenar ponto.");
     }
@@ -1318,7 +1339,7 @@ export function Roteiros() {
     try {
       await api.delete(`/roteiros/${roteiro.id}/lojas/${loja.id}`);
       setSuccess("Ponto removido do roteiro com sucesso.");
-      carregarDadosIniciais();
+      await atualizarListaRoteiros();
     } catch (err) {
       const mensagemBackend = err?.response?.data?.error;
       setError(mensagemBackend || "Erro ao remover ponto do roteiro.");
@@ -1801,7 +1822,7 @@ export function Roteiros() {
                           `Responsável ${funcionarioNome || "removido"} atribuído com sucesso.`,
                         );
                         // Recarregar dados do backend para garantir persistência
-                        carregarDadosIniciais();
+                        await atualizarListaRoteiros();
                       } catch (err) {
                         setError(
                           getMensagemErroVeiculo(
@@ -2414,51 +2435,17 @@ export function Roteiros() {
         </div>
       )}
 
-      <Modal
-        isOpen={modalFinalizar.aberto}
+      <FinalizarRoteiroModal
+        aberto={modalFinalizar.aberto}
+        etapa={modalFinalizar.etapa}
+        loading={modalFinalizar.loading}
         onClose={fecharModalFinalizacao}
-        title={
-          modalFinalizar.etapa === 1
-            ? "Confirmar finalização"
-            : "Confirmação final"
-        }
-        size="sm"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            {modalFinalizar.etapa === 1
-              ? `Deseja finalizar o roteiro ${modalFinalizar.roteiro?.nome || ""}?`
-              : "Confirma novamente a finalização deste roteiro?"}
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
-              className="btn-secondary"
-              onClick={fecharModalFinalizacao}
-              disabled={modalFinalizar.loading}
-            >
-              Cancelar
-            </button>
-            {modalFinalizar.etapa === 1 ? (
-              <button
-                className="btn-primary"
-                onClick={avancarConfirmacaoFinalizacao}
-              >
-                Continuar
-              </button>
-            ) : (
-              <button
-                className="btn-danger"
-                onClick={executarFinalizacaoRoteiro}
-                disabled={modalFinalizar.loading}
-              >
-                {modalFinalizar.loading
-                  ? "Finalizando..."
-                  : "Finalizar Roteiro"}
-              </button>
-            )}
-          </div>
-        </div>
-      </Modal>
+        onAvancar={avancarConfirmacaoFinalizacao}
+        onConfirmar={executarFinalizacaoRoteiro}
+        textoEtapa1={`Deseja finalizar o roteiro ${modalFinalizar.roteiro?.nome || ""}?`}
+        textoEtapa2="Confirma novamente a finalização deste roteiro?"
+        labelBotaoFinalizar="Finalizar Roteiro"
+      />
 
       <Footer />
     </div>

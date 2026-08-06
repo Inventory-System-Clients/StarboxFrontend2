@@ -4,6 +4,8 @@ import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import { Modal, AlertBox } from "../components/UIComponents";
+import { FinalizarRoteiroModal } from "../components/FinalizarRoteiroModal";
+import { MovimentacaoMaquinaForm } from "../components/MovimentacaoMaquinaForm";
 import ManutencaoModal from "../components/ManutencaoModal";
 import ModalEditarMovimentacao from "../components/ModalEditarMovimentacao";
 import { useAuth } from "../contexts/AuthContext";
@@ -84,6 +86,8 @@ export default function RoteiroExecucao() {
     lojasSemManutencao: [],
   });
   const [resumoExecucaoBackend, setResumoExecucaoBackend] = useState(null);
+  const [resumoExecucaoRawBackend, setResumoExecucaoRawBackend] = useState(null);
+  const [resumoExecucaoExpandido, setResumoExecucaoExpandido] = useState(false);
   const [tiposMaquinaPorId, setTiposMaquinaPorId] = useState({});
   const [ultimasMovimentacoesPorMaquina, setUltimasMovimentacoesPorMaquina] =
     useState({});
@@ -121,6 +125,7 @@ export default function RoteiroExecucao() {
     [],
   );
   const [pontosPuladosPorLoja, setPontosPuladosPorLoja] = useState({});
+  const [modalMovimentacao, setModalMovimentacao] = useState(null);
 
   const perfisPermitidosEditarMovimentacaoRota = new Set([
     "FUNCIONARIO",
@@ -1031,14 +1036,30 @@ export default function RoteiroExecucao() {
     return { ok: true, numero };
   };
 
-  const obterTextoResumoParaCompartilhar = () =>
-    String(
-      resumoExecucaoBackend?.resumoTextoCopiar ||
-        resumoExecucaoBackend?.mensagemResumoWhatsapp ||
+  // Fonte única de resolução da mensagem de resumo, usada pelos 3 caminhos de
+  // envio (popup automático ao finalizar, botão "Enviar Whats" e "Copiar
+  // resumo") para garantir que os 3 mandem exatamente o mesmo texto, sempre
+  // filtrado por período. Aceita overrides porque, no momento do finalize, o
+  // state ainda não refletiu o resultado recém-recebido do backend.
+  const obterTextoResumoParaCompartilhar = (
+    resumoOverride = resumoExecucaoBackend,
+    rawOverride = resumoExecucaoRawBackend,
+  ) => {
+    const textoBase = String(
+      resumoOverride?.resumoTextoCopiar ||
+        resumoOverride?.mensagemResumoWhatsapp ||
         roteiro?.resumoTextoCopiar ||
         roteiro?.mensagemResumoWhatsapp ||
         "",
     ).trim();
+    if (!textoBase) return "";
+
+    return filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo({
+      mensagem: textoBase,
+      finalizacaoData: rawOverride,
+      roteiro,
+    }).trim();
+  };
 
   const enviarResumoWhatsapp = async () => {
     if (enviandoResumoWhatsapp) return;
@@ -2157,6 +2178,7 @@ export default function RoteiroExecucao() {
       );
 
       setResumoExecucaoBackend(normalizado);
+      setResumoExecucaoRawBackend(resResumo?.data || null);
 
       if (normalizado) {
         setResumoManutencaoRota({
@@ -2212,6 +2234,55 @@ export default function RoteiroExecucao() {
     return () => window.clearInterval(interval);
   }, [id, roteiro]);
 
+  // Quando uma movimentação é registrada, verificar se todas as máquinas da
+  // loja estão finalizadas. Se sim, enviar WhatsApp combinado da loja — mas
+  // só automaticamente na primeira vez que o ponto fica completo. Se o ponto
+  // já estava 100% concluído antes (ex: usuário voltou numa máquina só para
+  // lançar um abastecimento extra), não reabre o WhatsApp sozinho de novo —
+  // só sinaliza a leitura atualizada, e o reenvio fica a cargo do botão
+  // manual "Enviar leitura atualizada". Usado tanto pelo fluxo de página
+  // (efeito de location.state abaixo) quanto pelo modal de movimentação.
+  const verificarEEnviarWhatsAppLojaSeCompleta = (loja) => {
+    if (!loja) return;
+
+    const todasFinalizadas =
+      loja.maquinas?.length > 0 &&
+      loja.maquinas.every((m) => maquinaEstaConcluidaNoBackend(m));
+    if (!todasFinalizadas) return;
+
+    const jaHaviaMensagemEnviadaAntes = Boolean(
+      obterUltimaMensagemMovimentacoesWhatsAppLoja({
+        roteiroId: id,
+        usuarioId: usuario?.id,
+        lojaId: loja.id,
+      }),
+    );
+
+    if (jaHaviaMensagemEnviadaAntes) {
+      setLeiturasAtualizadasPorLoja((prev) => ({
+        ...prev,
+        [String(loja.id)]: true,
+      }));
+    } else {
+      enviarWhatsAppLoja(loja);
+    }
+  };
+
+  // Chamado pelo modal de movimentação (sem navegação de página) após um
+  // registro bem-sucedido: recarrega a rota e roda a mesma checagem de
+  // "loja completa -> WhatsApp" que o fluxo de página faz via location.state.
+  const handleMovimentacaoSalva = async ({ lojaId: lojaIdSalva }) => {
+    setModalMovimentacao(null);
+    const roteiroAtualizado = await carregarRoteiro();
+    const lojaAtualizada = roteiroAtualizado?.lojas?.find(
+      (l) => l.id === lojaIdSalva,
+    );
+    if (lojaAtualizada) {
+      setLojaSelecionada(lojaAtualizada);
+      verificarEEnviarWhatsAppLojaSeCompleta(lojaAtualizada);
+    }
+  };
+
   // Efeito para selecionar automaticamente a loja quando volta da movimentação
   useEffect(() => {
     if (roteiro && location.state?.lojaId) {
@@ -2225,35 +2296,8 @@ export default function RoteiroExecucao() {
           replace: true,
           state: Object.keys(proximoState).length > 0 ? proximoState : {},
         });
-        // Quando voltar de uma movimentação, verificar se todas as máquinas da
-        // loja estão finalizadas. Se sim, enviar WhatsApp combinado da loja —
-        // mas só automaticamente na primeira vez que o ponto fica completo.
-        // Se o ponto já estava 100% concluído antes (ex: usuário voltou numa
-        // máquina só para lançar um abastecimento extra), não reabre o
-        // WhatsApp sozinho de novo — só sinaliza a leitura atualizada, e o
-        // reenvio fica a cargo do botão manual "Enviar leitura atualizada".
         if (location.state?.origemMovimentacao) {
-          const todasFinalizadas =
-            loja.maquinas?.length > 0 &&
-            loja.maquinas.every((m) => maquinaEstaConcluidaNoBackend(m));
-          if (todasFinalizadas) {
-            const jaHaviaMensagemEnviadaAntes = Boolean(
-              obterUltimaMensagemMovimentacoesWhatsAppLoja({
-                roteiroId: id,
-                usuarioId: usuario?.id,
-                lojaId: loja.id,
-              }),
-            );
-
-            if (jaHaviaMensagemEnviadaAntes) {
-              setLeiturasAtualizadasPorLoja((prev) => ({
-                ...prev,
-                [String(loja.id)]: true,
-              }));
-            } else {
-              enviarWhatsAppLoja(loja);
-            }
-          }
+          verificarEEnviarWhatsAppLojaSeCompleta(loja);
         }
       }
     }
@@ -2301,6 +2345,7 @@ export default function RoteiroExecucao() {
       );
 
       console.log("Roteiro carregado:", roteiroNormalizado);
+      return roteiroNormalizado;
     } catch (err) {
       if (err?.response?.status === 404) {
         setErroCarregamentoInicial(
@@ -2309,6 +2354,7 @@ export default function RoteiroExecucao() {
       } else {
         setErroCarregamentoInicial("Erro ao buscar roteiro.");
       }
+      return null;
     } finally {
       setLoading(false);
     }
@@ -2994,24 +3040,20 @@ export default function RoteiroExecucao() {
         roteiro,
       );
       setResumoExecucaoBackend(resumoNormalizado);
-      const mensagemWhatsAppOriginal =
-        resumoNormalizado?.mensagemResumoWhatsapp ||
-        String(res?.data?.mensagemResumoWhatsapp || "").trim();
+      setResumoExecucaoRawBackend(res?.data || null);
 
-      if (!mensagemWhatsAppOriginal) {
+      const mensagemWhatsApp = obterTextoResumoParaCompartilhar(
+        resumoNormalizado,
+        res?.data,
+      );
+
+      if (!mensagemWhatsApp) {
         setError(
           "Rota finalizada, mas o backend nao retornou mensagemResumoWhatsapp.",
         );
         setModalFinalizar((prev) => ({ ...prev, loading: false }));
         return;
       }
-
-      const mensagemWhatsApp =
-        filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo({
-          mensagem: mensagemWhatsAppOriginal,
-          finalizacaoData: res?.data,
-          roteiro,
-        });
 
       const abriuWhatsApp = abrirWhatsAppComMensagem(
         mensagemWhatsApp,
@@ -3259,58 +3301,69 @@ export default function RoteiroExecucao() {
           </p>
         )}
         <section className="mb-6 rounded-xl border border-violet-200 bg-violet-50 p-4">
-          <h3 className="text-sm font-bold text-violet-900 mb-2">
-            📋 Resumo da execução (backend)
-          </h3>
-          {!resumoExecucaoBackend ? (
-            <p className="text-xs text-violet-900">
-              Resumo persistido ainda não disponível para hoje.
-            </p>
-          ) : (
-            <div className="space-y-2 text-xs text-violet-900">
-              <p>Roteiro: {resumoExecucaoBackend.roteiro || "-"}</p>
-              <p className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                Total de pontos na rota: {Number(resumoExecucaoBackend.totalPontosNaRota || 0)}
+          <button
+            type="button"
+            onClick={() => setResumoExecucaoExpandido((prev) => !prev)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <h3 className="text-sm font-bold text-violet-900">
+              📋 Resumo da execução (backend)
+            </h3>
+            <span className="text-xs font-semibold text-violet-700">
+              {resumoExecucaoExpandido ? "▲ Ocultar" : "▾ Ver resumo"}
+            </span>
+          </button>
+          {resumoExecucaoExpandido && (
+            !resumoExecucaoBackend ? (
+              <p className="text-xs text-violet-900 mt-2">
+                Resumo persistido ainda não disponível para hoje.
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Pontos feitos: {resumoExecucaoBackend.pontosFeitos.length}
-                </span>
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Pontos não feitos: {resumoExecucaoBackend.pontosNaoFeitos.length}
-                </span>
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Máquinas feitas: {resumoExecucaoBackend.maquinasFeitas.length}
-                </span>
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Máquinas não feitas: {resumoExecucaoBackend.maquinasNaoFeitas.length}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Estoque inicial: {Number(resumoExecucaoBackend.estoqueInicial || 0)} produtos
-                </span>
-                {Number(resumoExecucaoBackend.estoqueAdicional || 0) > 0 && (
-                  <span className="rounded-md bg-blue-50 px-2 py-1 border border-blue-300 text-blue-900 font-semibold">
-                    Estoque adicional: {Number(resumoExecucaoBackend.estoqueAdicional || 0)} produtos
+            ) : (
+              <div className="space-y-2 text-xs text-violet-900 mt-2">
+                <p>Roteiro: {resumoExecucaoBackend.roteiro || "-"}</p>
+                <p className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                  Total de pontos na rota: {Number(resumoExecucaoBackend.totalPontosNaRota || 0)}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Pontos feitos: {resumoExecucaoBackend.pontosFeitos.length}
                   </span>
-                )}
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Estoque final: {Number(resumoExecucaoBackend.estoqueFinal || 0)} produtos
-                </span>
-                <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Total gasto na rota: {Number(resumoExecucaoBackend.totalGastoRota || 0)} produtos
-                </span>
-              </div>
-              {!isFuncionarioAbastecedor && obterTextoResumoParaCompartilhar() && (
-                <div>
-                  <p className="font-semibold mb-1">Texto do resumo (inclui KM):</p>
-                  <pre className="whitespace-pre-wrap rounded-md border border-violet-200 bg-white/70 p-2 text-[11px]">
-                    {obterTextoResumoParaCompartilhar()}
-                  </pre>
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Pontos não feitos: {resumoExecucaoBackend.pontosNaoFeitos.length}
+                  </span>
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Máquinas feitas: {resumoExecucaoBackend.maquinasFeitas.length}
+                  </span>
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Máquinas não feitas: {resumoExecucaoBackend.maquinasNaoFeitas.length}
+                  </span>
                 </div>
-              )}
-            </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Estoque inicial: {Number(resumoExecucaoBackend.estoqueInicial || 0)} produtos
+                  </span>
+                  {Number(resumoExecucaoBackend.estoqueAdicional || 0) > 0 && (
+                    <span className="rounded-md bg-blue-50 px-2 py-1 border border-blue-300 text-blue-900 font-semibold">
+                      Estoque adicional: {Number(resumoExecucaoBackend.estoqueAdicional || 0)} produtos
+                    </span>
+                  )}
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Estoque final: {Number(resumoExecucaoBackend.estoqueFinal || 0)} produtos
+                  </span>
+                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
+                    Total gasto na rota: {Number(resumoExecucaoBackend.totalGastoRota || 0)} produtos
+                  </span>
+                </div>
+                {!isFuncionarioAbastecedor && obterTextoResumoParaCompartilhar() && (
+                  <div>
+                    <p className="font-semibold mb-1">Texto do resumo (inclui KM):</p>
+                    <pre className="whitespace-pre-wrap rounded-md border border-violet-200 bg-white/70 p-2 text-[11px]">
+                      {obterTextoResumoParaCompartilhar()}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )
           )}
         </section>
         {error && (
@@ -3577,7 +3630,46 @@ export default function RoteiroExecucao() {
             </button>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
+          {gastosSemanaOrdenados.length > 0 ? (
+            <div className="sm:hidden space-y-2">
+              {gastosSemanaOrdenados.map((gasto) => {
+                const dataHoraFormatada = formatarDataHora(gasto.dataHora);
+                return (
+                  <div
+                    key={gasto.id}
+                    className="rounded-lg border border-gray-200 p-3 text-sm space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold">
+                        {getLabelCategoriaGasto(gasto.categoria)}
+                      </span>
+                      <span className="font-semibold text-gray-800">
+                        {formatarMoedaBRL(gasto.valor)}
+                      </span>
+                    </div>
+                    <p className="text-gray-600">
+                      KM: {gasto.quilometragem ?? "-"}
+                    </p>
+                    <p className="text-gray-600">
+                      Observação: {gasto.observacao?.trim() || "-"}
+                    </p>
+                    <p className="text-gray-600">
+                      Funcionário: {gasto.usuario?.nome || usuario?.nome || "-"}
+                    </p>
+                    <p className="text-gray-600">
+                      {dataHoraFormatada.data} às {dataHoraFormatada.hora}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="sm:hidden px-3 py-4 text-center text-gray-500 italic">
+              Nenhum gasto lançado nesta semana para este roteiro.
+            </p>
+          )}
+
+          <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -3746,9 +3838,11 @@ export default function RoteiroExecucao() {
                                 ${maquinaConcluida ? "opacity-70 cursor-not-allowed" : ""}`}
                                         onClick={() => {
                                           if (maquinaConcluida) return;
-                                          navigate(
-                                            `/roteiros/${roteiro.id}/lojas/${loja.id}/maquinas/${maquina.id}/movimentacao`,
-                                          );
+                                          setModalMovimentacao({
+                                            roteiroId: roteiro.id,
+                                            lojaId: loja.id,
+                                            maquinaId: maquina.id,
+                                          });
                                         }}
                                         disabled={maquinaConcluida}
                                       >
@@ -3825,42 +3919,42 @@ export default function RoteiroExecucao() {
               </button>
             )}
           {!isFuncionarioAbastecedor && (
-            <button
-              className={`w-full sm:w-auto py-2 px-6 rounded-lg font-bold text-white ${
-                roteiroEstaFinalizado(roteiro.status) && !enviandoResumoWhatsapp
-                  ? "bg-emerald-600 hover:bg-emerald-700"
-                  : "bg-emerald-300 cursor-not-allowed"
-              }`}
-              onClick={enviarResumoWhatsapp}
-              disabled={
-                !roteiroEstaFinalizado(roteiro.status) || enviandoResumoWhatsapp
-              }
-              title={
-                roteiroEstaFinalizado(roteiro.status)
-                  ? ""
-                  : "Finalize a rota para enviar o resumo no WhatsApp"
-              }
-            >
-              {enviandoResumoWhatsapp ? "Enviando Whats..." : "Enviar resumo Whats"}
-            </button>
-          )}
-          {!isFuncionarioAbastecedor && (
-            <button
-              className={`w-full sm:w-auto py-2 px-6 rounded-lg font-bold text-white ${
-                roteiroEstaFinalizado(roteiro.status) && !copiandoResumo
-                  ? "bg-blue-600 hover:bg-blue-700"
-                  : "bg-blue-300 cursor-not-allowed"
-              }`}
-              onClick={copiarResumoFinalizacao}
-              disabled={!roteiroEstaFinalizado(roteiro.status) || copiandoResumo}
-              title={
-                roteiroEstaFinalizado(roteiro.status)
-                  ? ""
-                  : "Finalize a rota para copiar o resumo"
-              }
-            >
-              {copiandoResumo ? "Copiando..." : "Copiar resumo"}
-            </button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
+                  roteiroEstaFinalizado(roteiro.status) && !enviandoResumoWhatsapp
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-emerald-300 cursor-not-allowed"
+                }`}
+                onClick={enviarResumoWhatsapp}
+                disabled={
+                  !roteiroEstaFinalizado(roteiro.status) || enviandoResumoWhatsapp
+                }
+                title={
+                  roteiroEstaFinalizado(roteiro.status)
+                    ? "Enviar resumo no WhatsApp"
+                    : "Finalize a rota para enviar o resumo no WhatsApp"
+                }
+              >
+                {enviandoResumoWhatsapp ? "Enviando..." : "📤 Whats"}
+              </button>
+              <button
+                className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
+                  roteiroEstaFinalizado(roteiro.status) && !copiandoResumo
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-blue-300 cursor-not-allowed"
+                }`}
+                onClick={copiarResumoFinalizacao}
+                disabled={!roteiroEstaFinalizado(roteiro.status) || copiandoResumo}
+                title={
+                  roteiroEstaFinalizado(roteiro.status)
+                    ? "Copiar resumo para colar em outro lugar"
+                    : "Finalize a rota para copiar o resumo"
+                }
+              >
+                {copiandoResumo ? "Copiando..." : "📋 Copiar"}
+              </button>
+            </div>
           )}
           <button
             className="w-full sm:w-auto bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-bold"
@@ -3870,70 +3964,20 @@ export default function RoteiroExecucao() {
           </button>
         </div>
 
-        <Modal
-          isOpen={modalFinalizar.aberto}
+        <FinalizarRoteiroModal
+          aberto={modalFinalizar.aberto}
+          etapa={modalFinalizar.etapa}
+          loading={modalFinalizar.loading}
           onClose={fecharModalFinalizacao}
-          title={
-            modalFinalizar.etapa === 1
-              ? "Confirmar finalização"
-              : "Confirmação final"
-          }
-          size="sm"
-        >
-          <div className="space-y-4">
-            <p className="text-gray-700">
-              {modalFinalizar.etapa === 1
-                ? "Deseja realmente finalizar esta rota?"
-                : "Confirma novamente: finalizar agora este roteiro?"}
-            </p>
-            {roteiroTemVeiculoAssociado(roteiro) && modalFinalizar.etapa === 2 && (
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  KM final de devolução do veículo
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  inputMode="numeric"
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Ex: 12380"
-                  value={kmFinalVeiculoInput}
-                  onChange={(e) => setKmFinalVeiculoInput(e.target.value)}
-                  disabled={modalFinalizar.loading}
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Campo obrigatório quando o roteiro possui veículo.
-                </p>
-              </div>
-            )}
-            <div className="flex justify-end gap-2">
-              <button
-                className="btn-secondary"
-                onClick={fecharModalFinalizacao}
-                disabled={modalFinalizar.loading}
-              >
-                Cancelar
-              </button>
-              {modalFinalizar.etapa === 1 ? (
-                <button
-                  className="btn-primary"
-                  onClick={avancarConfirmacaoFinalizacao}
-                >
-                  Continuar
-                </button>
-              ) : (
-                <button
-                  className="btn-danger"
-                  onClick={executarFinalizacaoRoteiro}
-                  disabled={modalFinalizar.loading}
-                >
-                  {modalFinalizar.loading ? "Finalizando..." : "Finalizar Rota"}
-                </button>
-              )}
-            </div>
-          </div>
-        </Modal>
+          onAvancar={avancarConfirmacaoFinalizacao}
+          onConfirmar={executarFinalizacaoRoteiro}
+          textoEtapa1="Deseja realmente finalizar esta rota?"
+          textoEtapa2="Confirma novamente: finalizar agora este roteiro?"
+          labelBotaoFinalizar="Finalizar Rota"
+          mostrarKmVeiculo={roteiroTemVeiculoAssociado(roteiro)}
+          kmFinalVeiculoInput={kmFinalVeiculoInput}
+          onChangeKmFinalVeiculoInput={setKmFinalVeiculoInput}
+        />
 
         <Modal
           isOpen={modalJustificativa.aberto}
@@ -4281,6 +4325,18 @@ export default function RoteiroExecucao() {
               setModalEdicaoAberto(false);
             }}
             onSucesso={concluirEdicaoMovimentacao}
+          />
+        )}
+
+        {modalMovimentacao && (
+          <MovimentacaoMaquinaForm
+            key={`${modalMovimentacao.lojaId}-${modalMovimentacao.maquinaId}`}
+            variant="modal"
+            roteiroId={modalMovimentacao.roteiroId}
+            lojaId={modalMovimentacao.lojaId}
+            maquinaId={modalMovimentacao.maquinaId}
+            onCancelar={() => setModalMovimentacao(null)}
+            onSalvarComSucesso={handleMovimentacaoSalva}
           />
         )}
 
