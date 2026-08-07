@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
@@ -11,14 +11,8 @@ import ModalEditarMovimentacao from "../components/ModalEditarMovimentacao";
 import { useAuth } from "../contexts/AuthContext";
 import {
   abrirWhatsAppComMensagem,
-  montarMensagemMovimentacoesWhatsAppLoja,
-  obterMovimentacoesWhatsAppPendentesLoja,
-  obterUltimaMensagemMovimentacoesWhatsAppLoja,
+  montarMensagemDeLeiturasWhatsApp,
   obterKmInicialPilotagemAtiva,
-  removerMovimentacoesWhatsAppPendentesLoja,
-  salvarUltimaMensagemMovimentacoesWhatsAppLoja,
-  salvarMovimentacaoWhatsAppPendenteLoja,
-  atualizarMovimentacaoWhatsAppPendenteLoja,
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
 } from "../lib/roteiroFinalizacaoWhatsApp";
 
@@ -104,6 +98,11 @@ export default function RoteiroExecucao() {
   const [leiturasAtualizadasPorLoja, setLeiturasAtualizadasPorLoja] = useState(
     {},
   );
+  // So para nao auto-enviar o WhatsApp da loja mais de uma vez por sessao
+  // quando ela fica 100% concluida. Nao precisa persistir (nem entre abas):
+  // reenviar manualmente e sempre permitido, isso so evita um auto-envio
+  // duplicado logo em seguida do primeiro.
+  const lojasAutoEnviadasWhatsAppRef = useRef(new Set());
   const [justificativasEdicaoPorLoja, setJustificativasEdicaoPorLoja] =
     useState({});
   const [abastecimentosExtrasNaRota, setAbastecimentosExtrasNaRota] = useState(
@@ -569,20 +568,26 @@ export default function RoteiroExecucao() {
     return maquinas.every((maquina) => maquinaEstaConcluidaNoBackend(maquina));
   };
 
-  const enviarWhatsAppLoja = (loja) => {
+  const enviarWhatsAppLoja = async (loja) => {
     if (!loja?.id) return;
-    const mensagemPendente = montarMensagemMovimentacoesWhatsAppLoja({
-      roteiroId: id,
-      usuarioId: usuario?.id,
-      lojaId: loja.id,
-    });
-    const mensagem =
-      mensagemPendente ||
-      obterUltimaMensagemMovimentacoesWhatsAppLoja({
-        roteiroId: id,
-        usuarioId: usuario?.id,
-        lojaId: loja.id,
+
+    // Busca as leituras direto do banco (nao do localStorage do navegador),
+    // para funcionar mesmo se a leitura foi lancada em outro
+    // dispositivo/navegador. Nao existe estado de "ja enviado": cada leitura
+    // desde o inicio da execucao atual entra de novo, entao clicar de novo
+    // sempre reenvia a mensagem completa e atualizada do ponto.
+    let leituras = [];
+    try {
+      const resposta = await api.get("/movimentacoes/leituras-whatsapp", {
+        params: { roteiroId: id, lojaId: loja.id },
       });
+      leituras = Array.isArray(resposta?.data) ? resposta.data : [];
+    } catch {
+      setError("Não foi possível carregar as leituras deste ponto.");
+      return;
+    }
+
+    const mensagem = montarMensagemDeLeiturasWhatsApp(leituras);
 
     if (!mensagem) {
       setError(
@@ -603,24 +608,11 @@ export default function RoteiroExecucao() {
       );
     }
 
-    salvarUltimaMensagemMovimentacoesWhatsAppLoja({
-      roteiroId: id,
-      usuarioId: usuario?.id,
-      lojaId: loja.id,
-      mensagem,
-    });
-
-    if (mensagemPendente) {
-      removerMovimentacoesWhatsAppPendentesLoja({
-        roteiroId: id,
-        usuarioId: usuario?.id,
-        lojaId: loja.id,
-      });
-      setLeiturasAtualizadasPorLoja((prev) => ({
-        ...prev,
-        [String(loja.id)]: false,
-      }));
-    }
+    lojasAutoEnviadasWhatsAppRef.current.add(String(loja.id));
+    setLeiturasAtualizadasPorLoja((prev) => ({
+      ...prev,
+      [String(loja.id)]: false,
+    }));
   };
 
   const roteiroTemPendencias = (roteiroAtual) => {
@@ -1281,12 +1273,6 @@ export default function RoteiroExecucao() {
     return 0;
   };
 
-  const formatarNumeroLeitura = (valor, casas = 0) =>
-    Number(valor || 0).toLocaleString("pt-BR", {
-      minimumFractionDigits: casas,
-      maximumFractionDigits: casas,
-    });
-
   const obterProdutoMovimentacaoParaLeitura = (movimentacao, resumoBase) => {
     const detalhePrincipal = Array.isArray(movimentacao?.detalhesProdutos)
       ? movimentacao.detalhesProdutos[0]
@@ -1308,36 +1294,7 @@ export default function RoteiroExecucao() {
     };
   };
 
-  const montarMensagemLeituraAtualizada = (resumo) => {
-    const alteracoes = Array.isArray(resumo?.alteracoesLeitura)
-      ? resumo.alteracoesLeitura
-      : [];
-    const quantidadeSaiu = Number(resumo?.quantidadeSaiu || 0);
-    const saldo = Number(resumo?.saldo ?? resumo?.diferencaIn ?? 0);
-    const jogadaPorPelucia = quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
-
-    return [
-      "STAR BOX",
-      `*${resumo?.lojaNome || "LOJA"}*`,
-      `Data: ${new Date(resumo?.dataMovimentacao || Date.now()).toLocaleString("pt-BR")}`,
-      `LanÃ§ado por: ${resumo?.nomeUsuario || usuario?.nome || "-"}`,
-      "___________________________________",
-      `${resumo?.codigoMaquina || "-"} | ${resumo?.tipoMaquina || "MÃ¡quina"}${resumo?.modeloMaquina ? ` | Modelo: ${resumo.modeloMaquina}` : ""}`,
-      ...(resumo?.nomeProdutoAbastecido
-        ? [
-            `Produto abastecido: ${resumo.nomeProdutoAbastecido}${Number(resumo?.quantidadeAbastecidaInformada || 0) > 0 ? ` (Qtd: ${formatarNumeroLeitura(resumo.quantidadeAbastecidaInformada)})` : ""}`,
-          ]
-        : []),
-      "Leitura atualizada",
-      ...alteracoes.map((item) => `Alteracao: ${item}`),
-      `E  ${formatarNumeroLeitura(resumo?.inAnterior)}  ${formatarNumeroLeitura(resumo?.inAtual)}  ____ ${formatarNumeroLeitura(resumo?.diferencaIn, 2)}`,
-      `S  ${formatarNumeroLeitura(resumo?.outAnterior)}  ${formatarNumeroLeitura(resumo?.outAtual)}  ____ ${formatarNumeroLeitura(quantidadeSaiu)}`,
-      `Saldo: R$${formatarNumeroLeitura(saldo, 2)}`,
-      `Jogada: R$${formatarNumeroLeitura(jogadaPorPelucia, 2)}`,
-    ].join("\n");
-  };
-
-  const atualizarLeituraPendenteAposEdicao = ({
+  const atualizarLeituraPendenteAposEdicao = async ({
     maquina,
     movimentacaoAnterior,
     movimentacaoAtualizada,
@@ -1352,21 +1309,18 @@ export default function RoteiroExecucao() {
         movimentacaoAnterior?.maquinaId ||
         "",
     ).trim();
+    const movimentacaoIdAlvo = movimentacaoAtualizada?.id;
 
-    if (!lojaIdAtual || !maquinaIdAtual) return false;
+    if (!lojaIdAtual || !maquinaIdAtual || !movimentacaoIdAlvo) return false;
 
-    const leiturasPendentes = obterMovimentacoesWhatsAppPendentesLoja({
-      roteiroId: id,
-      usuarioId: usuario?.id,
-      lojaId: lojaIdAtual,
-    });
-    const leituraOriginal = [...leiturasPendentes]
-      .reverse()
-      .find((item) => String(item?.maquinaId || "").trim() === maquinaIdAtual);
+    // O resumo salvo anteriormente para esta leitura ja veio no banco junto
+    // com a movimentacao (coluna resumo_whatsapp), entao nao precisa mais
+    // buscar no localStorage do navegador.
+    const resumoBase =
+      movimentacaoAnterior?.resumoWhatsapp ||
+      movimentacaoAtualizada?.resumoWhatsapp ||
+      null;
 
-    if (!leituraOriginal?.resumo) return false;
-
-    const resumoBase = leituraOriginal.resumo;
     const inAnterior = numeroOuFallback(resumoBase?.inAnterior);
     const outAnterior = numeroOuFallback(resumoBase?.outAnterior);
     const inAtual = numeroOuFallback(
@@ -1416,6 +1370,8 @@ export default function RoteiroExecucao() {
 
     const resumoAtualizado = {
       ...resumoBase,
+      lojaNome:
+        resumoBase?.lojaNome || lojaSelecionada?.nome || maquina?.loja?.nome || "LOJA",
       dataMovimentacao: new Date().toISOString(),
       nomeUsuario: usuario?.nome || resumoBase?.nomeUsuario || "-",
       codigoMaquina:
@@ -1438,23 +1394,25 @@ export default function RoteiroExecucao() {
       leituraAtualizada: true,
     };
 
-    const atualizou = atualizarMovimentacaoWhatsAppPendenteLoja({
-      roteiroId: id,
-      usuarioId: usuario?.id,
-      lojaId: lojaIdAtual,
-      maquinaId: maquinaIdAtual,
-      mensagem: montarMensagemLeituraAtualizada(resumoAtualizado),
-      resumo: resumoAtualizado,
-    });
-
-    if (atualizou) {
-      setLeiturasAtualizadasPorLoja((prev) => ({
-        ...prev,
-        [lojaIdAtual]: true,
-      }));
+    try {
+      await api.patch(
+        `/movimentacoes/${movimentacaoIdAlvo}/resumo-whatsapp`,
+        { resumo: resumoAtualizado },
+      );
+    } catch (resumoError) {
+      console.warn(
+        "Não foi possível atualizar o resumo desta leitura para o WhatsApp:",
+        resumoError,
+      );
+      return false;
     }
 
-    return atualizou;
+    setLeiturasAtualizadasPorLoja((prev) => ({
+      ...prev,
+      [lojaIdAtual]: true,
+    }));
+
+    return true;
   };
 
   const abrirModalAbastecimentoExtra = async (maquina) => {
@@ -1696,49 +1654,43 @@ export default function RoteiroExecucao() {
         },
       ]);
 
-      const mensagemWhatsApp = [
-        "STAR BOX",
-        "*Abastecimento extra na rota*",
-        `Data/Hora: ${new Date().toLocaleString("pt-BR")}`,
-        `Roteiro: ${roteiro?.nome || "-"}`,
-        `Funcionário: ${usuario?.nome || "-"}`,
-        `Loja: ${lojaSelecionada?.nome || "-"}`,
-        `Máquina: ${nomeMaquina} | Tipo: ${tipoMaquina}`,
-        `Produto abastecido: ${nomeProduto}`,
-        `Quantidade abastecida: ${quantidadeNumero}`,
-      ].join("\n");
+      const resumoAbastecimentoExtra = {
+        lojaNome: lojaSelecionada?.nome || "LOJA",
+        dataMovimentacao: new Date().toISOString(),
+        nomeUsuario: usuario?.nome || "-",
+        codigoMaquina: nomeMaquina,
+        tipoMaquina,
+        inAnterior: Number(movimentacaoAtualizada?.contadorInAnterior || 0),
+        inAtual: Number(movimentacaoAtualizada?.contadorInAtual || 0),
+        outAnterior: Number(movimentacaoAtualizada?.contadorOutAnterior || 0),
+        outAtual: Number(movimentacaoAtualizada?.contadorOutAtual || 0),
+        diferencaIn: Number(movimentacaoAtualizada?.diferencaIn || 0),
+        quantidadeSaiu: Number(movimentacaoAtualizada?.quantidadeSaiu || 0),
+        jogado: Number(movimentacaoAtualizada?.jogado || 0),
+        jogadasMediasPorPelucia: Number(
+          movimentacaoAtualizada?.jogadasMediasPorPelucia || 0,
+        ),
+        diasDesdeUltimaMovimentacao:
+          movimentacaoAtualizada?.diasDesdeUltimaMovimentacao,
+        quantidadeAbastecimentoExtra: quantidadeNumero,
+        nomeProdutoAbastecimentoExtra: nomeProduto,
+      };
 
-      salvarMovimentacaoWhatsAppPendenteLoja({
-        roteiroId: id,
-        usuarioId: usuario?.id,
-        lojaId: lojaSelecionada?.id,
-        maquinaId: maquina?.id,
-        maquinaNome: nomeMaquina,
-        mensagem: mensagemWhatsApp,
-        resumo: {
-          lojaNome: lojaSelecionada?.nome || "LOJA",
-          dataMovimentacao: new Date().toISOString(),
-          nomeUsuario: usuario?.nome || "-",
-          codigoMaquina: nomeMaquina,
-          tipoMaquina,
-          inAnterior: Number(movimentacaoAtualizada?.contadorInAnterior || 0),
-          inAtual: Number(movimentacaoAtualizada?.contadorInAtual || 0),
-          outAnterior: Number(movimentacaoAtualizada?.contadorOutAnterior || 0),
-          outAtual: Number(movimentacaoAtualizada?.contadorOutAtual || 0),
-          diferencaIn: Number(movimentacaoAtualizada?.diferencaIn || 0),
-          quantidadeSaiu: Number(movimentacaoAtualizada?.quantidadeSaiu || 0),
-          jogado: Number(movimentacaoAtualizada?.jogado || 0),
-          jogadasMediasPorPelucia: Number(
-            movimentacaoAtualizada?.jogadasMediasPorPelucia || 0,
-          ),
-          diasDesdeUltimaMovimentacao:
-            movimentacaoAtualizada?.diasDesdeUltimaMovimentacao,
-          quantidadeAbastecimentoExtra: quantidadeNumero,
-          nomeProdutoAbastecimentoExtra: nomeProduto,
-        },
-      });
+      if (movimentacaoAtualizada?.id) {
+        try {
+          await api.patch(
+            `/movimentacoes/${movimentacaoAtualizada.id}/resumo-whatsapp`,
+            { resumo: resumoAbastecimentoExtra },
+          );
+        } catch (resumoError) {
+          console.warn(
+            "Não foi possível salvar o resumo deste abastecimento para o WhatsApp:",
+            resumoError,
+          );
+        }
+      }
 
-      enviarWhatsAppLoja(lojaSelecionada);
+      await enviarWhatsAppLoja(lojaSelecionada);
       setSuccess("Abastecimento extra salvo com sucesso!");
       setModalAbastecimentoExtra({
         aberto: false,
@@ -2250,15 +2202,11 @@ export default function RoteiroExecucao() {
       loja.maquinas.every((m) => maquinaEstaConcluidaNoBackend(m));
     if (!todasFinalizadas) return;
 
-    const jaHaviaMensagemEnviadaAntes = Boolean(
-      obterUltimaMensagemMovimentacoesWhatsAppLoja({
-        roteiroId: id,
-        usuarioId: usuario?.id,
-        lojaId: loja.id,
-      }),
+    const jaAutoEnviadaNestaSessao = lojasAutoEnviadasWhatsAppRef.current.has(
+      String(loja.id),
     );
 
-    if (jaHaviaMensagemEnviadaAntes) {
+    if (jaAutoEnviadaNestaSessao) {
       setLeiturasAtualizadasPorLoja((prev) => ({
         ...prev,
         [String(loja.id)]: true,

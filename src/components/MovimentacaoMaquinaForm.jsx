@@ -3,7 +3,6 @@ import api from "../services/api";
 import { Modal } from "./UIComponents";
 
 import { useAuth } from "../contexts/AuthContext.jsx";
-import { salvarMovimentacaoWhatsAppPendenteLoja } from "../lib/roteiroFinalizacaoWhatsApp";
 
 export function MovimentacaoMaquinaForm({
   roteiroId,
@@ -1507,8 +1506,9 @@ export function MovimentacaoMaquinaForm({
         ? null
         : window.open("about:blank", "_blank");
 
+      let respostaMovimentacao;
       try {
-        await enviarMovimentacao(false);
+        respostaMovimentacao = await enviarMovimentacao(false);
       } catch (postError) {
         const precisaConfirmarLoja =
           postError?.response?.status === 409 &&
@@ -1538,23 +1538,26 @@ export function MovimentacaoMaquinaForm({
           return;
         }
 
-        await enviarMovimentacao(true);
+        respostaMovimentacao = await enviarMovimentacao(true);
       }
 
       if (popupReservado && !popupReservado.closed) {
         popupReservado.close();
       }
-      const { mensagem: mensagemWhatsApp, resumoEstruturado } =
-        montarResumoWhatsApp();
-      salvarMovimentacaoWhatsAppPendenteLoja({
-        roteiroId,
-        usuarioId: usuario?.id,
-        lojaId,
-        maquinaId,
-        maquinaNome: maquina?.nome || maquina?.codigo || maquinaId,
-        mensagem: mensagemWhatsApp,
-        resumo: resumoEstruturado,
-      });
+      const { resumoEstruturado } = montarResumoWhatsApp();
+      const movimentacaoId = respostaMovimentacao?.data?.id;
+      if (movimentacaoId) {
+        try {
+          await api.patch(`/movimentacoes/${movimentacaoId}/resumo-whatsapp`, {
+            resumo: resumoEstruturado,
+          });
+        } catch (resumoError) {
+          console.warn(
+            "Não foi possível salvar o resumo desta leitura para o WhatsApp:",
+            resumoError,
+          );
+        }
+      }
       const abriuWhatsApp = true;
 
       if (!abriuWhatsApp) {

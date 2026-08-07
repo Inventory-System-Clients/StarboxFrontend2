@@ -21,6 +21,15 @@ const podeVerItem = (item, role) => {
 
 const itensSoltos = [{ to: "/", label: "Dashboard", icon: "📊" }];
 
+// Abastecedor tem uma rotina bem restrita (rota + estoque pessoal), entao o
+// menu dele nao mostra os grupos administrativos/operacionais inteiros — so
+// os 2 links que ele realmente usa, direto sem dropdown.
+const itensSoltosAbastecedor = [
+  { to: "/", label: "Dashboard", icon: "📊" },
+  { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
+  { to: "/estoque-usuarios", label: "Meu Estoque", icon: "📦" },
+];
+
 const grupos = [
   {
     id: "operacional",
@@ -164,16 +173,20 @@ export default function Navbar() {
                 ? "🚚 Abastecedor"
                 : "👤 Funcionário Abastecedor";
 
-  const itensSoltosVisiveis = itensSoltos.filter((item) =>
-    podeVerItem(item, usuario?.role),
-  );
+  const isAbastecedor = usuario?.role === "ABASTECEDOR";
 
-  const gruposVisiveis = grupos
-    .map((grupo) => ({
-      ...grupo,
-      itens: grupo.itens.filter((item) => podeVerItem(item, usuario?.role)),
-    }))
-    .filter((grupo) => grupo.itens.length > 0);
+  const itensSoltosVisiveis = (
+    isAbastecedor ? itensSoltosAbastecedor : itensSoltos
+  ).filter((item) => podeVerItem(item, usuario?.role));
+
+  const gruposVisiveis = isAbastecedor
+    ? []
+    : grupos
+        .map((grupo) => ({
+          ...grupo,
+          itens: grupo.itens.filter((item) => podeVerItem(item, usuario?.role)),
+        }))
+        .filter((grupo) => grupo.itens.length > 0);
 
   return (
     <nav

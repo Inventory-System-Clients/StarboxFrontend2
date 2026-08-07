@@ -11,6 +11,7 @@ import AlertAdmin from "../components/AlertAdmin";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import DashboardGastosRoteirosTab from "../components/DashboardGastosRoteirosTab";
 import AjusteMaquinaAtual from "../components/AjusteMaquinaAtual";
+import PainelAbastecedor from "../components/PainelAbastecedor";
 
 import Swal from "sweetalert2";
 
@@ -49,6 +50,9 @@ export function Dashboard() {
 
   const isFuncionario =
     usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR";
+  // Abastecedor so usa Rotas e Meu Estoque no dia a dia — o resto do
+  // dashboard (alerta de inatividade, manutencoes etc.) nao se aplica a ele.
+  const isAbastecedor = usuario?.role === "ABASTECEDOR";
   const isAdminLike =
     usuario?.role === "ADMIN" ||
     usuario?.role === "GERENCIADOR" ||
@@ -778,7 +782,7 @@ export function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {alertaInatividadeLojas.lojas.length > 0 && (
+            {!isAbastecedor && alertaInatividadeLojas.lojas.length > 0 && (
               <>
                 <button
                   type="button"
@@ -822,15 +826,19 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="mb-6 md:hidden">
-          <button
-            onClick={() => navigate("/roteiros")}
-            className="w-full bg-linear-to-r from-blue-600 to-indigo-700 text-white font-bold px-4 py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
-          >
-            <span className="text-xl">🗺️</span>
-            Ir para Rotas
-          </button>
-        </div>
+        {isAbastecedor && <PainelAbastecedor />}
+
+        {!isAbastecedor && (
+          <div className="mb-6 md:hidden">
+            <button
+              onClick={() => navigate("/roteiros")}
+              className="w-full bg-linear-to-r from-blue-600 to-indigo-700 text-white font-bold px-4 py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
+            >
+              <span className="text-xl">🗺️</span>
+              Ir para Rotas
+            </button>
+          </div>
+        )}
 
         {/* Cards de Resumo com design moderno - Apenas para ADMIN */}
         {isAdminLike ? (
@@ -1394,36 +1402,37 @@ export function Dashboard() {
                 </div>
               </div>
             )}
-            {/* Manutenções */}
-            <div
-              className={`stat-card order-2 md:order-0 bg-linear-to-br from-indigo-500 to-indigo-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer${temManutencaoPendente ? " maintenance-blink" : ""}`}
-              onClick={() => navigate("/manutencoes")}
-            >
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium opacity-90">
-                    Manutenções
-                  </h3>
-                  <svg
-                    className="w-8 h-8 opacity-80"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9.75 17L9 21l3-1 3 1-.75-4M9 13V7a3 3 0 116 0v6m-6 0h6"
-                    />
-                  </svg>
+            {!isAbastecedor && (
+              <div
+                className={`stat-card order-2 md:order-0 bg-linear-to-br from-indigo-500 to-indigo-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer${temManutencaoPendente ? " maintenance-blink" : ""}`}
+                onClick={() => navigate("/manutencoes")}
+              >
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium opacity-90">
+                      Manutenções
+                    </h3>
+                    <svg
+                      className="w-8 h-8 opacity-80"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9.75 17L9 21l3-1 3 1-.75-4M9 13V7a3 3 0 116 0v6m-6 0h6"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-3xl font-bold">🛠️</p>
+                  <p className="text-xs opacity-75 mt-1">
+                    Acessar manutenções do sistema
+                  </p>
                 </div>
-                <p className="text-3xl font-bold">🛠️</p>
-                <p className="text-xs opacity-75 mt-1">
-                  Acessar manutenções do sistema
-                </p>
               </div>
-            </div>
+            )}
           </div>
         )}
 

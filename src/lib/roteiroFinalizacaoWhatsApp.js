@@ -643,18 +643,15 @@ const extrairResumoLegadoDaMensagem = (mensagem = "", item = {}) => {
   };
 };
 
-export const montarMensagemMovimentacoesWhatsAppLoja = ({
-  roteiroId,
-  usuarioId,
-  lojaId,
-}) => {
-  const itens = obterMovimentacoesWhatsAppPendentesLoja({
-    roteiroId,
-    usuarioId,
-    lojaId,
-  });
-
-  if (itens.length === 0) return "";
+// Monta a mensagem combinada de um ponto (loja) a partir de uma lista de
+// itens `{ maquinaId, maquinaNome, mensagem, resumo, createdAt }`. Usada
+// tanto pelo fluxo legado (itens vindos do localStorage) quanto pelo fluxo
+// atual, que busca as leituras direto do banco (ver
+// montarMensagemDeLeiturasWhatsApp). Nao agrupa por maquina de proposito:
+// se a mesma maquina teve duas leituras, as duas entram como blocos
+// separados na mensagem.
+const construirMensagemDeItensWhatsApp = (itens) => {
+  if (!Array.isArray(itens) || itens.length === 0) return "";
 
   const itensOrdenados = [...itens].sort((a, b) => {
     const dataA = new Date(a?.createdAt || 0).getTime();
@@ -662,21 +659,13 @@ export const montarMensagemMovimentacoesWhatsAppLoja = ({
     return dataA - dataB;
   });
 
-  const itensPorMaquina = new Map();
-  itensOrdenados.forEach((item, index) => {
-    const itemNormalizado = {
-      ...item,
-      resumo:
-        item?.resumo && typeof item.resumo === "object"
-          ? item.resumo
-          : extrairResumoLegadoDaMensagem(item?.mensagem, item),
-    };
-    const chaveMaquina =
-      montarChaveUnicaMovimentacaoMaquina(itemNormalizado) || `item-${index}`;
-    itensPorMaquina.set(chaveMaquina, itemNormalizado);
-  });
-
-  const itensNormalizados = Array.from(itensPorMaquina.values());
+  const itensNormalizados = itensOrdenados.map((item) => ({
+    ...item,
+    resumo:
+      item?.resumo && typeof item.resumo === "object"
+        ? item.resumo
+        : extrairResumoLegadoDaMensagem(item?.mensagem, item),
+  }));
 
   const primeiroResumo = itensNormalizados[0].resumo;
   const ultimoResumo = itensNormalizados[itensNormalizados.length - 1].resumo;
@@ -823,6 +812,42 @@ export const montarMensagemMovimentacoesWhatsAppLoja = ({
     "Cartao......: 0,00",
     `Especie.....: ${formatarMoeda(totalEntradas)}`,
   ].join("\n");
+};
+
+// Fluxo legado: le os itens pendentes salvos no localStorage do navegador.
+// Mantido para nao quebrar o fallback de "ultima mensagem" ja existente.
+export const montarMensagemMovimentacoesWhatsAppLoja = ({
+  roteiroId,
+  usuarioId,
+  lojaId,
+}) => {
+  const itens = obterMovimentacoesWhatsAppPendentesLoja({
+    roteiroId,
+    usuarioId,
+    lojaId,
+  });
+
+  return construirMensagemDeItensWhatsApp(itens);
+};
+
+// Fluxo atual: recebe as leituras buscadas do banco (endpoint
+// GET /movimentacoes/leituras-whatsapp), no formato
+// `{ id, maquinaId, maquinaNome, resumo, createdAt }`, e monta a mesma
+// mensagem combinada do ponto. Independe de navegador/dispositivo porque a
+// origem dos dados e o banco, nao o localStorage - e pode ser chamada de
+// novo a qualquer momento para reenviar (nao ha estado de "ja enviado").
+export const montarMensagemDeLeiturasWhatsApp = (leituras) => {
+  const itens = (Array.isArray(leituras) ? leituras : [])
+    .filter((item) => item?.resumo && typeof item.resumo === "object")
+    .map((item) => ({
+      maquinaId: normalizarTexto(item?.maquinaId),
+      maquinaNome: normalizarTexto(item?.maquinaNome),
+      mensagem: "",
+      resumo: item.resumo,
+      createdAt: item?.createdAt || null,
+    }));
+
+  return construirMensagemDeItensWhatsApp(itens);
 };
 
 export const obterManutencaoResumoSnapshotRoteiro = ({
