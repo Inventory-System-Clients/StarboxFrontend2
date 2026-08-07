@@ -375,7 +375,17 @@ export function Roteiros() {
     const usuarioAssociadoId = String(execucaoSemanal?.usuarioId || "").trim();
 
     if (!usuarioAtualId || !usuarioAssociadoId) return false;
-    return usuarioAtualId !== usuarioAssociadoId;
+    if (usuarioAtualId === usuarioAssociadoId) return false;
+
+    // Se o roteiro foi reatribuido para o usuario atual, ele e o responsavel
+    // de verdade e deve conseguir continuar normalmente, mesmo que a
+    // execucao em andamento tenha sido iniciada por quem tinha o roteiro antes.
+    const funcionarioRoteiroId = String(roteiro?.funcionarioId || "").trim();
+    if (funcionarioRoteiroId && funcionarioRoteiroId === usuarioAtualId) {
+      return false;
+    }
+
+    return true;
   };
 
   const usuarioPodeIniciarRoteiro = (roteiro) => {
@@ -1751,11 +1761,18 @@ export function Roteiros() {
                 execucaoSemanal?.usuarioId || "",
               ).trim();
               const usuarioAtualId = String(usuario?.id || "").trim();
+              const funcionarioRoteiroId = String(
+                roteiro?.funcionarioId || "",
+              ).trim();
+              const usuarioEhFuncionarioAtualDoRoteiro =
+                Boolean(funcionarioRoteiroId) &&
+                funcionarioRoteiroId === usuarioAtualId;
               const execucaoPertenceOutroUsuario =
                 execucaoEmAndamento &&
                 usuarioAssociadoId &&
                 usuarioAtualId &&
-                usuarioAssociadoId !== usuarioAtualId;
+                usuarioAssociadoId !== usuarioAtualId &&
+                !usuarioEhFuncionarioAtualDoRoteiro;
               const andamentoPorOutroUsuario =
                 execucaoPertenceOutroUsuario && !isAdmin;
               const nomeResponsavel =
