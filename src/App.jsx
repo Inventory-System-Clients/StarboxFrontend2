@@ -106,7 +106,7 @@ function AppRoutes() {
       <Route
         path="/alertas"
         element={
-          <PrivateRoute adminOnly>
+          <PrivateRoute>
             <Alertas />
           </PrivateRoute>
         }
