@@ -7,6 +7,7 @@ import { EmptyState } from "../components/Loading";
 import AlertAdmin from "../components/AlertAdmin";
 import { useAlertas } from "../contexts/AlertasContext.jsx";
 import { INTERVALO_ALERTA_PERSISTENTE_DIAS } from "../hooks/useManutencoesPersistentes";
+import { montarWhatsAppUrl } from "../lib/whatsapp";
 
 const CORES_TILE = {
   red: "from-red-500 to-red-600",
@@ -164,9 +165,29 @@ function SecaoEstoque({ itens }) {
   );
 }
 
+const montarMensagemManutencaoRecorrente = (item) =>
+  [
+    "STAR BOX",
+    "*Alerta de Manutenção Recorrente*",
+    "___________________________________",
+    `Máquina: ${item.maquinaNome}`,
+    `Ponto: ${item.lojaNome}`,
+    `Última manutenção: ${formatarData(item.dataUltima)}`,
+    `Manutenção atual: ${formatarData(item.dataAtual)}`,
+    "",
+    `Essa máquina teve mais de uma manutenção concluída em até ${INTERVALO_ALERTA_PERSISTENTE_DIAS} dias — pode indicar que o problema não foi totalmente resolvido.`,
+  ].join("\n");
+
 function SecaoManutencaoRecorrente({ itens }) {
   const navigate = useNavigate();
   const [filtro, setFiltro] = useState("");
+
+  const enviarWhatsApp = (item) => {
+    window.open(
+      montarWhatsAppUrl(montarMensagemManutencaoRecorrente(item)),
+      "_blank",
+    );
+  };
 
   const itensFiltrados = useMemo(() => {
     const termo = normalizarTexto(filtro);
@@ -212,13 +233,22 @@ function SecaoManutencaoRecorrente({ itens }) {
                   Última manutenção: {formatarData(item.dataUltima)} · Manutenção atual: {formatarData(item.dataAtual)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate("/manutencoes")}
-                className="px-4 py-2 text-sm bg-gray-100 text-[#24094E] font-semibold rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Ver Manutenções
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => enviarWhatsApp(item)}
+                  className="px-4 py-2 text-sm bg-green-100 text-green-800 font-semibold rounded-lg hover:bg-green-200 transition-colors"
+                >
+                  Enviar WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/manutencoes")}
+                  className="px-4 py-2 text-sm bg-gray-100 text-[#24094E] font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Ver Manutenções
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -287,7 +317,8 @@ function SecaoContas({ itens, cor, mensagemVazio, rotuloDias }) {
 }
 
 export default function Alertas() {
-  const { tipos, totalGeral, carregando, podeVerAlertas } = useAlertas();
+  const { tipos, totalGeral, carregando, podeVerAlertas, podeVerAlertaManutencao } =
+    useAlertas();
   const [secoesAbertas, setSecoesAbertas] = useState(() => new Set());
 
   const alternarSecao = (id) => {
@@ -310,7 +341,7 @@ export default function Alertas() {
     });
   };
 
-  if (!podeVerAlertas) {
+  if (!podeVerAlertas && !podeVerAlertaManutencao) {
     return (
       <div className="min-h-screen bg-background-light bg-pattern teddy-pattern">
         <Navbar />
@@ -318,7 +349,7 @@ export default function Alertas() {
           <EmptyState
             icon="🔒"
             title="Sem acesso"
-            description="Somente administradores e gerenciadores veem a central de alertas."
+            description="Faça login para ver a central de alertas."
           />
         </div>
       </div>
@@ -345,28 +376,32 @@ export default function Alertas() {
           ))}
         </div>
 
-        <SecaoColapsavel
-          id="alerta-secao-estoque"
-          titulo="🎮 Estoque baixo em máquina"
-          total={tipos.find((t) => t.id === "estoque")?.total}
-          aberta={secoesAbertas.has("estoque")}
-          onToggle={() => alternarSecao("estoque")}
-        >
-          <SecaoEstoque itens={tipos.find((t) => t.id === "estoque")?.itens || []} />
-        </SecaoColapsavel>
+        {podeVerAlertas && (
+          <SecaoColapsavel
+            id="alerta-secao-estoque"
+            titulo="🎮 Estoque baixo em máquina"
+            total={tipos.find((t) => t.id === "estoque")?.total}
+            aberta={secoesAbertas.has("estoque")}
+            onToggle={() => alternarSecao("estoque")}
+          >
+            <SecaoEstoque itens={tipos.find((t) => t.id === "estoque")?.itens || []} />
+          </SecaoColapsavel>
+        )}
 
-        <SecaoColapsavel
-          id="alerta-secao-movimentacao-inconsistente"
-          titulo="🔄 Movimentação inconsistente e abastecimento incompleto"
-          total={
-            (tipos.find((t) => t.id === "movimentacao-inconsistente")?.total || 0) +
-            (tipos.find((t) => t.id === "abastecimento-incompleto")?.total || 0)
-          }
-          aberta={secoesAbertas.has("movimentacao-inconsistente")}
-          onToggle={() => alternarSecao("movimentacao-inconsistente")}
-        >
-          <AlertAdmin />
-        </SecaoColapsavel>
+        {podeVerAlertas && (
+          <SecaoColapsavel
+            id="alerta-secao-movimentacao-inconsistente"
+            titulo="🔄 Movimentação inconsistente e abastecimento incompleto"
+            total={
+              (tipos.find((t) => t.id === "movimentacao-inconsistente")?.total || 0) +
+              (tipos.find((t) => t.id === "abastecimento-incompleto")?.total || 0)
+            }
+            aberta={secoesAbertas.has("movimentacao-inconsistente")}
+            onToggle={() => alternarSecao("movimentacao-inconsistente")}
+          >
+            <AlertAdmin />
+          </SecaoColapsavel>
+        )}
 
         <SecaoColapsavel
           id="alerta-secao-manutencao-recorrente"
@@ -384,35 +419,39 @@ export default function Alertas() {
           />
         </SecaoColapsavel>
 
-        <SecaoColapsavel
-          id="alerta-secao-contas-vencidas"
-          titulo="💰 Contas vencidas"
-          total={tipos.find((t) => t.id === "contas-vencidas")?.total}
-          aberta={secoesAbertas.has("contas-vencidas")}
-          onToggle={() => alternarSecao("contas-vencidas")}
-        >
-          <SecaoContas
-            itens={tipos.find((t) => t.id === "contas-vencidas")?.itens || []}
-            cor="red"
-            mensagemVazio="Nenhuma conta vencida no momento."
-            rotuloDias="Vence em"
-          />
-        </SecaoColapsavel>
+        {podeVerAlertas && (
+          <SecaoColapsavel
+            id="alerta-secao-contas-vencidas"
+            titulo="💰 Contas vencidas"
+            total={tipos.find((t) => t.id === "contas-vencidas")?.total}
+            aberta={secoesAbertas.has("contas-vencidas")}
+            onToggle={() => alternarSecao("contas-vencidas")}
+          >
+            <SecaoContas
+              itens={tipos.find((t) => t.id === "contas-vencidas")?.itens || []}
+              cor="red"
+              mensagemVazio="Nenhuma conta vencida no momento."
+              rotuloDias="Vence em"
+            />
+          </SecaoColapsavel>
+        )}
 
-        <SecaoColapsavel
-          id="alerta-secao-contas-proximas"
-          titulo="⏰ Contas a vencer (3 dias)"
-          total={tipos.find((t) => t.id === "contas-proximas")?.total}
-          aberta={secoesAbertas.has("contas-proximas")}
-          onToggle={() => alternarSecao("contas-proximas")}
-        >
-          <SecaoContas
-            itens={tipos.find((t) => t.id === "contas-proximas")?.itens || []}
-            cor="yellow"
-            mensagemVazio="Nenhuma conta com vencimento nos próximos 3 dias."
-            rotuloDias="Vence em"
-          />
-        </SecaoColapsavel>
+        {podeVerAlertas && (
+          <SecaoColapsavel
+            id="alerta-secao-contas-proximas"
+            titulo="⏰ Contas a vencer (3 dias)"
+            total={tipos.find((t) => t.id === "contas-proximas")?.total}
+            aberta={secoesAbertas.has("contas-proximas")}
+            onToggle={() => alternarSecao("contas-proximas")}
+          >
+            <SecaoContas
+              itens={tipos.find((t) => t.id === "contas-proximas")?.itens || []}
+              cor="yellow"
+              mensagemVazio="Nenhuma conta com vencimento nos próximos 3 dias."
+              rotuloDias="Vence em"
+            />
+          </SecaoColapsavel>
+        )}
       </div>
       <Footer />
     </div>

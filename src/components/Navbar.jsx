@@ -151,7 +151,7 @@ const grupos = [
 
 export default function Navbar() {
   const { usuario, logout } = useAuth();
-  const { totalGeral, podeVerAlertas } = useAlertas();
+  const { totalGeral, podeVerAlertas, podeVerAlertaManutencao } = useAlertas();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -266,7 +266,7 @@ export default function Navbar() {
               </div>
             </div>
 
-            {podeVerAlertas && (
+            {(podeVerAlertas || podeVerAlertaManutencao) && (
               <button
                 type="button"
                 onClick={() => navigate("/alertas")}

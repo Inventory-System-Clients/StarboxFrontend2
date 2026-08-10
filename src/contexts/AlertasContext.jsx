@@ -28,6 +28,10 @@ const extrairAlertas = (data) => {
 export function AlertasProvider({ children }) {
   const { usuario } = useAuth();
   const podeVerAlertas = ["ADMIN", "GERENCIADOR"].includes(usuario?.role);
+  // Manutenção recorrente também interessa a quem executa a manutenção, não
+  // só a quem administra: qualquer usuário logado enxerga esse alerta (o
+  // hook abaixo já restringe às próprias manutenções quando não é admin).
+  const podeVerAlertaManutencao = Boolean(usuario?.id);
 
   const [estoque, setEstoque] = useState([]);
   const [movimentacaoInconsistente, setMovimentacaoInconsistente] = useState(
@@ -44,9 +48,9 @@ export function AlertasProvider({ children }) {
     carregando: carregandoManutencoes,
     recarregar: recarregarManutencoes,
   } = useManutencoesPersistentes({
-    isAdmin: true,
+    isAdmin: podeVerAlertas,
     usuarioId: usuario?.id,
-    ativo: podeVerAlertas,
+    ativo: podeVerAlertaManutencao,
   });
 
   const carregar = useCallback(async () => {
@@ -147,56 +151,62 @@ export function AlertasProvider({ children }) {
     return () => clearInterval(intervalo);
   }, [podeVerAlertas, carregar]);
 
-  const tipos = [
-    {
-      id: "estoque",
-      label: "Estoque baixo em máquina",
-      icone: "🎮",
-      cor: "red",
-      itens: estoque,
-      total: estoque.length,
-    },
-    {
-      id: "movimentacao-inconsistente",
-      label: "Movimentação inconsistente",
-      icone: "🔄",
-      cor: "purple",
-      itens: movimentacaoInconsistente,
-      total: movimentacaoInconsistente.length,
-    },
-    {
-      id: "abastecimento-incompleto",
-      label: "Abastecimento incompleto",
-      icone: "📦",
-      cor: "amber",
-      itens: abastecimentoIncompleto,
-      total: abastecimentoIncompleto.length,
-    },
-    {
-      id: "manutencao-recorrente",
-      label: "Manutenção recorrente",
-      icone: "🔁",
-      cor: "rose",
-      itens: manutencoesPersistentes,
-      total: manutencoesPersistentes.length,
-    },
-    {
-      id: "contas-vencidas",
-      label: "Contas vencidas",
-      icone: "💰",
-      cor: "red",
-      itens: contasVencidas,
-      total: contasVencidas.length,
-    },
-    {
-      id: "contas-proximas",
-      label: "Contas a vencer (3 dias)",
-      icone: "⏰",
-      cor: "yellow",
-      itens: contasProximas,
-      total: contasProximas.length,
-    },
-  ];
+  const tipoManutencaoRecorrente = {
+    id: "manutencao-recorrente",
+    label: "Manutenção recorrente",
+    icone: "🔁",
+    cor: "rose",
+    itens: manutencoesPersistentes,
+    total: manutencoesPersistentes.length,
+  };
+
+  const tipos = podeVerAlertas
+    ? [
+        {
+          id: "estoque",
+          label: "Estoque baixo em máquina",
+          icone: "🎮",
+          cor: "red",
+          itens: estoque,
+          total: estoque.length,
+        },
+        {
+          id: "movimentacao-inconsistente",
+          label: "Movimentação inconsistente",
+          icone: "🔄",
+          cor: "purple",
+          itens: movimentacaoInconsistente,
+          total: movimentacaoInconsistente.length,
+        },
+        {
+          id: "abastecimento-incompleto",
+          label: "Abastecimento incompleto",
+          icone: "📦",
+          cor: "amber",
+          itens: abastecimentoIncompleto,
+          total: abastecimentoIncompleto.length,
+        },
+        tipoManutencaoRecorrente,
+        {
+          id: "contas-vencidas",
+          label: "Contas vencidas",
+          icone: "💰",
+          cor: "red",
+          itens: contasVencidas,
+          total: contasVencidas.length,
+        },
+        {
+          id: "contas-proximas",
+          label: "Contas a vencer (3 dias)",
+          icone: "⏰",
+          cor: "yellow",
+          itens: contasProximas,
+          total: contasProximas.length,
+        },
+      ]
+    : podeVerAlertaManutencao
+      ? [tipoManutencaoRecorrente]
+      : [];
 
   const totalGeral = tipos.reduce((soma, tipo) => soma + tipo.total, 0);
 
@@ -213,6 +223,7 @@ export function AlertasProvider({ children }) {
         carregando: carregando || carregandoManutencoes,
         recarregar,
         podeVerAlertas,
+        podeVerAlertaManutencao,
       }}
     >
       {children}
