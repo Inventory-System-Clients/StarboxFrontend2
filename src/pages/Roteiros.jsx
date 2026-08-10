@@ -14,6 +14,10 @@ import {
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
   obterKmInicialPilotagemAtiva,
 } from "../lib/roteiroFinalizacaoWhatsApp";
+import {
+  roteiroTemVeiculoAssociado,
+  usuarioTemPilotagemAtiva as checarPilotagemAtivaRoteiro,
+} from "../lib/pilotagemRoteiro";
 
 export function Roteiros() {
   const { usuario } = useAuth();
@@ -111,6 +115,8 @@ export function Roteiros() {
   const [novoVeiculoId, setNovoVeiculoId] = useState("");
   const [novosDiasRoteiro, setNovosDiasRoteiro] = useState([]);
   const [novaObservacaoRoteiro, setNovaObservacaoRoteiro] = useState("");
+  const [novoPermiteGastos, setNovoPermiteGastos] = useState(true);
+  const [salvandoPermiteGastos, setSalvandoPermiteGastos] = useState({});
   const [filtroNomeRoteiro, setFiltroNomeRoteiro] = useState("");
   const [filtroResponsavelId, setFiltroResponsavelId] = useState("");
   const [filtroLojaId, setFiltroLojaId] = useState("");
@@ -431,11 +437,6 @@ export function Roteiros() {
     }));
   };
 
-  const roteiroTemVeiculoAssociado = (roteiroAtual) =>
-    Boolean(
-      String(roteiroAtual?.veiculoId || roteiroAtual?.veiculo?.id || "").trim(),
-    );
-
   const normalizarIdOpcional = (valor) => {
     const texto = String(valor || "").trim();
     return texto || null;
@@ -559,6 +560,31 @@ export function Roteiros() {
       return orcamentosPendentes[roteiro.id];
     }
     return getOrcamentoNumericoRoteiro(roteiro).toFixed(2);
+  };
+
+  const alternarPermiteGastos = async (roteiro) => {
+    const roteiroId = roteiro.id;
+    const valorAtual = roteiro?.permiteGastos !== false;
+    const novoValor = !valorAtual;
+
+    try {
+      setSalvandoPermiteGastos((prev) => ({ ...prev, [roteiroId]: true }));
+      await api.patch(`/roteiros/${roteiroId}`, { permiteGastos: novoValor });
+      setRoteiros((prev) =>
+        prev.map((item) =>
+          item.id === roteiroId ? { ...item, permiteGastos: novoValor } : item,
+        ),
+      );
+      setSuccess(
+        novoValor
+          ? "Lançamento de gastos liberado para este roteiro."
+          : "Lançamento de gastos bloqueado para este roteiro.",
+      );
+    } catch {
+      setError("Erro ao atualizar permissão de gastos do roteiro.");
+    } finally {
+      setSalvandoPermiteGastos((prev) => ({ ...prev, [roteiroId]: false }));
+    }
   };
 
   const handleOrcamentoChange = (roteiroId, valor) => {
@@ -952,83 +978,12 @@ export function Roteiros() {
     validarParaTodosPerfis = false,
     roteiroAtual = null,
   ) => {
-    if (
-      !validarParaTodosPerfis &&
-      usuario?.role !== "FUNCIONARIO_TODAS_LOJAS"
-    ) {
-      return true;
-    }
-
     try {
-      const [ultimasMovRes, veiculosRes] = await Promise.all([
-        api.get("/movimentacao-veiculos/ultimas"),
-        api.get("/veiculos", { params: { all: true } }),
-      ]);
-
-      const usuarioId = String(usuario?.id || "").trim();
-      const veiculoRoteiroId = String(
-        roteiroAtual?.veiculoId || roteiroAtual?.veiculo?.id || "",
-      ).trim();
-
-      if (!usuarioId) return false;
-
-      if (veiculoRoteiroId) {
-        const kmInicialLocal = obterKmInicialPilotagemAtiva({
-          usuarioId,
-          veiculoId: veiculoRoteiroId,
-        });
-
-        if (Number.isFinite(kmInicialLocal)) {
-          return true;
-        }
-      }
-
-      const veiculosLista = Array.isArray(veiculosRes.data)
-        ? veiculosRes.data
-        : [];
-
-      const ultimasMovObj = ultimasMovRes.data || {};
-      const ultimasMovimentacoes = Array.isArray(ultimasMovObj)
-        ? ultimasMovObj
-        : Object.values(ultimasMovObj);
-
-      const temRetiradaAtiva = ultimasMovimentacoes.some((mov) => {
-        const usuarioMovId = String(
-          mov?.usuario?.id || mov?.usuarioId || mov?.funcionarioId || "",
-        ).trim();
-        const tipoMov = String(mov?.tipo || "").toLowerCase();
-        const veiculoId = String(
-          mov?.veiculoId || mov?.veiculo?.id || "",
-        ).trim();
-        const veiculo = veiculosLista.find((v) => String(v.id) === veiculoId);
-
-        return (
-          usuarioMovId === usuarioId &&
-          tipoMov === "retirada" &&
-          (!veiculoRoteiroId || veiculoId === veiculoRoteiroId) &&
-          Boolean(veiculo?.emUso)
-        );
+      return await checarPilotagemAtivaRoteiro({
+        usuario,
+        roteiro: roteiroAtual,
+        validarParaTodosPerfis,
       });
-
-      // Fallback defensivo para APIs que já expõem vínculo de usuário no veículo.
-      const temVinculoDiretoNoVeiculo = veiculosLista.some((veiculo) => {
-        const usuarioVeiculoId = String(
-          veiculo?.usuario?.id ||
-            veiculo?.usuarioId ||
-            veiculo?.funcionarioId ||
-            veiculo?.condutorId ||
-            "",
-        ).trim();
-        const veiculoId = String(veiculo?.id || "").trim();
-
-        return (
-          Boolean(veiculo?.emUso) &&
-          usuarioVeiculoId === usuarioId &&
-          (!veiculoRoteiroId || veiculoId === veiculoRoteiroId)
-        );
-      });
-
-      return temRetiradaAtiva || temVinculoDiretoNoVeiculo;
     } catch (err) {
       console.error("Erro ao validar pilotagem ativa:", err);
       setError(
@@ -1217,6 +1172,7 @@ export function Roteiros() {
         nome: novoNomeRoteiro,
         diasSemana: novosDiasRoteiro,
         veiculoId,
+        permiteGastos: novoPermiteGastos,
       };
 
       // Observação é opcional na criação: só envia se houver texto.
@@ -1229,6 +1185,7 @@ export function Roteiros() {
       setNovoVeiculoId("");
       setNovosDiasRoteiro([]);
       setNovaObservacaoRoteiro("");
+      setNovoPermiteGastos(true);
       setShowModalCriarRoteiro(false);
       setSuccess("Roteiro criado com sucesso!");
       carregarDadosIniciais();
@@ -2030,6 +1987,37 @@ export function Roteiros() {
                 )}
               </div>
 
+              {/* Seção Permitir Gastos */}
+              <div className="mb-4">
+                <label className="text-xs font-bold text-gray-400 block mb-2">
+                  GASTOS DO FUNCIONÁRIO
+                </label>
+                {isGestorRoteiro ? (
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-[#24094E]"
+                      checked={roteiro.permiteGastos !== false}
+                      disabled={salvandoPermiteGastos[roteiro.id]}
+                      onChange={() => alternarPermiteGastos(roteiro)}
+                    />
+                    <span className="text-sm text-gray-700">
+                      {salvandoPermiteGastos[roteiro.id]
+                        ? "Salvando..."
+                        : "Permitir lançamento de gastos"}
+                    </span>
+                  </label>
+                ) : (
+                  <p
+                    className={`text-sm font-semibold ${roteiro.permiteGastos !== false ? "text-green-700" : "text-gray-500"}`}
+                  >
+                    {roteiro.permiteGastos !== false
+                      ? "Liberado"
+                      : "Bloqueado pelo admin"}
+                  </p>
+                )}
+              </div>
+
               {/* Seção de Observação */}
               <div className="mb-4">
                 <label className="text-xs font-bold text-gray-400 block mb-2">
@@ -2393,6 +2381,17 @@ export function Roteiros() {
             <p className="text-xs text-gray-500 mb-4">
               {novaObservacaoRoteiro.length}/{LIMITE_OBSERVACAO_ROTEIRO}
             </p>
+            <label className="flex items-center gap-2 mb-5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-[#24094E]"
+                checked={novoPermiteGastos}
+                onChange={(e) => setNovoPermiteGastos(e.target.checked)}
+              />
+              <span className="text-sm font-semibold text-gray-700">
+                Permitir lançamento de gastos pelo funcionário
+              </span>
+            </label>
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -2400,6 +2399,7 @@ export function Roteiros() {
                   setNovoVeiculoId("");
                   setNovosDiasRoteiro([]);
                   setNovaObservacaoRoteiro("");
+                  setNovoPermiteGastos(true);
                 }}
                 className="flex-1 py-3 text-gray-500 font-bold"
               >

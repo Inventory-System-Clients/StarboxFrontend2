@@ -12,6 +12,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import DashboardGastosRoteirosTab from "../components/DashboardGastosRoteirosTab";
 import AjusteMaquinaAtual from "../components/AjusteMaquinaAtual";
 import PainelAbastecedor from "../components/PainelAbastecedor";
+import PainelFuncionarioTodasLojas from "../components/PainelFuncionarioTodasLojas";
 
 import Swal from "sweetalert2";
 
@@ -53,6 +54,7 @@ export function Dashboard() {
   // Abastecedor so usa Rotas e Meu Estoque no dia a dia — o resto do
   // dashboard (alerta de inatividade, manutencoes etc.) nao se aplica a ele.
   const isAbastecedor = usuario?.role === "ABASTECEDOR";
+  const isFuncionarioTodasLojas = usuario?.role === "FUNCIONARIO_TODAS_LOJAS";
   const isAdminLike =
     usuario?.role === "ADMIN" ||
     usuario?.role === "GERENCIADOR" ||
@@ -827,6 +829,7 @@ export function Dashboard() {
         </div>
 
         {isAbastecedor && <PainelAbastecedor />}
+        {isFuncionarioTodasLojas && <PainelFuncionarioTodasLojas />}
 
         {!isAbastecedor && (
           <div className="mb-6 md:hidden">
