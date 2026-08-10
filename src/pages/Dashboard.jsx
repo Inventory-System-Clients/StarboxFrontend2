@@ -831,18 +831,6 @@ export function Dashboard() {
         {isAbastecedor && <PainelAbastecedor />}
         {isFuncionarioTodasLojas && <PainelFuncionarioTodasLojas />}
 
-        {!isAbastecedor && (
-          <div className="mb-6 md:hidden">
-            <button
-              onClick={() => navigate("/roteiros")}
-              className="w-full bg-linear-to-r from-blue-600 to-indigo-700 text-white font-bold px-4 py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
-            >
-              <span className="text-xl">🗺️</span>
-              Ir para Rotas
-            </button>
-          </div>
-        )}
-
         {/* Cards de Resumo com design moderno - Apenas para ADMIN */}
         {isAdminLike ? (
           <div
