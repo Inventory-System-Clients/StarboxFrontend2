@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useAlertas } from "../contexts/AlertasContext.jsx";
+import api from "../services/api";
+import { roteiroTemVeiculoAssociado } from "../lib/pilotagemRoteiro";
 
 const ADMIN_LIKE = ["ADMIN", "GERENCIADOR"];
 // Usuário MANUTENCAO só consegue navegar pra /pecas e /manutencoes (o próprio
@@ -9,13 +11,22 @@ const ADMIN_LIKE = ["ADMIN", "GERENCIADOR"];
 // deve oferecer links que vão só jogar o usuário de volta.
 const ROTAS_PERMITIDAS_MANUTENCAO = ["/pecas", "/manutencoes"];
 
-const podeVerItem = (item, role) => {
+const podeVerItem = (item, role, temVeiculoNoRoteiro) => {
   if (role === "MANUTENCAO") {
     return ROTAS_PERMITIDAS_MANUTENCAO.includes(item.to);
   }
   if (item.adminOnly && !ADMIN_LIKE.includes(role)) return false;
   if (item.allowedRoles && !item.allowedRoles.includes(role)) return false;
   if (item.deniedRoles && item.deniedRoles.includes(role)) return false;
+  // Funcionario (todas as lojas) so precisa do menu de veiculos quando o
+  // roteiro dele realmente tem um veiculo associado.
+  if (
+    item.requiresVeiculoRoteiro &&
+    role === "FUNCIONARIO_TODAS_LOJAS" &&
+    !temVeiculoNoRoteiro
+  ) {
+    return false;
+  }
   return true;
 };
 
@@ -45,12 +56,14 @@ const grupos = [
         label: "Veículos",
         icon: "🚚",
         deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+        requiresVeiculoRoteiro: true,
       },
       {
         to: "/veiculos/revisoes-pendentes",
         label: "Revisões Pendentes",
         icon: "🔧",
         deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+        requiresVeiculoRoteiro: true,
       },
     ],
   },
@@ -143,6 +156,37 @@ export default function Navbar() {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [gruposAbertos, setGruposAbertos] = useState({});
+  const [temVeiculoNoRoteiro, setTemVeiculoNoRoteiro] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    async function verificarVeiculoNoRoteiro() {
+      if (usuario?.role !== "FUNCIONARIO_TODAS_LOJAS" || !usuario?.id) {
+        setTemVeiculoNoRoteiro(false);
+        return;
+      }
+
+      try {
+        const res = await api.get("/roteiros");
+        const todos = Array.isArray(res.data) ? res.data : [];
+        const possuiVeiculo = todos.some(
+          (roteiro) =>
+            String(roteiro?.funcionarioId || "") === String(usuario.id) &&
+            roteiroTemVeiculoAssociado(roteiro),
+        );
+        if (!cancelado) setTemVeiculoNoRoteiro(possuiVeiculo);
+      } catch {
+        if (!cancelado) setTemVeiculoNoRoteiro(false);
+      }
+    }
+
+    verificarVeiculoNoRoteiro();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [usuario?.role, usuario?.id]);
 
   const isActive = (path) => location.pathname === path;
   const closeMenu = () => setIsMenuOpen(false);
@@ -177,14 +221,16 @@ export default function Navbar() {
 
   const itensSoltosVisiveis = (
     isAbastecedor ? itensSoltosAbastecedor : itensSoltos
-  ).filter((item) => podeVerItem(item, usuario?.role));
+  ).filter((item) => podeVerItem(item, usuario?.role, temVeiculoNoRoteiro));
 
   const gruposVisiveis = isAbastecedor
     ? []
     : grupos
         .map((grupo) => ({
           ...grupo,
-          itens: grupo.itens.filter((item) => podeVerItem(item, usuario?.role)),
+          itens: grupo.itens.filter((item) =>
+            podeVerItem(item, usuario?.role, temVeiculoNoRoteiro),
+          ),
         }))
         .filter((grupo) => grupo.itens.length > 0);
 

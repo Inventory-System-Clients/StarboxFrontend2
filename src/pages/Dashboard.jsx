@@ -1315,7 +1315,9 @@ export function Dashboard() {
               gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             }}
           >
-            {!isFuncionario && usuario?.role !== "CONTROLADOR_ESTOQUE" && (
+            {!isFuncionario &&
+              !isFuncionarioTodasLojas &&
+              usuario?.role !== "CONTROLADOR_ESTOQUE" && (
               <div
                 className="stat-card bg-linear-to-br from-gray-700 to-gray-900 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
                 onClick={() => navigate("/veiculos")}
