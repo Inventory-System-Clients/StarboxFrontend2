@@ -250,6 +250,30 @@ export default function BillsPage() {
     return diffDays;
   };
 
+  const METODO_PAGAMENTO_LABEL = {
+    boleto: "Boleto",
+    pix: "PIX",
+    email: "Email",
+    app: "App",
+  };
+
+  // "Onde pagar" vem do método de pagamento cadastrado na conta (boleto,
+  // PIX, email ou app) + os detalhes específicos dele, não do beneficiário
+  // (que é quem recebe, não como pagar).
+  const formatarOndePagar = (bill) => {
+    const metodoLabel = METODO_PAGAMENTO_LABEL[bill.payment_method];
+
+    if (bill.payment_method === "boleto") {
+      return bill.boleto_em_maos ? "Boleto (em mãos)" : "Boleto";
+    }
+
+    if (metodoLabel && bill.payment_details) {
+      return `${metodoLabel}: ${bill.payment_details}`;
+    }
+
+    return metodoLabel || bill.observations || bill.beneficiario || "-";
+  };
+
   // Mensagem de cobrança via WhatsApp: nome da conta, valor, onde pagar e
   // data de vencimento — os dados que o usuário pediu explicitamente.
   const montarMensagemCobranca = (bill, occurrence) => {
@@ -266,7 +290,6 @@ export default function BillsPage() {
         : dias < 0
           ? "Vencida"
           : "Em aberto";
-    const ondePagar = bill.beneficiario || bill.city || "-";
 
     return [
       "STAR BOX",
@@ -275,7 +298,7 @@ export default function BillsPage() {
       `Conta: ${bill.name || "-"}`,
       `Valor: R$ ${valor.toFixed(2)}`,
       `Vencimento: ${new Date(occurrence.dueDate).toLocaleDateString("pt-BR")}`,
-      `Onde pagar: ${ondePagar}`,
+      `Onde pagar: ${formatarOndePagar(bill)}`,
       `Status: ${statusLabel}`,
     ].join("\n");
   };
@@ -609,18 +632,30 @@ export default function BillsPage() {
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <button
-                              onClick={() => handleViewDetails(bill)}
-                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
-                              title="Clique para ver todos os detalhes"
-                            >
-                              {bill.name}
-                            </button>
-                            {isRecurringBill(bill) && (
-                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold" title="Conta recorrente mensal">
-                                🔁 Mensal
-                              </span>
-                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => handleViewDetails(bill)}
+                                className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                                title="Clique para ver todos os detalhes"
+                              >
+                                {bill.name}
+                              </button>
+                              {isRecurringBill(bill) && (
+                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold" title="Conta recorrente mensal">
+                                  🔁 Mensal
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleEnviarCobranca(bill, occurrence)}
+                                className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-200 transition-colors"
+                                title="Enviar cobrança via WhatsApp"
+                                data-testid={`btn-cobranca-${bill.id}-${occurrence.monthKey}`}
+                              >
+                                <MessageCircle size={13} />
+                                WhatsApp
+                              </button>
+                            </div>
                             {bill.observations && (
                               <p className="text-sm text-gray-500 mt-1">
                                 {bill.observations}
@@ -702,16 +737,6 @@ export default function BillsPage() {
                               ) : (
                                 <CheckCircle size={18} />
                               )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEnviarCobranca(bill, occurrence)}
-                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                              title="Enviar cobrança via WhatsApp"
-                              data-testid={`btn-cobranca-${bill.id}-${occurrence.monthKey}`}
-                            >
-                              <MessageCircle size={18} />
                             </Button>
                             <Button
                               size="sm"

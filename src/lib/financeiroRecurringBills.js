@@ -161,8 +161,6 @@ export const getBillOccurrenceForMonth = (bill, monthKey, currentMonthKey) => {
     };
   }
 
-  if (monthKey < currentMonthKey) return null;
-
   const dueDate = buildDueDateForMonthKey(bill, monthKey);
   if (!dueDate) return null;
 
