@@ -38,6 +38,8 @@ export function AlertasProvider({ children }) {
     [],
   );
   const [abastecimentoIncompleto, setAbastecimentoIncompleto] = useState([]);
+  const [revisoesVeiculos, setRevisoesVeiculos] = useState([]);
+  const [leituraAntiga, setLeituraAntiga] = useState([]);
   const [contasVencidas, setContasVencidas] = useState([]);
   const [contasProximas, setContasProximas] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -60,24 +62,37 @@ export function AlertasProvider({ children }) {
     setCarregando(true);
 
     try {
-      const [estoqueRes, movRes, abastRes, personalBills, companyBills] =
-        await Promise.all([
-          api
-            .get("/relatorios/alertas-estoque")
-            .catch(() => ({ data: { alertas: [] } })),
-          api
-            .get("/relatorios/alertas-movimentacao-inconsistente")
-            .catch(() => ({ data: { alertas: [] } })),
-          api
-            .get("/relatorios/alertas-abastecimento-incompleto")
-            .catch(() => ({ data: { alertas: [] } })),
-          billsAPI.getAll({ bill_type: "personal" }).catch(() => []),
-          billsAPI.getAll({ bill_type: "company" }).catch(() => []),
-        ]);
+      const [
+        estoqueRes,
+        movRes,
+        abastRes,
+        revisoesRes,
+        leituraAntigaRes,
+        personalBills,
+        companyBills,
+      ] = await Promise.all([
+        api
+          .get("/relatorios/alertas-estoque")
+          .catch(() => ({ data: { alertas: [] } })),
+        api
+          .get("/relatorios/alertas-movimentacao-inconsistente")
+          .catch(() => ({ data: { alertas: [] } })),
+        api
+          .get("/relatorios/alertas-abastecimento-incompleto")
+          .catch(() => ({ data: { alertas: [] } })),
+        api.get("/revisoes-veiculos").catch(() => ({ data: [] })),
+        api
+          .get("/relatorios/alertas-leitura-antiga")
+          .catch(() => ({ data: { alertas: [] } })),
+        billsAPI.getAll({ bill_type: "personal" }).catch(() => []),
+        billsAPI.getAll({ bill_type: "company" }).catch(() => []),
+      ]);
 
       setEstoque(extrairAlertas(estoqueRes.data));
       setMovimentacaoInconsistente(extrairAlertas(movRes.data));
       setAbastecimentoIncompleto(extrairAlertas(abastRes.data));
+      setRevisoesVeiculos(extrairAlertas(revisoesRes.data));
+      setLeituraAntiga(extrairAlertas(leituraAntigaRes.data));
 
       const bills = [
         ...(Array.isArray(personalBills) ? personalBills : []),
@@ -162,29 +177,49 @@ export function AlertasProvider({ children }) {
 
   const tipos = podeVerAlertas
     ? [
+        // Ocultos a pedido do usuário (2026-08-11). A lógica e os dados
+        // continuam ativos abaixo (estoque, movimentacaoInconsistente,
+        // abastecimentoIncompleto) — só os tiles/cards ficaram de fora da
+        // lista exibida. Basta descomentar para trazer de volta.
+        // {
+        //   id: "estoque",
+        //   label: "Estoque baixo em máquina",
+        //   icone: "🎮",
+        //   cor: "red",
+        //   itens: estoque,
+        //   total: estoque.length,
+        // },
+        // {
+        //   id: "movimentacao-inconsistente",
+        //   label: "Movimentação inconsistente",
+        //   icone: "🔄",
+        //   cor: "purple",
+        //   itens: movimentacaoInconsistente,
+        //   total: movimentacaoInconsistente.length,
+        // },
+        // {
+        //   id: "abastecimento-incompleto",
+        //   label: "Abastecimento incompleto",
+        //   icone: "📦",
+        //   cor: "amber",
+        //   itens: abastecimentoIncompleto,
+        //   total: abastecimentoIncompleto.length,
+        // },
         {
-          id: "estoque",
-          label: "Estoque baixo em máquina",
-          icone: "🎮",
-          cor: "red",
-          itens: estoque,
-          total: estoque.length,
+          id: "revisao-veiculo",
+          label: "Revisão de carro",
+          icone: "🔧",
+          cor: "orange",
+          itens: revisoesVeiculos,
+          total: revisoesVeiculos.length,
         },
         {
-          id: "movimentacao-inconsistente",
-          label: "Movimentação inconsistente",
-          icone: "🔄",
-          cor: "purple",
-          itens: movimentacaoInconsistente,
-          total: movimentacaoInconsistente.length,
-        },
-        {
-          id: "abastecimento-incompleto",
-          label: "Abastecimento incompleto",
-          icone: "📦",
-          cor: "amber",
-          itens: abastecimentoIncompleto,
-          total: abastecimentoIncompleto.length,
+          id: "leitura-antiga",
+          label: "Leitura faz muito tempo",
+          icone: "📟",
+          cor: "cyan",
+          itens: leituraAntiga,
+          total: leituraAntiga.length,
         },
         tipoManutencaoRecorrente,
         {

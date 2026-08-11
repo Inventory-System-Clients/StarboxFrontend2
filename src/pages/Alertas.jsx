@@ -15,6 +15,8 @@ const CORES_TILE = {
   amber: "from-amber-500 to-amber-600",
   rose: "from-rose-500 to-rose-600",
   yellow: "from-yellow-500 to-yellow-600",
+  orange: "from-orange-500 to-orange-600",
+  cyan: "from-cyan-500 to-cyan-600",
 };
 
 // A partir desse tanto de itens, mostra um campo de busca em vez de listar
@@ -148,6 +150,128 @@ function SecaoEstoque({ itens }) {
                 <p className="text-sm text-gray-600">
                   {alerta.maquina?.loja} · Estoque {alerta.estoqueAtual}/{alerta.capacidadePadrao} (
                   {alerta.percentualAtual}%) · {alerta.nivelAlerta}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/maquinas/${alerta.maquina?.id}`)}
+                className="px-4 py-2 text-sm bg-gray-100 text-[#24094E] font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Ver Máquina
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function SecaoRevisaoVeiculos({ itens }) {
+  const navigate = useNavigate();
+  const [filtro, setFiltro] = useState("");
+
+  const itensFiltrados = useMemo(() => {
+    const termo = normalizarTexto(filtro);
+    if (!termo) return itens;
+    return itens.filter((item) =>
+      [item.veiculoNome, item.veiculoModelo]
+        .map(normalizarTexto)
+        .some((campo) => campo.includes(termo)),
+    );
+  }, [itens, filtro]);
+
+  if (itens.length === 0) {
+    return <p className="text-sm text-gray-500">Nenhum veículo com revisão pendente.</p>;
+  }
+
+  return (
+    <>
+      {itens.length > LIMITE_PARA_FILTRO && (
+        <CampoFiltro valor={filtro} onChange={setFiltro} placeholder="Buscar por veículo..." />
+      )}
+      {itensFiltrados.length === 0 ? (
+        <p className="text-sm text-gray-500">Nenhum veículo encontrado para essa busca.</p>
+      ) : (
+        <div className="grid gap-3">
+          {itensFiltrados.map((item) => {
+            const atraso = item.kmAtual - item.kmRevisaoDevida;
+            return (
+              <div
+                key={item.veiculoId}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4"
+              >
+                <div>
+                  <p className="font-bold text-gray-900">
+                    {item.veiculoNome} {item.veiculoModelo ? `- ${item.veiculoModelo}` : ""}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    KM atual {item.kmAtual?.toLocaleString("pt-BR")} · Revisão devida aos{" "}
+                    {item.kmRevisaoDevida?.toLocaleString("pt-BR")} km · Atrasado ~
+                    {atraso.toLocaleString("pt-BR")} km
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate("/veiculos/revisoes-pendentes")}
+                  className="px-4 py-2 text-sm bg-gray-100 text-[#24094E] font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Gerenciar Revisão
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function SecaoLeituraAntiga({ itens }) {
+  const navigate = useNavigate();
+  const [filtro, setFiltro] = useState("");
+
+  const itensFiltrados = useMemo(() => {
+    const termo = normalizarTexto(filtro);
+    if (!termo) return itens;
+    return itens.filter((alerta) =>
+      [alerta.maquina?.codigo, alerta.maquina?.nome, alerta.maquina?.loja]
+        .map(normalizarTexto)
+        .some((campo) => campo.includes(termo)),
+    );
+  }, [itens, filtro]);
+
+  if (itens.length === 0) {
+    return <p className="text-sm text-gray-500">Nenhuma máquina sem leitura recente.</p>;
+  }
+
+  return (
+    <>
+      {itens.length > LIMITE_PARA_FILTRO && (
+        <CampoFiltro
+          valor={filtro}
+          onChange={setFiltro}
+          placeholder="Buscar por máquina ou ponto..."
+        />
+      )}
+      {itensFiltrados.length === 0 ? (
+        <p className="text-sm text-gray-500">Nenhum alerta encontrado para essa busca.</p>
+      ) : (
+        <div className="grid gap-3">
+          {itensFiltrados.map((alerta, index) => (
+            <div
+              key={alerta.maquina?.id || index}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-cyan-200 bg-cyan-50 p-4"
+            >
+              <div>
+                <p className="font-bold text-gray-900">
+                  {alerta.maquina?.codigo} {alerta.maquina?.nome ? `- ${alerta.maquina.nome}` : ""}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {alerta.maquina?.loja} · Última leitura: {formatarData(alerta.ultimaLeitura)} ·{" "}
+                  {alerta.diasSemLeitura >= 9999
+                    ? "sem leitura registrada"
+                    : `${alerta.diasSemLeitura} dia(s) sem leitura`}
                 </p>
               </div>
               <button
@@ -376,7 +500,10 @@ export default function Alertas() {
           ))}
         </div>
 
-        {podeVerAlertas && (
+        {/* Ocultos a pedido do usuário (2026-08-11), junto com os tiles
+            correspondentes em AlertasContext.jsx. Basta descomentar dos dois
+            lados para trazer de volta. */}
+        {/* {podeVerAlertas && (
           <SecaoColapsavel
             id="alerta-secao-estoque"
             titulo="🎮 Estoque baixo em máquina"
@@ -386,9 +513,9 @@ export default function Alertas() {
           >
             <SecaoEstoque itens={tipos.find((t) => t.id === "estoque")?.itens || []} />
           </SecaoColapsavel>
-        )}
+        )} */}
 
-        {podeVerAlertas && (
+        {/* {podeVerAlertas && (
           <SecaoColapsavel
             id="alerta-secao-movimentacao-inconsistente"
             titulo="🔄 Movimentação inconsistente e abastecimento incompleto"
@@ -400,6 +527,34 @@ export default function Alertas() {
             onToggle={() => alternarSecao("movimentacao-inconsistente")}
           >
             <AlertAdmin />
+          </SecaoColapsavel>
+        )} */}
+
+        {podeVerAlertas && (
+          <SecaoColapsavel
+            id="alerta-secao-revisao-veiculo"
+            titulo="🔧 Revisão de carro"
+            total={tipos.find((t) => t.id === "revisao-veiculo")?.total}
+            aberta={secoesAbertas.has("revisao-veiculo")}
+            onToggle={() => alternarSecao("revisao-veiculo")}
+          >
+            <SecaoRevisaoVeiculos
+              itens={tipos.find((t) => t.id === "revisao-veiculo")?.itens || []}
+            />
+          </SecaoColapsavel>
+        )}
+
+        {podeVerAlertas && (
+          <SecaoColapsavel
+            id="alerta-secao-leitura-antiga"
+            titulo="📟 Leitura faz muito tempo"
+            total={tipos.find((t) => t.id === "leitura-antiga")?.total}
+            aberta={secoesAbertas.has("leitura-antiga")}
+            onToggle={() => alternarSecao("leitura-antiga")}
+          >
+            <SecaoLeituraAntiga
+              itens={tipos.find((t) => t.id === "leitura-antiga")?.itens || []}
+            />
           </SecaoColapsavel>
         )}
 
