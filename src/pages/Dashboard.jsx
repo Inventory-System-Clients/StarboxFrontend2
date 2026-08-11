@@ -515,6 +515,19 @@ export function Dashboard() {
         balancoData.lucroPorDia = {};
       }
 
+      // Valor esperado diário (calculado pelos contadores das máquinas na
+      // retirada de dinheiro, usado na conferência de FluxoCaixa) — é o que
+      // alimenta o card "Comparativo Mensal".
+      try {
+        const valorEsperadoRes = await api.get(
+          "/dashboard/valor-esperado-diario",
+        );
+        balancoData.valorEsperadoPorDia = valorEsperadoRes.data;
+      } catch (err) {
+        console.error("Erro ao buscar valor esperado diário:", err);
+        balancoData.valorEsperadoPorDia = {};
+      }
+
       setStats({
         alertas: alertasRes.data?.alertas || [],
         balanco: balancoData,
@@ -718,7 +731,7 @@ export function Dashboard() {
     const linhasHtml = [];
     for (let d = 1; d <= diaAtual; d++) {
       const dataStr = `${anoAtual}-${String(mesAtual).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      const valor = Number(stats.balanco?.lucroPorDia?.[dataStr] || 0);
+      const valor = Number(stats.balanco?.valorEsperadoPorDia?.[dataStr] || 0);
       total += valor;
       linhasHtml.push(`
         <tr>
@@ -729,19 +742,19 @@ export function Dashboard() {
     }
 
     Swal.fire({
-      title: "Detalhamento do Comparativo Mensal",
+      title: "Detalhamento do Valor Esperado do Mês",
       width: 900,
       confirmButtonText: "Fechar",
       confirmButtonColor: "#f59e0b",
       html: `
         <div style="text-align:left;max-height:60vh;overflow:auto;font-size:14px;">
-          <p style="margin-bottom:8px;"><strong>Fonte dos dados:</strong> endpoint <code>/dashboard/lucro-diario</code>.</p>
-          <p style="margin-bottom:12px;"><strong>Regra:</strong> lucro líquido diário consolidado de todas as lojas, somado até o dia atual do mês.</p>
+          <p style="margin-bottom:8px;"><strong>Fonte dos dados:</strong> endpoint <code>/dashboard/valor-esperado-diario</code>.</p>
+          <p style="margin-bottom:12px;"><strong>Regra:</strong> valor esperado calculado pelos contadores das máquinas no momento da retirada de dinheiro (mesmo número usado na conferência de FluxoCaixa) — não é o faturamento já confirmado, é o que se espera receber. Somado dia a dia até o dia atual do mês.</p>
           <table style="width:100%;border-collapse:collapse;">
             <thead>
               <tr style="background:#f3f4f6;">
                 <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Data</th>
-                <th style="padding:8px;border:1px solid #e5e7eb;text-align:right;">Lucro consolidado</th>
+                <th style="padding:8px;border:1px solid #e5e7eb;text-align:right;">Valor esperado</th>
               </tr>
             </thead>
             <tbody>
@@ -849,6 +862,9 @@ export function Dashboard() {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium opacity-90">
                       Comparativo Mensal
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                        Valor Esperado
+                      </span>
                     </h3>
                     <svg
                       className="w-8 h-8 opacity-80"
@@ -867,56 +883,45 @@ export function Dashboard() {
                   <p className="text-3xl font-bold">
                     R${" "}
                     {(() => {
-                      // Exibir o lucro líquido consolidado do mês atual (todas as lojas)
+                      // Valor esperado consolidado do mês atual (todas as lojas) —
+                      // calculado pelos contadores das máquinas na retirada de
+                      // dinheiro, não o faturamento já confirmado.
                       const hoje = new Date();
                       const diaAtual = hoje.getDate();
                       const mesAtual = hoje.getMonth() + 1;
                       const anoAtual = hoje.getFullYear();
-                      let totalLucroMes = 0;
+                      let totalValorEsperadoMes = 0;
                       for (let d = 1; d <= diaAtual; d++) {
                         const dataStr = `${anoAtual}-${String(mesAtual).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                        totalLucroMes += Number(
-                          stats.balanco?.lucroPorDia?.[dataStr] || 0,
+                        totalValorEsperadoMes += Number(
+                          stats.balanco?.valorEsperadoPorDia?.[dataStr] || 0,
                         );
                       }
-                      return totalLucroMes.toLocaleString("pt-BR", {
+                      return totalValorEsperadoMes.toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
                       });
                     })()}
                   </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    <span className="text-xs opacity-75 bg-white/20 rounded px-1.5 py-0.5">
-                      💵 R${" "}
-                      {Number(
-                        stats.balanco?.totais?.totalDinheiro || 0,
-                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-xs opacity-75 bg-white/20 rounded px-1.5 py-0.5">
-                      💳 R${" "}
-                      {Number(
-                        stats.balanco?.totais?.totalCartaoPix || 0,
-                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <p className="text-xs opacity-75 mt-1">💰 Último mês</p>
-                  {/* Comparação de lucro com mês anterior */}
+                  <p className="text-xs opacity-75 mt-1">
+                    📊 Valor esperado (mês atual, até hoje)
+                  </p>
+                  {/* Comparação do valor esperado com o mês anterior */}
                   {(() => {
-                    // Supondo que stats.balanco.lucroPorDia[YYYY-MM-DD] existe
                     const hoje = new Date();
                     const diaAtual = hoje.getDate();
                     const mesAtual = hoje.getMonth() + 1;
                     const anoAtual = hoje.getFullYear();
-                    function getLucroPeriodo(stats, ano, mes, dias) {
+                    function getValorEsperadoPeriodo(stats, ano, mes, dias) {
                       let total = 0;
                       for (let d = 1; d <= dias; d++) {
                         const dataStr = `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                         total += Number(
-                          stats.balanco?.lucroPorDia?.[dataStr] || 0,
+                          stats.balanco?.valorEsperadoPorDia?.[dataStr] || 0,
                         );
                       }
                       return total;
                     }
-                    const lucroPeriodoAtual = getLucroPeriodo(
+                    const valorEsperadoPeriodoAtual = getValorEsperadoPeriodo(
                       stats,
                       anoAtual,
                       mesAtual,
@@ -925,20 +930,21 @@ export function Dashboard() {
                     const mesAnterior = mesAtual === 1 ? 12 : mesAtual - 1;
                     const anoMesAnterior =
                       mesAtual === 1 ? anoAtual - 1 : anoAtual;
-                    const lucroPeriodoAnterior = getLucroPeriodo(
+                    const valorEsperadoPeriodoAnterior = getValorEsperadoPeriodo(
                       stats,
                       anoMesAnterior,
                       mesAnterior,
                       diaAtual,
                     );
-                    const diff = lucroPeriodoAtual - lucroPeriodoAnterior;
+                    const diff =
+                      valorEsperadoPeriodoAtual - valorEsperadoPeriodoAnterior;
                     const percent =
-                      lucroPeriodoAnterior > 0
-                        ? (diff / lucroPeriodoAnterior) * 100
+                      valorEsperadoPeriodoAnterior > 0
+                        ? (diff / valorEsperadoPeriodoAnterior) * 100
                         : 0;
                     return (
                       <div className="mt-2 text-xs font-semibold">
-                        Renda bruta até hoje vs mês passado:
+                        Valor esperado até hoje vs mês passado:
                         <span
                           className={
                             percent >= 0 ? "text-green-700" : "text-red-700"
@@ -949,13 +955,14 @@ export function Dashboard() {
                         </span>
                         <span className="ml-2 text-gray-700">
                           (R${" "}
-                          {lucroPeriodoAtual.toLocaleString("pt-BR", {
+                          {valorEsperadoPeriodoAtual.toLocaleString("pt-BR", {
                             minimumFractionDigits: 2,
                           })}{" "}
                           vs R${" "}
-                          {lucroPeriodoAnterior.toLocaleString("pt-BR", {
-                            minimumFractionDigits: 2,
-                          })}
+                          {valorEsperadoPeriodoAnterior.toLocaleString(
+                            "pt-BR",
+                            { minimumFractionDigits: 2 },
+                          )}
                           )
                         </span>
                       </div>
