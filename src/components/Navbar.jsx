@@ -48,6 +48,12 @@ const grupos = [
     icon: "🛠️",
     itens: [
       { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
+      {
+        to: "/lancar-gasto",
+        label: "Lançar Gasto",
+        icon: "💸",
+        allowedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+      },
       { to: "/manutencoes", label: "Manutenções", icon: "🛠️", alert: true },
       { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
       { to: "/quebra-ordem", label: "Quebra de Ordem", icon: "🔀" },

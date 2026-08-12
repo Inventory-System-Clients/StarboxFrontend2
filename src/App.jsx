@@ -40,6 +40,7 @@ import Alertas from "./pages/Alertas";
 import SecurityLockPage from "./pages/SecurityLockPage.jsx";
 import { QuebraOrdemPage } from "./pages/QuebraOrdemPage.jsx";
 import EstoqueUsuarios from "./pages/EstoqueUsuarios.jsx";
+import LancarGasto from "./pages/LancarGasto.jsx";
 import FluxoCaixa from "./pages/FluxoCaixa.jsx";
 import PecasDefeituosasDashboard from "./pages/PecasDefeituosasDashboard.jsx";
 import PecasDefeituosasAdminPage from "./pages/PecasDefeituosasAdminPage.jsx";
@@ -285,6 +286,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <EstoqueUsuarios />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/lancar-gasto"
+        element={
+          <PrivateRoute>
+            <LancarGasto />
           </PrivateRoute>
         }
       />

@@ -649,6 +649,12 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     (roleUsuarioNormalizado === "ABASTECEDOR" &&
       Boolean(usuario?.id) &&
       String(roteiro?.funcionarioId || "") === String(usuario?.id));
+  // Funcionário comum agora lança gasto pela página dedicada (/lancar-gasto,
+  // no navbar) em vez do bloco embutido aqui — só ADMIN/GERENCIADOR/
+  // CONTROLADOR_ESTOQUE continuam vendo o bloco embutido.
+  const isFuncionarioComum = ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"].includes(
+    roleUsuarioNormalizado,
+  );
   const usuarioPodeEditarMovimentacaoNaRota =
     perfisPermitidosEditarMovimentacaoRota.has(roleUsuarioNormalizado) ||
     roleUsuarioNormalizado.includes("FUNCIONARIO") ||
@@ -3350,7 +3356,9 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
           </section>
         )}
 
-        {!isFuncionarioAbastecedor && roteiro?.permiteGastos !== false && (
+        {!isFuncionarioAbastecedor &&
+          !isFuncionarioComum &&
+          roteiro?.permiteGastos !== false && (
         <section className="mb-8 bg-white rounded-xl shadow p-5 border border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
             <h2 className="text-lg font-bold">💸 Gastos Semanais do Roteiro</h2>
