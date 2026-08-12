@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { LoadingSpinner, EmptyState } from "./Loading";
 import { AlertBox } from "./UIComponents";
 import { RoteiroExecucaoConteudo } from "./RoteiroExecucaoConteudo";
+import PilotarVeiculoRoteiro from "./PilotarVeiculoRoteiro";
 import {
   roteiroTemVeiculoAssociado,
   usuarioTemPilotagemAtiva,
@@ -19,12 +19,12 @@ import {
 // um aviso pra pilotar antes - a mesma regra que Roteiros.jsx ja aplica.
 export default function PainelFuncionarioTodasLojas() {
   const { usuario } = useAuth();
-  const navigate = useNavigate();
 
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [meusRoteiros, setMeusRoteiros] = useState([]);
   const [pilotagemPorRoteiro, setPilotagemPorRoteiro] = useState({});
+  const [roteiroPilotandoId, setRoteiroPilotandoId] = useState(null);
 
   useEffect(() => {
     let cancelado = false;
@@ -80,10 +80,9 @@ export default function PainelFuncionarioTodasLojas() {
     };
   }, [usuario?.id]);
 
-  const pilotarVeiculoDoRoteiro = () => {
-    navigate("/veiculos", {
-      state: { origem: "roteiros", retornarPara: "/" },
-    });
+  const handleVeiculoPilotado = (roteiroId) => {
+    setPilotagemPorRoteiro((prev) => ({ ...prev, [roteiroId]: true }));
+    setRoteiroPilotandoId(null);
   };
 
   if (carregando) {
@@ -130,6 +129,14 @@ export default function PainelFuncionarioTodasLojas() {
 
             {podeExecutar ? (
               <RoteiroExecucaoConteudo roteiroId={roteiro.id} />
+            ) : roteiroPilotandoId === roteiro.id ? (
+              <div className="max-w-sm mx-auto py-4">
+                <PilotarVeiculoRoteiro
+                  veiculoId={roteiro.veiculoId || roteiro.veiculo?.id}
+                  onPilotado={() => handleVeiculoPilotado(roteiro.id)}
+                  onCancelar={() => setRoteiroPilotandoId(null)}
+                />
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-4 py-10 text-center">
                 <span className="text-5xl">🚗</span>
@@ -139,7 +146,7 @@ export default function PainelFuncionarioTodasLojas() {
                 </p>
                 <button
                   type="button"
-                  onClick={pilotarVeiculoDoRoteiro}
+                  onClick={() => setRoteiroPilotandoId(roteiro.id)}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-md"
                 >
                   🚗 Pilotar veículo

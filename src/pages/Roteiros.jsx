@@ -9,6 +9,7 @@ import { Modal, AlertBox } from "../components/UIComponents";
 import { MultiSelectAutocomplete } from "../components/MultiSelectAutocomplete";
 import { AutocompleteSelect } from "../components/AutocompleteSelect";
 import { FinalizarRoteiroModal } from "../components/FinalizarRoteiroModal";
+import PilotarVeiculoRoteiro from "../components/PilotarVeiculoRoteiro";
 import {
   abrirWhatsAppComMensagem,
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
@@ -54,6 +55,10 @@ export function Roteiros() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [avisoAndamento, setAvisoAndamento] = useState(null);
+  const [modalPilotarVeiculo, setModalPilotarVeiculo] = useState({
+    aberto: false,
+    roteiro: null,
+  });
 
   // --- DIAS DA SEMANA ---
   const DIAS_SEMANA = [
@@ -1016,16 +1021,7 @@ export function Roteiros() {
       );
 
       if (!podeProsseguir) {
-        const mensagemBloqueio =
-          "Você precisa iniciar a pilotagem de um veículo antes de começar a rota. Você será redirecionado para Veículos.";
-
-        setError(mensagemBloqueio);
-        navigate("/veiculos", {
-          state: {
-            origem: "roteiros",
-            retornarPara: "/roteiros",
-          },
-        });
+        setModalPilotarVeiculo({ aberto: true, roteiro: roteiroAtual });
         return;
       }
     }
@@ -1131,6 +1127,18 @@ export function Roteiros() {
       }
     } finally {
       setIniciandoRoteiros((prev) => ({ ...prev, [roteiroAtual.id]: false }));
+    }
+  };
+
+  const fecharModalPilotarVeiculo = () => {
+    setModalPilotarVeiculo({ aberto: false, roteiro: null });
+  };
+
+  const handleVeiculoPilotadoNaListaDeRoteiros = () => {
+    const roteiroPendente = modalPilotarVeiculo.roteiro;
+    fecharModalPilotarVeiculo();
+    if (roteiroPendente) {
+      iniciarOuContinuarRoteiro(roteiroPendente);
     }
   };
 
@@ -2480,6 +2488,24 @@ export function Roteiros() {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={modalPilotarVeiculo.aberto}
+        onClose={fecharModalPilotarVeiculo}
+        title="Pilotar veículo"
+        size="sm"
+      >
+        {modalPilotarVeiculo.roteiro ? (
+          <PilotarVeiculoRoteiro
+            veiculoId={
+              modalPilotarVeiculo.roteiro.veiculoId ||
+              modalPilotarVeiculo.roteiro.veiculo?.id
+            }
+            onPilotado={handleVeiculoPilotadoNaListaDeRoteiros}
+            onCancelar={fecharModalPilotarVeiculo}
+          />
+        ) : null}
+      </Modal>
 
       <FinalizarRoteiroModal
         aberto={modalFinalizar.aberto}

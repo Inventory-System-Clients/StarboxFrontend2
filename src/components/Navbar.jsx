@@ -61,7 +61,7 @@ const grupos = [
         to: "/veiculos",
         label: "Veículos",
         icon: "🚚",
-        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS", "ABASTECEDOR"],
         requiresVeiculoRoteiro: true,
       },
       {
