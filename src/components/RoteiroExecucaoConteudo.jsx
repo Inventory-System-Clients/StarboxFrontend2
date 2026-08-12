@@ -3098,7 +3098,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
               </span>
             )}
         </h1>
-        {!isFuncionarioAbastecedor && (
+        {!isFuncionarioAbastecedor && roteiro?.veiculo && (
           <p className="text-sm text-gray-600 mb-4">
             🚗 Veículo: {veiculoResumo}
           </p>
