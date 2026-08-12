@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import { Modal, AlertBox } from "./UIComponents";
 import { FinalizarRoteiroModal } from "./FinalizarRoteiroModal";
 import { MovimentacaoMaquinaForm } from "./MovimentacaoMaquinaForm";
 import ManutencaoModal from "./ManutencaoModal";
 import ModalEditarMovimentacao from "./ModalEditarMovimentacao";
+import FinalizarVeiculoRoteiro from "./FinalizarVeiculoRoteiro";
 import { useAuth } from "../contexts/AuthContext";
 import {
   abrirWhatsAppComMensagem,
   montarMensagemDeLeiturasWhatsApp,
-  obterKmInicialPilotagemAtiva,
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
 } from "../lib/roteiroFinalizacaoWhatsApp";
 
@@ -42,6 +43,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     loading: false,
   });
   const [kmFinalVeiculoInput, setKmFinalVeiculoInput] = useState("");
+  const [mostrarFinalizarVeiculo, setMostrarFinalizarVeiculo] = useState(false);
   const [enviandoResumoWhatsapp, setEnviandoResumoWhatsapp] = useState(false);
   const [copiandoResumo, setCopiandoResumo] = useState(false);
   const [modalNovaManutencao, setModalNovaManutencao] = useState({
@@ -1067,7 +1069,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     const textoResumo = obterTextoResumoParaCompartilhar();
     if (!textoResumo) {
       setError(
-        "Resumo ainda não disponível para envio. Finalize a rota e tente novamente.",
+        "Resumo ainda não disponível para envio. Registre pelo menos uma leitura e tente novamente.",
       );
       return;
     }
@@ -2855,113 +2857,15 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     }
   };
 
-  const executarFinalizacaoRoteiro = async () => {
+  const executarFinalizacaoRoteiro = async (kmFinalVeiculoOverride) => {
     if (!roteiro || modalFinalizar.loading) return;
-
-    const validarPilotagemAtivaUsuario = async () => {
-      try {
-        const veiculoRoteiroId = String(
-          roteiro?.veiculoId || roteiro?.veiculo?.id || "",
-        ).trim();
-        if (!veiculoRoteiroId) return false;
-
-        const [ultimasMovRes, veiculosRes] = await Promise.all([
-          api.get("/movimentacao-veiculos/ultimas"),
-          api.get("/veiculos", { params: { all: true } }),
-        ]);
-
-        const usuarioId = String(usuario?.id || "");
-        const veiculosLista = Array.isArray(veiculosRes.data)
-          ? veiculosRes.data
-          : [];
-        const veiculoDoRoteiro = veiculosLista.find(
-          (veiculo) => String(veiculo?.id || "") === veiculoRoteiroId,
-        );
-
-        if (!veiculoDoRoteiro?.emUso) {
-          return false;
-        }
-
-        const ultimasMovObj = ultimasMovRes.data || {};
-        const ultimasMovimentacoes = Array.isArray(ultimasMovObj)
-          ? ultimasMovObj
-          : Object.values(ultimasMovObj);
-
-        const ultimaMovimentacaoVeiculoRoteiro = ultimasMovimentacoes.find(
-          (mov) =>
-            String(mov?.veiculoId || mov?.veiculo?.id || "") ===
-            veiculoRoteiroId,
-        );
-
-        const usuarioUltimaMovimentacao = String(
-          ultimaMovimentacaoVeiculoRoteiro?.usuario?.id ||
-            ultimaMovimentacaoVeiculoRoteiro?.usuarioId ||
-            ultimaMovimentacaoVeiculoRoteiro?.funcionarioId ||
-            "",
-        );
-        const tipoUltimaMovimentacao = String(
-          ultimaMovimentacaoVeiculoRoteiro?.tipo || "",
-        ).toLowerCase();
-
-        const temRetiradaAtivaDoUsuarioNoVeiculoDoRoteiro =
-          tipoUltimaMovimentacao === "retirada" &&
-          usuarioUltimaMovimentacao === usuarioId;
-
-        if (temRetiradaAtivaDoUsuarioNoVeiculoDoRoteiro) {
-          return true;
-        }
-
-        const usuarioVinculadoAoVeiculo = String(
-          veiculoDoRoteiro?.usuario?.id ||
-            veiculoDoRoteiro?.usuarioId ||
-            veiculoDoRoteiro?.funcionarioId ||
-            veiculoDoRoteiro?.condutorId ||
-            "",
-        );
-
-        if (usuarioVinculadoAoVeiculo === usuarioId) {
-          return true;
-        }
-
-        const kmInicialPilotagemAtiva = obterKmInicialPilotagemAtiva({
-          usuarioId,
-          veiculoId: veiculoRoteiroId,
-        });
-
-        return Number.isFinite(Number(kmInicialPilotagemAtiva));
-      } catch {
-        setError(
-          "Não foi possível validar a pilotagem do veículo. Tente novamente em instantes.",
-        );
-        return false;
-      }
-    };
-
-    if (roteiroTemVeiculoAssociado(roteiro)) {
-      const temPilotagemAtiva = await validarPilotagemAtivaUsuario();
-      if (temPilotagemAtiva) {
-        const mensagemBloqueio =
-          "Para finalizar a rota, finalize primeiro a pilotagem do veículo. Você será redirecionado para Veículos.";
-
-        setError(mensagemBloqueio);
-        setModalFinalizar({ aberto: false, etapa: 1, loading: false });
-        navigate("/veiculos", {
-          state: {
-            origem: "roteiros-finalizacao",
-            retornarPara: `/roteiros/${id}/executar`,
-            roteiroIdParaFinalizar: id,
-            alertaFinalizarVeiculo: mensagemBloqueio,
-            alertaFinalizarVeiculoToken: `${Date.now()}-${id}`,
-          },
-        });
-        return;
-      }
-    }
 
     const payload = {};
 
     if (roteiroTemVeiculoAssociado(roteiro)) {
-      const kmFinalValidado = parseKmInteiroNaoNegativo(kmFinalVeiculoInput);
+      const kmFinalValidado = parseKmInteiroNaoNegativo(
+        kmFinalVeiculoOverride ?? kmFinalVeiculoInput,
+      );
       if (!kmFinalValidado.ok) {
         setError(
           "Informe um KM final de devolução válido (inteiro maior ou igual a zero).",
@@ -3052,106 +2956,50 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     }
   };
 
+  // Só é chamada pra roteiro sem veículo — quando tem veículo, o botão abre
+  // FinalizarVeiculoRoteiro em vez disso (ver handleAbrirFinalizacao).
   const abrirModalFinalizacao = async () => {
-    if (roteiroTemVeiculoAssociado(roteiro)) {
-      try {
-        const veiculoRoteiroId = String(
-          roteiro?.veiculoId || roteiro?.veiculo?.id || "",
-        ).trim();
-        if (!veiculoRoteiroId) {
-          setModalFinalizar({ aberto: true, etapa: 1, loading: false });
-          setKmFinalVeiculoInput("");
-          return;
-        }
-
-        const [ultimasMovRes, veiculosRes] = await Promise.all([
-          api.get("/movimentacao-veiculos/ultimas"),
-          api.get("/veiculos", { params: { all: true } }),
-        ]);
-
-        const usuarioId = String(usuario?.id || "");
-        const veiculosLista = Array.isArray(veiculosRes.data)
-          ? veiculosRes.data
-          : [];
-        const veiculoDoRoteiro = veiculosLista.find(
-          (veiculo) => String(veiculo?.id || "") === veiculoRoteiroId,
-        );
-
-        if (!veiculoDoRoteiro?.emUso) {
-          setModalFinalizar({ aberto: true, etapa: 1, loading: false });
-          setKmFinalVeiculoInput("");
-          return;
-        }
-
-        const ultimasMovObj = ultimasMovRes.data || {};
-        const ultimasMovimentacoes = Array.isArray(ultimasMovObj)
-          ? ultimasMovObj
-          : Object.values(ultimasMovObj);
-
-        const ultimaMovimentacaoVeiculoRoteiro = ultimasMovimentacoes.find(
-          (mov) =>
-            String(mov?.veiculoId || mov?.veiculo?.id || "") ===
-            veiculoRoteiroId,
-        );
-
-        const usuarioUltimaMovimentacao = String(
-          ultimaMovimentacaoVeiculoRoteiro?.usuario?.id ||
-            ultimaMovimentacaoVeiculoRoteiro?.usuarioId ||
-            ultimaMovimentacaoVeiculoRoteiro?.funcionarioId ||
-            "",
-        );
-        const tipoUltimaMovimentacao = String(
-          ultimaMovimentacaoVeiculoRoteiro?.tipo || "",
-        ).toLowerCase();
-
-        const temRetiradaAtivaDoUsuarioNoVeiculoDoRoteiro =
-          tipoUltimaMovimentacao === "retirada" &&
-          usuarioUltimaMovimentacao === usuarioId;
-
-        const usuarioVinculadoAoVeiculo = String(
-          veiculoDoRoteiro?.usuario?.id ||
-            veiculoDoRoteiro?.usuarioId ||
-            veiculoDoRoteiro?.funcionarioId ||
-            veiculoDoRoteiro?.condutorId ||
-            "",
-        );
-
-        const kmInicialPilotagemAtiva = obterKmInicialPilotagemAtiva({
-          usuarioId,
-          veiculoId: veiculoRoteiroId,
-        });
-
-        const usuarioTemPilotagemNoVeiculoDoRoteiro =
-          temRetiradaAtivaDoUsuarioNoVeiculoDoRoteiro ||
-          usuarioVinculadoAoVeiculo === usuarioId ||
-          Number.isFinite(Number(kmInicialPilotagemAtiva));
-
-        if (usuarioTemPilotagemNoVeiculoDoRoteiro) {
-          const mensagemBloqueio =
-            "Para finalizar a rota, finalize primeiro a pilotagem do veículo. Você será redirecionado para Veículos.";
-
-          setError(mensagemBloqueio);
-          navigate("/veiculos", {
-            state: {
-              origem: "roteiros-finalizacao",
-              retornarPara: `/roteiros/${id}/executar`,
-              roteiroIdParaFinalizar: id,
-              alertaFinalizarVeiculo: mensagemBloqueio,
-              alertaFinalizarVeiculoToken: `${Date.now()}-${id}`,
-            },
-          });
-          return;
-        }
-      } catch {
-        setError(
-          "Não foi possível validar a pilotagem do veículo. Tente novamente em instantes.",
-        );
-        return;
-      }
-    }
-
     setModalFinalizar({ aberto: true, etapa: 1, loading: false });
     setKmFinalVeiculoInput("");
+  };
+
+  // Botão "Finalizar Veículo"/"Finalizar Rota": com veículo associado, abre
+  // o formulário de devolução em vez do modal de confirmação — devolver o
+  // carro e finalizar a rota viram um passo só.
+  const handleAbrirFinalizacao = () => {
+    if (roteiroTemVeiculoAssociado(roteiro)) {
+      setMostrarFinalizarVeiculo(true);
+      return;
+    }
+    abrirModalFinalizacao();
+  };
+
+  const handleVeiculoDevolvido = async (kmFinal) => {
+    setMostrarFinalizarVeiculo(false);
+    setKmFinalVeiculoInput(String(kmFinal));
+
+    // Devolver o veículo é uma ação do dia a dia, mas finalizar a ROTA
+    // inteira (status semanal, pendências) normalmente só acontece no fim
+    // da semana — confirma separado pra não finalizar sem querer só por
+    // estar devolvendo o carro.
+    const confirmacao = await Swal.fire({
+      icon: "question",
+      title: "Finalizar a rota agora?",
+      text: "O veículo já foi devolvido. Finalizar a rota normalmente só é feito no fim da semana — deseja finalizar a rota agora também?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, finalizar rota",
+      cancelButtonText: "Não, só devolver o veículo",
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#6b7280",
+    });
+
+    if (!confirmacao.isConfirmed) {
+      setSuccess("Veículo devolvido com sucesso.");
+      await carregarRoteiro();
+      return;
+    }
+
+    executarFinalizacaoRoteiro(kmFinal);
   };
 
   const fecharModalFinalizacao = () => {
@@ -3864,62 +3712,64 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
             )}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          {!isFuncionarioAbastecedor &&
-            (!roteiroEstaFinalizado(roteiro.status) ||
-              roteiroTemPendencias(roteiro)) && (
-              <button
-                className="w-full sm:w-auto bg-green-600 text-white py-2 px-6 rounded-lg font-bold hover:bg-green-700"
-                onClick={abrirModalFinalizacao}
-              >
-                Finalizar Rota
-              </button>
+        {!isFuncionarioAbastecedor && mostrarFinalizarVeiculo ? (
+          <div className="bg-white rounded-xl shadow p-5 border border-gray-200 mb-4">
+            <FinalizarVeiculoRoteiro
+              veiculoId={roteiro?.veiculoId || roteiro?.veiculo?.id}
+              onDevolvido={handleVeiculoDevolvido}
+              onCancelar={() => setMostrarFinalizarVeiculo(false)}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-3">
+            {!isFuncionarioAbastecedor &&
+              (!roteiroEstaFinalizado(roteiro.status) ||
+                roteiroTemPendencias(roteiro)) && (
+                <button
+                  className="w-full sm:w-auto bg-green-600 text-white py-2 px-6 rounded-lg font-bold hover:bg-green-700"
+                  onClick={handleAbrirFinalizacao}
+                >
+                  {roteiroTemVeiculoAssociado(roteiro)
+                    ? "Finalizar Veículo"
+                    : "Finalizar Rota"}
+                </button>
+              )}
+            {!isFuncionarioAbastecedor && (
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
+                    enviandoResumoWhatsapp
+                      ? "bg-emerald-300 cursor-not-allowed"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
+                  onClick={enviarResumoWhatsapp}
+                  disabled={enviandoResumoWhatsapp}
+                  title="Enviar mensagem final do roteiro no WhatsApp"
+                >
+                  {enviandoResumoWhatsapp ? "Enviando..." : "📤 Whats"}
+                </button>
+                <button
+                  className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
+                    copiandoResumo
+                      ? "bg-blue-300 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
+                  onClick={copiarResumoFinalizacao}
+                  disabled={copiandoResumo}
+                  title="Copiar resumo para colar em outro lugar"
+                >
+                  {copiandoResumo ? "Copiando..." : "📋 Copiar"}
+                </button>
+              </div>
             )}
-          {!isFuncionarioAbastecedor && (
-            <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
-                  roteiroEstaFinalizado(roteiro.status) && !enviandoResumoWhatsapp
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-emerald-300 cursor-not-allowed"
-                }`}
-                onClick={enviarResumoWhatsapp}
-                disabled={
-                  !roteiroEstaFinalizado(roteiro.status) || enviandoResumoWhatsapp
-                }
-                title={
-                  roteiroEstaFinalizado(roteiro.status)
-                    ? "Enviar resumo no WhatsApp"
-                    : "Finalize a rota para enviar o resumo no WhatsApp"
-                }
-              >
-                {enviandoResumoWhatsapp ? "Enviando..." : "📤 Whats"}
-              </button>
-              <button
-                className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
-                  roteiroEstaFinalizado(roteiro.status) && !copiandoResumo
-                    ? "bg-blue-600 hover:bg-blue-700"
-                    : "bg-blue-300 cursor-not-allowed"
-                }`}
-                onClick={copiarResumoFinalizacao}
-                disabled={!roteiroEstaFinalizado(roteiro.status) || copiandoResumo}
-                title={
-                  roteiroEstaFinalizado(roteiro.status)
-                    ? "Copiar resumo para colar em outro lugar"
-                    : "Finalize a rota para copiar o resumo"
-                }
-              >
-                {copiandoResumo ? "Copiando..." : "📋 Copiar"}
-              </button>
-            </div>
-          )}
-          <button
-            className="w-full sm:w-auto bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-bold"
-            onClick={() => navigate("/roteiros", { replace: true })}
-          >
-            Voltar
-          </button>
-        </div>
+            <button
+              className="w-full sm:w-auto bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-bold"
+              onClick={() => navigate("/roteiros", { replace: true })}
+            >
+              Voltar
+            </button>
+          </div>
+        )}
 
         <FinalizarRoteiroModal
           aberto={modalFinalizar.aberto}
@@ -3928,10 +3778,10 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
           onClose={fecharModalFinalizacao}
           onAvancar={avancarConfirmacaoFinalizacao}
           onConfirmar={executarFinalizacaoRoteiro}
-          textoEtapa1="Deseja realmente finalizar esta rota?"
+          textoEtapa1="Deseja realmente finalizar esta rota? Isso normalmente só é feito no fim da semana."
           textoEtapa2="Confirma novamente: finalizar agora este roteiro?"
           labelBotaoFinalizar="Finalizar Rota"
-          mostrarKmVeiculo={roteiroTemVeiculoAssociado(roteiro)}
+          mostrarKmVeiculo={false}
           kmFinalVeiculoInput={kmFinalVeiculoInput}
           onChangeKmFinalVeiculoInput={setKmFinalVeiculoInput}
         />
