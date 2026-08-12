@@ -30,7 +30,15 @@ const podeVerItem = (item, role, temVeiculoNoRoteiro) => {
   return true;
 };
 
-const itensSoltos = [{ to: "/", label: "Dashboard", icon: "📊" }];
+const itensSoltos = [
+  { to: "/", label: "Dashboard", icon: "📊" },
+  {
+    to: "/lancar-gasto",
+    label: "Lançar Gasto",
+    icon: "💸",
+    allowedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+  },
+];
 
 // Abastecedor tem uma rotina bem restrita (rota + estoque pessoal), entao o
 // menu dele nao mostra os grupos administrativos/operacionais inteiros — so
@@ -48,15 +56,14 @@ const grupos = [
     icon: "🛠️",
     itens: [
       { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
-      {
-        to: "/lancar-gasto",
-        label: "Lançar Gasto",
-        icon: "💸",
-        allowedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
-      },
       { to: "/manutencoes", label: "Manutenções", icon: "🛠️", alert: true },
       { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
-      { to: "/quebra-ordem", label: "Quebra de Ordem", icon: "🔀" },
+      {
+        to: "/quebra-ordem",
+        label: "Quebra de Ordem",
+        icon: "🔀",
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+      },
       {
         to: "/veiculos",
         label: "Veículos",
@@ -80,7 +87,12 @@ const grupos = [
     itens: [
       { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
       { to: "/pecas", label: "Peças e Carrinhos", icon: "🧰" },
-      { to: "/deposito-principal", label: "Depósito Principal", icon: "🏭" },
+      {
+        to: "/deposito-principal",
+        label: "Depósito Principal",
+        icon: "🏭",
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+      },
       {
         to: "/dashboard/pecas-defeituosas",
         label: "Peças Defeituosas",
@@ -108,15 +120,20 @@ const grupos = [
         to: "/lojas",
         label: "Lojas",
         icon: "🏪",
-        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS", "ABASTECEDOR"],
       },
       {
         to: "/maquinas",
         label: "Máquinas",
         icon: "🎮",
-        deniedRoles: ["FUNCIONARIO", "ABASTECEDOR"],
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS", "ABASTECEDOR"],
       },
-      { to: "/produtos", label: "Produtos", icon: "🧸" },
+      {
+        to: "/produtos",
+        label: "Produtos",
+        icon: "🧸",
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+      },
       { to: "/usuarios", label: "Usuários", icon: "👥", adminOnly: true },
     ],
   },
@@ -125,7 +142,12 @@ const grupos = [
     label: "Análise",
     icon: "📈",
     itens: [
-      { to: "/movimentacoes", label: "Movimentações", icon: "🔄" },
+      {
+        to: "/movimentacoes",
+        label: "Movimentações",
+        icon: "🔄",
+        deniedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+      },
       { to: "/graficos", label: "Gráficos", icon: "📈", adminOnly: true },
       {
         to: "/relatorios",
@@ -144,13 +166,13 @@ const grupos = [
         to: "/fluxo-caixa",
         label: "Fluxo de Caixa",
         icon: "💵",
-        deniedRoles: ["GERENCIADOR"],
+        deniedRoles: ["GERENCIADOR", "FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
       },
       {
         to: "/financeiro",
         label: "Financeiro",
         icon: "💰",
-        deniedRoles: ["GERENCIADOR"],
+        deniedRoles: ["GERENCIADOR", "FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
       },
     ],
   },
