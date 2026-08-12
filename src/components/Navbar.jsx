@@ -38,7 +38,7 @@ const itensSoltos = [{ to: "/", label: "Dashboard", icon: "📊" }];
 const itensSoltosAbastecedor = [
   { to: "/", label: "Dashboard", icon: "📊" },
   { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
-  { to: "/estoque-usuarios", label: "Meu Estoque", icon: "📦" },
+  { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
 ];
 
 const grupos = [
@@ -49,7 +49,7 @@ const grupos = [
     itens: [
       { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
       { to: "/manutencoes", label: "Manutenções", icon: "🛠️", alert: true },
-      { to: "/estoque-usuarios", label: "Meu Estoque", icon: "📦" },
+      { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
       { to: "/quebra-ordem", label: "Quebra de Ordem", icon: "🔀" },
       {
         to: "/veiculos",
@@ -72,6 +72,7 @@ const grupos = [
     label: "Estoque e Peças",
     icon: "🧩",
     itens: [
+      { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
       { to: "/pecas", label: "Peças e Carrinhos", icon: "🧰" },
       { to: "/deposito-principal", label: "Depósito Principal", icon: "🏭" },
       {

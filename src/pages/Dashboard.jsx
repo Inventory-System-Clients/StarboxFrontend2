@@ -51,7 +51,7 @@ export function Dashboard() {
 
   const isFuncionario =
     usuario?.role === "FUNCIONARIO" || usuario?.role === "ABASTECEDOR";
-  // Abastecedor so usa Rotas e Meu Estoque no dia a dia — o resto do
+  // Abastecedor so usa Rotas e Gerenciamento de Estoque no dia a dia — o resto do
   // dashboard (alerta de inatividade, manutencoes etc.) nao se aplica a ele.
   const isAbastecedor = usuario?.role === "ABASTECEDOR";
   const isFuncionarioTodasLojas = usuario?.role === "FUNCIONARIO_TODAS_LOJAS";
@@ -1136,7 +1136,7 @@ export function Dashboard() {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium opacity-90">
-                    Meu Estoque
+                    Gerenciamento de Estoque
                   </h3>
                   <svg
                     className="w-8 h-8 opacity-80"
@@ -1349,7 +1349,7 @@ export function Dashboard() {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium opacity-90">
-                    Meu Estoque
+                    Gerenciamento de Estoque
                   </h3>
                   <svg
                     className="w-8 h-8 opacity-80"

@@ -1,26 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-// Função utilitária para buscar saldo do depósito principal para múltiplos produtos
-async function buscarSaldosDepositoPrincipal(produtoIds) {
-  if (!Array.isArray(produtoIds) || produtoIds.length === 0) return {};
-  try {
-    // Busca a loja depósito principal
-    const lojasRes = await api.get("/lojas", { params: { all: true } });
-    const deposito = (lojasRes.data || []).find((l) => l.isDepositoPrincipal);
-    if (!deposito) return {};
-    // Busca o estoque do depósito principal
-    const estoqueRes = await api.get(`/estoque-lojas/${deposito.id}`);
-    const estoque = Array.isArray(estoqueRes.data) ? estoqueRes.data : [];
-    // Monta um map produtoId -> quantidade
-    const saldos = {};
-    for (const pid of produtoIds) {
-      const item = estoque.find((e) => String(e.produtoId) === String(pid));
-      saldos[pid] = item ? Number(item.quantidade) : 0;
-    }
-    return saldos;
-  } catch {
-    return {};
-  }
-}
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import api from "../services/api";
@@ -44,12 +22,6 @@ const normalizarTexto = (texto = "") =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-const criarLinhaMovimentacao = (produtoId = "") => ({
-  produtoId: String(produtoId || ""),
-  tipoMovimentacao: "entrada",
-  quantidade: "",
-});
-
 const formatarDataHora = (valor) => {
   const data = new Date(valor);
   if (Number.isNaN(data.getTime())) return "-";
@@ -57,8 +29,6 @@ const formatarDataHora = (valor) => {
 };
 
 export default function EstoqueUsuarios() {
-  // Saldos do depósito principal para os produtos selecionados no modal
-  const [saldosDeposito, setSaldosDeposito] = useState({});
   const { usuario } = useAuth();
   const isAdmin = usuario?.role === "ADMIN";
   const isControlador = usuario?.role === "CONTROLADOR_ESTOQUE";
@@ -70,18 +40,13 @@ export default function EstoqueUsuarios() {
   const [usuarioSelecionadoId, setUsuarioSelecionadoId] = useState("");
   const [usuarioSelecionado, setUsuarioSelecionado] = useState(null);
   const [estoqueRows, setEstoqueRows] = useState([]);
+  const [produtoParaAdicionar, setProdutoParaAdicionar] = useState("");
+  const [ultimasMovimentacoes, setUltimasMovimentacoes] = useState([]);
   const [alertas, setAlertas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [mostrarModalMovimentacao, setMostrarModalMovimentacao] =
-    useState(false);
-  const [movimentacoesForm, setMovimentacoesForm] = useState([
-    criarLinhaMovimentacao(),
-  ]);
-  const [movimentacaoEnviando, setMovimentacaoEnviando] = useState(false);
-  const [movimentacaoErro, setMovimentacaoErro] = useState("");
   const [filtroHistoricoUsuarioId, setFiltroHistoricoUsuarioId] = useState("");
   const [filtroHistoricoDataInicio, setFiltroHistoricoDataInicio] =
     useState("");
@@ -90,41 +55,49 @@ export default function EstoqueUsuarios() {
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [erroHistorico, setErroHistorico] = useState("");
 
-  const montarRowsComProdutos = useCallback(
-    (produtosBase, estoqueAtual = []) => {
-      const estoqueMap = new Map(
-        (estoqueAtual || []).map((item) => [item.produtoId, item]),
-      );
-
-      return (produtosBase || []).map((produto) => {
-        const item = estoqueMap.get(produto.id);
-        return {
-          id: item?.id || null,
-          produtoId: produto.id,
-          produtoNome: produto.nome,
-          produtoCodigo: produto.codigo,
-          emoji: produto.emoji,
-          quantidade: toNumberOrZero(item?.quantidade),
-          estoqueMinimo:
-            item?.estoqueMinimo !== undefined && item?.estoqueMinimo !== null
-              ? toNumberOrZero(item.estoqueMinimo)
-              : toNumberOrZero(produto.estoqueMinimo),
-        };
-      });
-    },
+  // Monta as linhas só a partir dos registros que já existem de verdade pra
+  // esse usuário — não do catálogo inteiro de produtos. É isso que corrige
+  // o bug de "produto some quando fica 0": a linha existe (ou não) porque
+  // tem (ou não) um registro no banco, não por causa do valor digitado.
+  const montarRowsDoEstoque = useCallback(
+    (estoqueAtual = []) =>
+      (estoqueAtual || []).map((item) => ({
+        id: item.id,
+        produtoId: item.produtoId,
+        produtoNome: item.produto?.nome || "",
+        produtoCodigo: item.produto?.codigo || "",
+        emoji: item.produto?.emoji,
+        quantidade: toNumberOrZero(item.quantidade),
+        estoqueMinimo: toNumberOrZero(
+          item.estoqueMinimo ?? item.produto?.estoqueMinimo,
+        ),
+      })),
     [],
   );
 
+  const carregarUltimasMovimentacoes = useCallback(async (alvoUsuarioId) => {
+    if (!alvoUsuarioId) {
+      setUltimasMovimentacoes([]);
+      return;
+    }
+    try {
+      const res = await api.get("/estoque-usuarios/movimentacoes", {
+        params: { usuarioId: alvoUsuarioId, limit: 5 },
+      });
+      setUltimasMovimentacoes(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Erro ao carregar ultimas movimentacoes:", err);
+      setUltimasMovimentacoes([]);
+    }
+  }, []);
+
   const carregarEstoque = useCallback(
     async (alvoUsuarioId, produtosBase, usuariosBase = []) => {
-      if (
-        !alvoUsuarioId ||
-        !Array.isArray(produtosBase) ||
-        produtosBase.length === 0
-      ) {
+      if (!alvoUsuarioId) {
         setUsuarioSelecionado(null);
         setEstoqueRows([]);
         setAlertas([]);
+        setUltimasMovimentacoes([]);
         return;
       }
 
@@ -157,8 +130,12 @@ export default function EstoqueUsuarios() {
               role: usuario?.role,
             },
         );
-        setEstoqueRows(montarRowsComProdutos(produtosBase, estoqueData));
+        setEstoqueRows(montarRowsDoEstoque(estoqueData));
         setAlertas(alertasData);
+
+        if (isGestorEstoque) {
+          await carregarUltimasMovimentacoes(alvoUsuarioId);
+        }
       } catch (err) {
         console.error("Erro ao carregar estoque do usuario:", err);
         setError(
@@ -167,8 +144,9 @@ export default function EstoqueUsuarios() {
       }
     },
     [
+      carregarUltimasMovimentacoes,
       isGestorEstoque,
-      montarRowsComProdutos,
+      montarRowsDoEstoque,
       usuario?.email,
       usuario?.id,
       usuario?.nome,
@@ -275,6 +253,61 @@ export default function EstoqueUsuarios() {
     );
   };
 
+  const produtosDisponiveisParaAdicionar = useMemo(() => {
+    const idsJaNaLista = new Set(estoqueRows.map((row) => row.produtoId));
+    return produtos.filter((produto) => !idsJaNaLista.has(produto.id));
+  }, [produtos, estoqueRows]);
+
+  const adicionarProdutoNaLista = () => {
+    if (!produtoParaAdicionar) return;
+    const produto = produtos.find(
+      (item) => String(item.id) === produtoParaAdicionar,
+    );
+    if (!produto) return;
+
+    setEstoqueRows((prev) => [
+      ...prev,
+      {
+        id: null,
+        produtoId: produto.id,
+        produtoNome: produto.nome,
+        produtoCodigo: produto.codigo,
+        emoji: produto.emoji,
+        quantidade: 0,
+        estoqueMinimo: toNumberOrZero(produto.estoqueMinimo),
+      },
+    ]);
+    setProdutoParaAdicionar("");
+  };
+
+  const excluirProdutoDoEstoque = async (row) => {
+    if (
+      !window.confirm(
+        `Excluir ${row.produtoNome} do estoque de ${usuarioSelecionado?.nome}?`,
+      )
+    ) {
+      return;
+    }
+
+    if (row.id) {
+      try {
+        await api.delete(
+          `/estoque-usuarios/${usuarioSelecionadoId}/${row.produtoId}`,
+        );
+      } catch (err) {
+        console.error("Erro ao excluir produto do estoque do usuario:", err);
+        setError(
+          err?.response?.data?.error || "Erro ao excluir produto do estoque",
+        );
+        return;
+      }
+    }
+
+    setEstoqueRows((prev) =>
+      prev.filter((item) => item.produtoId !== row.produtoId),
+    );
+  };
+
   const salvarEstoque = async () => {
     if (!isGestorEstoque || !usuarioSelecionadoId) return;
 
@@ -303,23 +336,13 @@ export default function EstoqueUsuarios() {
     }
   };
 
-  const estoqueRowsVisiveis = useMemo(
-    () =>
-      estoqueRows.filter((item) => {
-        const quantidade = toNumberOrZero(item.quantidade);
-        const minimo = toNumberOrZero(item.estoqueMinimo);
-        return !(quantidade === 0 && minimo === 0);
-      }),
-    [estoqueRows],
-  );
-
   const resumo = useMemo(() => {
-    const totalProdutos = estoqueRowsVisiveis.length;
-    const totalUnidades = estoqueRowsVisiveis.reduce(
+    const totalProdutos = estoqueRows.length;
+    const totalUnidades = estoqueRows.reduce(
       (acc, item) => acc + toNumberOrZero(item.quantidade),
       0,
     );
-    const abaixoMinimo = estoqueRowsVisiveis.filter(
+    const abaixoMinimo = estoqueRows.filter(
       (item) =>
         toNumberOrZero(item.quantidade) <= toNumberOrZero(item.estoqueMinimo),
     ).length;
@@ -329,7 +352,7 @@ export default function EstoqueUsuarios() {
       totalUnidades,
       abaixoMinimo,
     };
-  }, [estoqueRowsVisiveis]);
+  }, [estoqueRows]);
 
   const usuariosFiltrados = useMemo(() => {
     const termo = normalizarTexto(buscaUsuario.trim());
@@ -461,207 +484,6 @@ export default function EstoqueUsuarios() {
     periodoHistoricoInvalido,
   ]);
 
-  const saldoAtualPorProduto = useMemo(
-    () =>
-      new Map(
-        estoqueRows.map((item) => [
-          String(item.produtoId),
-          toNumberOrZero(item.quantidade),
-        ]),
-      ),
-    [estoqueRows],
-  );
-
-  const obterProdutoInicialMovimentacao = useCallback(() => {
-    const produtoPreferencial = produtos.find(
-      (item) => String(item.id) === String(estoqueRowsVisiveis[0]?.produtoId),
-    );
-
-    return String(produtoPreferencial?.id || produtos[0]?.id || "");
-  }, [estoqueRowsVisiveis, produtos]);
-
-  const abrirModalMovimentacao = () => {
-    if (!usuarioSelecionadoId) {
-      setError("Selecione um usuario antes de lancar movimentacao.");
-      return;
-    }
-
-    const produtoInicial = obterProdutoInicialMovimentacao();
-
-    setMovimentacoesForm([criarLinhaMovimentacao(produtoInicial)]);
-    setMovimentacaoErro("");
-    setMostrarModalMovimentacao(true);
-
-    // Buscar saldo do depósito principal para o produto inicial
-    buscarSaldosDepositoPrincipal([produtoInicial]).then(setSaldosDeposito);
-  };
-
-  const fecharModalMovimentacao = () => {
-    if (movimentacaoEnviando) return;
-
-    setMostrarModalMovimentacao(false);
-    setMovimentacaoErro("");
-    setMovimentacoesForm([criarLinhaMovimentacao()]);
-  };
-
-  const adicionarLinhaMovimentacao = () => {
-    const produtoInicial = obterProdutoInicialMovimentacao();
-    setMovimentacoesForm((prev) => [
-      ...prev,
-      criarLinhaMovimentacao(produtoInicial),
-    ]);
-  };
-
-  const removerLinhaMovimentacao = (indice) => {
-    setMovimentacoesForm((prev) => {
-      if (prev.length === 1) return prev;
-      return prev.filter((_, idx) => idx !== indice);
-    });
-  };
-
-  const atualizarLinhaMovimentacao = (indice, campo, valor) => {
-    const valorFinal =
-      campo === "quantidade" ? String(valor || "").replace(/\D/g, "") : valor;
-
-    setMovimentacoesForm((prev) =>
-      prev.map((item, idx) =>
-        idx === indice ? { ...item, [campo]: valorFinal } : item,
-      ),
-    );
-
-    // Se trocar produto, buscar saldo do depósito principal para todos produtos do form
-    if (campo === "produtoId") {
-      const novosIds = [
-        ...new Set([
-          ...movimentacoesForm.map((m, i) =>
-            i === indice ? valorFinal : m.produtoId,
-          ),
-        ]),
-      ];
-      buscarSaldosDepositoPrincipal(novosIds).then(setSaldosDeposito);
-    }
-  };
-
-  const lancarMovimentacao = async (event) => {
-    event.preventDefault();
-
-    if (!isGestorEstoque || !usuarioSelecionadoId) return;
-
-    if (!Array.isArray(movimentacoesForm) || movimentacoesForm.length === 0) {
-      setMovimentacaoErro("Adicione ao menos um produto para movimentar.");
-      return;
-    }
-
-    // Verificar se há entradas e avisar sobre desconto do depósito
-    const temEntradas = movimentacoesForm.some(
-      (m) => m.tipoMovimentacao === "entrada",
-    );
-
-    if (temEntradas) {
-      const totalEntradas = movimentacoesForm.filter(
-        (m) => m.tipoMovimentacao === "entrada",
-      ).length;
-      const confirmar = window.confirm(
-        `📦 Você está adicionando ${totalEntradas} produto(s) para "${usuarioSelecionado?.nome}".\n\n` +
-          `🏭 Estes produtos serão AUTOMATICAMENTE DESCONTADOS do depósito principal.\n\n` +
-          `Confirma a entrada de estoque para o funcionário?`,
-      );
-
-      if (!confirmar) {
-        return;
-      }
-    }
-
-    const movimentacoesNormalizadas = [];
-
-    for (let index = 0; index < movimentacoesForm.length; index += 1) {
-      const linha = movimentacoesForm[index] || {};
-      const quantidadeNumerica = Number(linha.quantidade);
-
-      if (!linha.produtoId) {
-        setMovimentacaoErro(`Linha ${index + 1}: selecione um produto.`);
-        return;
-      }
-
-      if (!["entrada", "saida"].includes(linha.tipoMovimentacao)) {
-        setMovimentacaoErro(
-          `Linha ${index + 1}: tipo de movimentacao invalido.`,
-        );
-        return;
-      }
-
-      if (
-        Number.isNaN(quantidadeNumerica) ||
-        !Number.isFinite(quantidadeNumerica) ||
-        quantidadeNumerica <= 0
-      ) {
-        setMovimentacaoErro(
-          `Linha ${index + 1}: informe uma quantidade valida maior que zero.`,
-        );
-        return;
-      }
-
-      movimentacoesNormalizadas.push({
-        produtoId: linha.produtoId,
-        tipoMovimentacao: linha.tipoMovimentacao,
-        quantidade: quantidadeNumerica,
-      });
-    }
-
-    const saldoSimulado = new Map(saldoAtualPorProduto);
-    for (let index = 0; index < movimentacoesNormalizadas.length; index += 1) {
-      const item = movimentacoesNormalizadas[index];
-      const chaveProduto = String(item.produtoId);
-      const saldoAnterior = toNumberOrZero(saldoSimulado.get(chaveProduto));
-
-      if (
-        item.tipoMovimentacao === "saida" &&
-        item.quantidade > saldoAnterior
-      ) {
-        const produtoNome =
-          produtos.find((produto) => String(produto.id) === chaveProduto)
-            ?.nome || `produto ${chaveProduto}`;
-        setMovimentacaoErro(
-          `Linha ${index + 1}: nao e possivel tirar ${item.quantidade} de ${produtoNome}. Saldo atual: ${saldoAnterior}.`,
-        );
-        return;
-      }
-
-      saldoSimulado.set(
-        chaveProduto,
-        item.tipoMovimentacao === "entrada"
-          ? saldoAnterior + item.quantidade
-          : saldoAnterior - item.quantidade,
-      );
-    }
-
-    try {
-      setMovimentacaoEnviando(true);
-      setMovimentacaoErro("");
-      setError("");
-      setSuccess("");
-
-      await api.post(`/estoque-usuarios/${usuarioSelecionadoId}/movimentar`, {
-        movimentacoes: movimentacoesNormalizadas,
-      });
-
-      setSuccess(
-        `${movimentacoesNormalizadas.length} movimentacao(oes) registrada(s) com sucesso.`,
-      );
-      setMostrarModalMovimentacao(false);
-      setMovimentacaoErro("");
-      setMovimentacoesForm([criarLinhaMovimentacao()]);
-      await carregarEstoque(usuarioSelecionadoId, produtos, usuarios);
-    } catch (err) {
-      console.error("Erro ao lancar movimentacao do estoque do usuario:", err);
-      setMovimentacaoErro(
-        err?.response?.data?.error || "Erro ao lancar movimentacao",
-      );
-    } finally {
-      setMovimentacaoEnviando(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background-light">
       <Navbar />
@@ -771,6 +593,43 @@ export default function EstoqueUsuarios() {
                 apenas para ADMIN e CONTROLADOR_ESTOQUE.
               </p>
             ) : null}
+
+            {isGestorEstoque ? (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-600 uppercase mb-2">
+                  Ultimas movimentacoes
+                </p>
+                {ultimasMovimentacoes.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    Nenhuma movimentacao registrada ainda.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {ultimasMovimentacoes.map((item) => (
+                      <li key={item.id} className="text-xs text-gray-600">
+                        {formatarDataHora(item.dataMovimentacao)} ·{" "}
+                        {item.produto?.emoji || "📦"}{" "}
+                        {item.produto?.nome || item.produtoId} ·{" "}
+                        <span
+                          className={
+                            item.tipoMovimentacao === "entrada"
+                              ? "text-green-700 font-semibold"
+                              : "text-red-700 font-semibold"
+                          }
+                        >
+                          {item.tipoMovimentacao === "entrada"
+                            ? "Entrada"
+                            : "Saida"}{" "}
+                          {toNumberOrZero(item.quantidade)}
+                        </span>{" "}
+                        ({toNumberOrZero(item.quantidadeAnterior)} {"->"}{" "}
+                        {toNumberOrZero(item.quantidadeAtual)})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -795,21 +654,28 @@ export default function EstoqueUsuarios() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                     Status
                   </th>
+                  {isGestorEstoque ? (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Acoes
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {estoqueRowsVisiveis.length === 0 ? (
+                {estoqueRows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={isGestorEstoque ? 5 : 4}
                       className="px-4 py-6 text-center text-sm text-gray-500"
                     >
-                      Nenhum produto para exibir. Itens com quantidade e minimo
-                      zerados ficam ocultos.
+                      Nenhum produto neste estoque ainda.
+                      {isGestorEstoque
+                        ? " Use \"Adicionar produto\" abaixo para comecar."
+                        : ""}
                     </td>
                   </tr>
                 ) : (
-                  estoqueRowsVisiveis.map((item) => {
+                  estoqueRows.map((item) => {
                     const abaixo =
                       toNumberOrZero(item.quantidade) <=
                       toNumberOrZero(item.estoqueMinimo);
@@ -868,6 +734,17 @@ export default function EstoqueUsuarios() {
                             {abaixo ? "Abaixo do minimo" : "OK"}
                           </span>
                         </td>
+                        {isGestorEstoque ? (
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => excluirProdutoDoEstoque(item)}
+                              className="text-xs font-semibold text-red-600 hover:text-red-700"
+                            >
+                              🗑️ Excluir
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -878,17 +755,38 @@ export default function EstoqueUsuarios() {
         </div>
 
         {isGestorEstoque ? (
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-60"
-              onClick={abrirModalMovimentacao}
-              disabled={
-                loading || !usuarioSelecionadoId || movimentacaoEnviando
-              }
-            >
-              Lancar movimentacao
-            </button>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <select
+                className="select-field"
+                value={produtoParaAdicionar}
+                onChange={(e) => setProdutoParaAdicionar(e.target.value)}
+                disabled={
+                  loading || !usuarioSelecionadoId ||
+                  produtosDisponiveisParaAdicionar.length === 0
+                }
+              >
+                <option value="">
+                  {produtosDisponiveisParaAdicionar.length === 0
+                    ? "Todos os produtos ja estao na lista"
+                    : "Selecione um produto..."}
+                </option>
+                {produtosDisponiveisParaAdicionar.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome} {item.codigo ? `(${item.codigo})` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-60"
+                onClick={adicionarProdutoNaLista}
+                disabled={loading || !usuarioSelecionadoId || !produtoParaAdicionar}
+              >
+                + Adicionar produto
+              </button>
+            </div>
+
             <button
               type="button"
               className="btn-primary disabled:opacity-60"
@@ -1069,233 +967,6 @@ export default function EstoqueUsuarios() {
           </div>
         ) : null}
 
-        {isGestorEstoque && mostrarModalMovimentacao ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl max-h-[90vh] flex flex-col">
-              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-                <h2 className="text-lg font-bold text-gray-900">
-                  Movimentacao de estoque do usuario
-                </h2>
-                <button
-                  type="button"
-                  className="text-gray-500 hover:text-gray-700"
-                  onClick={fecharModalMovimentacao}
-                  disabled={movimentacaoEnviando}
-                >
-                  x
-                </button>
-              </div>
-
-              <form
-                className="space-y-4 px-6 py-5 overflow-y-auto flex-1"
-                style={{ maxHeight: "70vh" }}
-                onSubmit={lancarMovimentacao}
-              >
-                {/* Aviso sobre desconto do depósito principal */}
-                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
-                  <div className="flex gap-3">
-                    <div className="shrink-0">
-                      <span className="text-2xl">ℹ️</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-blue-900 mb-1">
-                        Atenção
-                      </p>
-                      <p className="text-sm text-blue-800">
-                        Ao adicionar estoque para este funcionário (Entrada), os
-                        produtos serão{" "}
-                        <strong>
-                          automaticamente descontados do Depósito Principal
-                        </strong>
-                        .
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {movimentacoesForm.map((linha, index) => {
-                    const produtoLinha =
-                      produtos.find(
-                        (item) => String(item.id) === String(linha.produtoId),
-                      ) || null;
-                    const saldoLinha = toNumberOrZero(
-                      saldoAtualPorProduto.get(String(linha.produtoId)),
-                    );
-
-                    // Saldo do depósito principal para o produto
-                    const saldoDeposito =
-                      saldosDeposito[String(linha.produtoId)] ?? null;
-
-                    return (
-                      <div
-                        key={`linha-movimentacao-${index}`}
-                        className="rounded-lg border border-gray-200 bg-gray-50 p-3"
-                      >
-                        <p className="text-xs font-semibold text-gray-500 mb-2">
-                          Item {index + 1}
-                        </p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">
-                              Produto
-                            </label>
-                            <select
-                              className="select-field"
-                              value={linha.produtoId}
-                              onChange={(e) =>
-                                atualizarLinhaMovimentacao(
-                                  index,
-                                  "produtoId",
-                                  e.target.value,
-                                )
-                              }
-                              disabled={movimentacaoEnviando}
-                              required
-                            >
-                              <option value="" disabled>
-                                Selecione
-                              </option>
-                              {produtos.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                  {item.nome}{" "}
-                                  {item.codigo ? `(${item.codigo})` : ""}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">
-                              Tipo
-                            </label>
-                            <select
-                              className="select-field"
-                              value={linha.tipoMovimentacao}
-                              onChange={(e) =>
-                                atualizarLinhaMovimentacao(
-                                  index,
-                                  "tipoMovimentacao",
-                                  e.target.value,
-                                )
-                              }
-                              disabled={movimentacaoEnviando}
-                              required
-                            >
-                              <option value="entrada">
-                                Enviar para funcionario
-                              </option>
-                              <option value="saida">
-                                Tirar do funcionario
-                              </option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">
-                              Quantidade
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              className="input-field no-number-controls"
-                              value={linha.quantidade}
-                              onChange={(e) =>
-                                atualizarLinhaMovimentacao(
-                                  index,
-                                  "quantidade",
-                                  e.target.value,
-                                )
-                              }
-                              onWheel={bloquearScrollNumero}
-                              disabled={movimentacaoEnviando}
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <p className="text-xs text-gray-500">
-                            Saldo atual: <strong>{saldoLinha}</strong>
-                            {produtoLinha
-                              ? ` ${produtoLinha.emoji || ""} ${produtoLinha.nome}`
-                              : ""}
-                          </p>
-                          {/* Alerta de saldo do depósito principal insuficiente */}
-                          {linha.tipoMovimentacao === "entrada" &&
-                          saldoDeposito !== null &&
-                          Number(linha.quantidade) > saldoDeposito ? (
-                            <div className="mt-2 rounded bg-amber-100 border border-amber-300 px-3 py-2 text-xs text-amber-900">
-                              Atenção: O depósito principal possui apenas{" "}
-                              <strong>{saldoDeposito}</strong> unidade(s) deste
-                              produto. A quantidade informada é maior que o
-                              disponível no depósito.
-                            </div>
-                          ) : null}
-
-                          {movimentacoesForm.length > 1 ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold text-red-600 hover:text-red-700"
-                              onClick={() => removerLinhaMovimentacao(index)}
-                              disabled={movimentacaoEnviando}
-                            >
-                              Remover item
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div>
-                  <button
-                    type="button"
-                    className="text-sm font-semibold text-[#F2A20C] hover:text-[#c58409]"
-                    onClick={adicionarLinhaMovimentacao}
-                    disabled={movimentacaoEnviando}
-                  >
-                    + Adicionar produto
-                  </button>
-                </div>
-
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Saidas nao podem ultrapassar o saldo atual do funcionario para
-                  cada produto.
-                </p>
-
-                {movimentacaoErro ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {movimentacaoErro}
-                  </div>
-                ) : null}
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-60"
-                    onClick={fecharModalMovimentacao}
-                    disabled={movimentacaoEnviando}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-primary disabled:opacity-60"
-                    disabled={movimentacaoEnviando}
-                  >
-                    {movimentacaoEnviando
-                      ? "Lancando..."
-                      : "Confirmar movimentacao"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        ) : null}
       </main>
 
       <Footer />
