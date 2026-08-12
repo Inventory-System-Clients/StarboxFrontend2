@@ -3367,6 +3367,9 @@ export function Relatorios() {
                         <th className="px-4 py-3 text-right text-sm font-bold">
                           Lucro Líquido
                         </th>
+                        <th className="px-4 py-3 text-right text-sm font-bold">
+                          Lucro Esperado
+                        </th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -3374,7 +3377,7 @@ export function Relatorios() {
                       {maquinasFiltradas.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={mostrarColunaLoja ? 7 : 6}
+                            colSpan={mostrarColunaLoja ? 8 : 7}
                             className="px-4 py-6 text-center text-sm text-gray-500"
                           >
                             Nenhuma máquina encontrada para essa busca.
@@ -3417,6 +3420,14 @@ export function Relatorios() {
                                 R${" "}
                                 {Number(
                                   maquina.totais.lucroLiquido || 0,
+                                ).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right font-bold text-emerald-700">
+                                R${" "}
+                                {Number(
+                                  maquina.totais.lucroEsperado || 0,
                                 ).toLocaleString("pt-BR", {
                                   minimumFractionDigits: 2,
                                 })}
@@ -3655,6 +3666,27 @@ export function Relatorios() {
                             </div>
                             <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
                               Lucro Líquido da Máquina
+                            </div>
+                          </div>
+                          {/* Lucro Esperado da Máquina */}
+                          <div className="bg-linear-to-br from-emerald-600 to-teal-500 text-white p-3 sm:p-5 rounded-xl shadow-lg">
+                            <div className="text-2xl sm:text-4xl mb-1 sm:mb-2 text-center">
+                              🔮
+                            </div>
+                            <div className="text-xl sm:text-3xl font-bold text-center">
+                              R${" "}
+                              {Number(
+                                maquina.totais.lucroEsperado || 0,
+                              ).toLocaleString("pt-BR", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </div>
+                            <div className="text-xs sm:text-sm text-center mt-1 sm:mt-2 opacity-90">
+                              Lucro Esperado da Máquina
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-center mt-1 opacity-80">
+                              Valor esperado pelo contador − custo dos
+                              produtos
                             </div>
                           </div>
                           {/* Ticket por Prêmio */}
