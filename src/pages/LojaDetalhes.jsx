@@ -27,6 +27,14 @@ export function LojaDetalhes() {
   const [relatorioGerado, setRelatorioGerado] = useState(null);
   const [erroRelatorio, setErroRelatorio] = useState("");
 
+  // Filtro de data global do resumo por máquina (valor esperado, última
+  // leitura, jogadas médias por pelúcia) — separado do dataInicio/dataFim
+  // acima, que é só do gerador de relatório por máquina selecionada.
+  const [filtroResumoInicio, setFiltroResumoInicio] = useState("");
+  const [filtroResumoFim, setFiltroResumoFim] = useState("");
+  const [resumoPorMaquina, setResumoPorMaquina] = useState({});
+  const [carregandoResumo, setCarregandoResumo] = useState(false);
+
   // Estados para modal de edição
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [movimentacaoSelecionada, setMovimentacaoSelecionada] = useState(null);
@@ -95,6 +103,45 @@ export function LojaDetalhes() {
     return "Todas as datas";
   };
 
+  const formatarDiasAtras = (dias) => {
+    if (dias === null || dias === undefined || dias >= 9999) {
+      return "sem leitura registrada";
+    }
+    if (dias <= 0) return "hoje";
+    if (dias === 1) return "ontem";
+    return `há ${dias} dias`;
+  };
+
+  const montarResumoWhatsAppMaquina = (maquina, resumo) => {
+    const inicioFormatado = filtroResumoInicio
+      ? new Date(`${filtroResumoInicio}T00:00:00`).toLocaleDateString("pt-BR")
+      : "-";
+    const fimFormatado = filtroResumoFim
+      ? new Date(`${filtroResumoFim}T00:00:00`).toLocaleDateString("pt-BR")
+      : "-";
+
+    return [
+      "STAR BOX",
+      `*${loja?.nome || "Ponto"}*`,
+      `${maquina.codigo}${maquina.nome ? ` | ${maquina.nome}` : ""}`,
+      `Período: ${inicioFormatado} a ${fimFormatado}`,
+      "___________________________________",
+      `Valor esperado: R$ ${formatarMoeda(resumo?.valorEsperadoPeriodo)}`,
+      `Jogadas médias por pelúcia: ${
+        resumo?.mediaRPorPelucia !== null && resumo?.mediaRPorPelucia !== undefined
+          ? `R$ ${formatarMoeda(resumo.mediaRPorPelucia)}`
+          : "-"
+      }`,
+      `Pelúcias liberadas no período: ${formatarInteiro(resumo?.totalSairamPeriodo)}`,
+      `Faturamento no período: R$ ${formatarMoeda(resumo?.totalFaturamentoPeriodo)}`,
+      `Última leitura: ${
+        resumo?.ultimaLeitura
+          ? `${formatarDataHora(resumo.ultimaLeitura)} (${formatarDiasAtras(resumo.diasSemLeitura)})`
+          : "sem leitura registrada"
+      }`,
+    ].join("\n");
+  };
+
   useEffect(() => {
     carregarDados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,6 +151,58 @@ export function LojaDetalhes() {
     setRelatorioGerado(null);
     setErroRelatorio("");
   }, [dataInicio, dataFim, maquinaSelecionada]);
+
+  const formatarDataISO = (data) => data.toISOString().slice(0, 10);
+
+  const definirPresetResumo = (dias) => {
+    const hoje = new Date();
+    const inicio = new Date();
+    inicio.setDate(hoje.getDate() - dias);
+    setFiltroResumoInicio(formatarDataISO(inicio));
+    setFiltroResumoFim(formatarDataISO(hoje));
+  };
+
+  // Últimos 30 dias como padrão inicial (mesmo idioma de Graficos.jsx).
+  useEffect(() => {
+    definirPresetResumo(30);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!id || !filtroResumoInicio || !filtroResumoFim) return;
+
+    let cancelado = false;
+
+    const carregarResumo = async () => {
+      setCarregandoResumo(true);
+      try {
+        const res = await api.get("/relatorios/resumo-maquinas", {
+          params: {
+            lojaId: id,
+            dataInicio: filtroResumoInicio,
+            dataFim: filtroResumoFim,
+          },
+        });
+        if (cancelado) return;
+        const porMaquina = {};
+        (res.data?.resumo || []).forEach((item) => {
+          porMaquina[item.maquinaId] = item;
+        });
+        setResumoPorMaquina(porMaquina);
+      } catch (error) {
+        console.error("Erro ao carregar resumo das máquinas:", error);
+        if (!cancelado) setResumoPorMaquina({});
+      } finally {
+        if (!cancelado) setCarregandoResumo(false);
+      }
+    };
+
+    carregarResumo();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [id, filtroResumoInicio, filtroResumoFim]);
 
   // Função para verificar se usuário pode editar uma movimentação
   const podeEditar = (movimentacao) => {
@@ -307,6 +406,11 @@ export function LojaDetalhes() {
       const codigoMaquina = maquinaAtual?.codigo || maquinaIdAtual;
       const nomeMaquina = maquinaAtual?.nome || "Maquina";
       const valorJogada = Number(maquinaAtual?.valorFicha || 0);
+      const usaFichas =
+        maquinaAtual?.usaFichas === true ||
+        maquinaAtual?.usa_fichas === true ||
+        maquinaAtual?.usaFichas === 1 ||
+        maquinaAtual?.usa_fichas === 1;
       const movimentacoesOrdenadas = [
         ...movimentacoesPorMaquina.get(maquinaIdAtual),
       ].sort((a, b) => obterDataMovimentacao(a) - obterDataMovimentacao(b));
@@ -357,16 +461,13 @@ export function LojaDetalhes() {
             produtoDetalhe?.produto?.nome ||
             produtoCadastro?.nome ||
             "Produto não identificado";
-          const saldo = diferencaIn;
-          const jogado = valorJogada > 0 ? diferencaIn / valorJogada : 0;
+          const saldo =
+            usaFichas && valorJogada > 0 ? diferencaIn * valorJogada : diferencaIn;
+          const jogado = saldo;
           const valorMedioSaidaPorPelucia =
-            quantidadeSaiu > 0
-              ? diferencaIn / quantidadeSaiu - precoProduto
-              : 0;
+            quantidadeSaiu > 0 ? saldo / quantidadeSaiu - precoProduto : 0;
           const jogadasMediasPorPelucia =
-            quantidadeSaiu > 0 && valorJogada > 0
-              ? diferencaIn / valorJogada / quantidadeSaiu
-              : 0;
+            quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
           const valorNotas = Number(mov.quantidade_notas_entrada || 0);
           const valorDigital = Number(mov.valor_entrada_maquininha_pix || 0);
 
@@ -757,6 +858,62 @@ export function LojaDetalhes() {
 
           {maquinas.length > 0 ? (
             <>
+              {/* Filtro de data único pra todas as máquinas — controla o
+                  resumo (valor esperado, jogadas médias, pelúcias liberadas)
+                  mostrado em cada card abaixo. */}
+              <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    📅 De
+                  </label>
+                  <input
+                    type="date"
+                    value={filtroResumoInicio}
+                    onChange={(e) => setFiltroResumoInicio(e.target.value)}
+                    className="input-field text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    📅 Até
+                  </label>
+                  <input
+                    type="date"
+                    value={filtroResumoFim}
+                    onChange={(e) => setFiltroResumoFim(e.target.value)}
+                    className="input-field text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => definirPresetResumo(7)}
+                    className="px-3 py-2 text-xs font-semibold bg-white border border-gray-300 rounded-lg hover:border-primary"
+                  >
+                    7 dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => definirPresetResumo(30)}
+                    className="px-3 py-2 text-xs font-semibold bg-white border border-gray-300 rounded-lg hover:border-primary"
+                  >
+                    30 dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => definirPresetResumo(90)}
+                    className="px-3 py-2 text-xs font-semibold bg-white border border-gray-300 rounded-lg hover:border-primary"
+                  >
+                    90 dias
+                  </button>
+                </div>
+                {carregandoResumo && (
+                  <span className="text-xs text-gray-500">
+                    Atualizando resumo das máquinas...
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                 {maquinas.map((maquina) => {
                   // Estoque calculado a partir de movimentações, não está no objeto máquina
@@ -866,6 +1023,73 @@ export function LojaDetalhes() {
                           </div>
                         </div>
                       </div>
+
+                      {(() => {
+                        const resumo = resumoPorMaquina[maquina.id];
+                        return (
+                          <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
+                            {resumo ? (
+                              <>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-500">
+                                    Valor esperado (período):
+                                  </span>
+                                  <span className="font-semibold text-gray-700">
+                                    R$ {formatarMoeda(resumo.valorEsperadoPeriodo)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-500">
+                                    Jogadas médias/pelúcia:
+                                  </span>
+                                  <span className="font-semibold text-gray-700">
+                                    {resumo.mediaRPorPelucia !== null &&
+                                    resumo.mediaRPorPelucia !== undefined
+                                      ? `R$ ${formatarMoeda(resumo.mediaRPorPelucia)}`
+                                      : "-"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-500">
+                                    Pelúcias no período:
+                                  </span>
+                                  <span className="font-semibold text-gray-700">
+                                    {formatarInteiro(resumo.totalSairamPeriodo)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-500">
+                                    Última leitura:
+                                  </span>
+                                  <span className="font-semibold text-gray-700 text-right">
+                                    {resumo.ultimaLeitura
+                                      ? `${formatarDataHora(resumo.ultimaLeitura)} (${formatarDiasAtras(resumo.diasSemLeitura)})`
+                                      : "sem leitura registrada"}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    abrirWhatsAppComMensagem(
+                                      montarResumoWhatsAppMaquina(maquina, resumo),
+                                    );
+                                  }}
+                                  className="mt-2 w-full px-3 py-1.5 text-xs font-semibold bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors"
+                                >
+                                  📲 Enviar resumo no WhatsApp
+                                </button>
+                              </>
+                            ) : (
+                              <p className="text-xs text-gray-400">
+                                {carregandoResumo
+                                  ? "Carregando resumo..."
+                                  : "Sem movimentação no período selecionado."}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {maquina.modelo && (
                         <p className="text-xs text-gray-500 mt-3">

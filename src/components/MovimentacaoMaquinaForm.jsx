@@ -4,6 +4,16 @@ import { Modal } from "./UIComponents";
 
 import { useAuth } from "../contexts/AuthContext.jsx";
 
+// Faixa esperada de "jogadas médias por pelúcia" (R$ jogado por pelúcia
+// liberada) por valor de ficha da máquina — pra avisar na hora, antes de
+// salvar. Mantenha em sync com FAIXAS_MEDIA_POR_VALOR_FICHA em
+// backend2/src/services/alertaMediaFichasService.js (fonte de verdade do
+// alerta persistido).
+const FAIXAS_MEDIA_POR_VALOR_FICHA = {
+  2: { min: 34, max: 45 },
+  5: { min: 65, max: 85 },
+};
+
 export function MovimentacaoMaquinaForm({
   roteiroId,
   lojaId,
@@ -54,6 +64,7 @@ export function MovimentacaoMaquinaForm({
   const [success, setSuccess] = useState("");
   const [resumoCalculo, setResumoCalculo] = useState(null);
   const [alertaDivergencia, setAlertaDivergencia] = useState(null);
+  const [alertaMediaVisto, setAlertaMediaVisto] = useState(false);
   const [isPrimeiraMovimentacao, setIsPrimeiraMovimentacao] = useState(false);
   const [ultimaMovimentacaoData, setUltimaMovimentacaoData] = useState(null);
   // Data da última movimentação que realmente leu os contadores (in/out) —
@@ -1626,6 +1637,60 @@ export function MovimentacaoMaquinaForm({
     resumoCalculo,
   ]);
 
+  // Aviso ao vivo: a leitura que está sendo digitada dá uma "jogadas médias
+  // por pelúcia" fora da faixa esperada pro valor de ficha da máquina? Mesma
+  // fórmula (e mesmas faixas) do alerta persistido que roda no backend ao
+  // salvar (verificarMediaJogadasForaPadrao).
+  const alertaMediaForaPadrao = useMemo(() => {
+    if (isFuncionarioAbastecedor && !isPrimeiraMovimentacao) return null;
+    if (formData.ignoreInOut) return null;
+    if (!maquina) return null;
+
+    const usaFichas =
+      maquina?.usaFichas === true ||
+      maquina?.usa_fichas === true ||
+      maquina?.usaFichas === 1 ||
+      maquina?.usa_fichas === 1;
+    if (!usaFichas) return null;
+
+    const valorFicha = Number(maquina?.valorFicha || 0);
+    const faixa = FAIXAS_MEDIA_POR_VALOR_FICHA[valorFicha];
+    if (!faixa) return null;
+
+    const { diferencaIn, diferencaOut } = resumoPreConfirmacao;
+    if (!diferencaOut) return null;
+
+    const saldo = diferencaIn * valorFicha;
+    const mediaCalculada = saldo / diferencaOut;
+    if (mediaCalculada >= faixa.min && mediaCalculada <= faixa.max) {
+      return null;
+    }
+
+    const direcao = mediaCalculada > faixa.max ? "acima" : "abaixo";
+    const limiteViolado = direcao === "acima" ? faixa.max : faixa.min;
+
+    return {
+      valorFicha,
+      faixaMin: faixa.min,
+      faixaMax: faixa.max,
+      mediaCalculada,
+      direcao,
+      diferenca: Math.abs(mediaCalculada - limiteViolado),
+    };
+  }, [
+    isFuncionarioAbastecedor,
+    isPrimeiraMovimentacao,
+    formData.ignoreInOut,
+    maquina,
+    resumoPreConfirmacao,
+  ]);
+
+  // Se os contadores mudarem depois de já ter confirmado, pede confirmação
+  // de novo.
+  useEffect(() => {
+    setAlertaMediaVisto(false);
+  }, [alertaMediaForaPadrao?.mediaCalculada]);
+
   if (loading) {
     return <div className="p-20 text-center font-bold">Carregando...</div>;
   }
@@ -2000,6 +2065,39 @@ export function MovimentacaoMaquinaForm({
                     resumoPreConfirmacao.diferencaIn,
                   )}
                 </p>
+              </div>
+            )}
+
+            {alertaMediaForaPadrao && (
+              <div className="mb-4 p-4 bg-orange-50 border-2 border-orange-400 rounded-lg">
+                <p className="text-sm font-bold text-orange-900">
+                  ⚠️ Essa leitura está fora da média esperada
+                </p>
+                <p className="text-sm text-orange-800 mt-1">
+                  Máquinas de R${" "}
+                  {alertaMediaForaPadrao.valorFicha.toFixed(2)} por ficha
+                  costumam ficar entre R${" "}
+                  {alertaMediaForaPadrao.faixaMin.toFixed(2)} e R${" "}
+                  {alertaMediaForaPadrao.faixaMax.toFixed(2)} por pelúcia —
+                  essa leitura deu R${" "}
+                  {alertaMediaForaPadrao.mediaCalculada.toFixed(2)}, R${" "}
+                  {alertaMediaForaPadrao.diferenca.toFixed(2)}{" "}
+                  {alertaMediaForaPadrao.direcao} do esperado.
+                </p>
+                {!alertaMediaVisto ? (
+                  <button
+                    type="button"
+                    onClick={() => setAlertaMediaVisto(true)}
+                    className="mt-3 px-4 py-2 text-sm bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    Entendi, confirmar
+                  </button>
+                ) : (
+                  <p className="mt-3 text-xs font-semibold text-orange-700">
+                    ✓ Confirmado — isso também vai ficar registrado na
+                    Central de Alertas.
+                  </p>
+                )}
               </div>
             )}
 

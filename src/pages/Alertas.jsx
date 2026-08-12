@@ -6,8 +6,10 @@ import { PageHeader } from "../components/UIComponents";
 import { EmptyState } from "../components/Loading";
 import AlertAdmin from "../components/AlertAdmin";
 import { useAlertas } from "../contexts/AlertasContext.jsx";
+import { useAuth } from "../contexts/AuthContext.jsx";
 import { INTERVALO_ALERTA_PERSISTENTE_DIAS } from "../hooks/useManutencoesPersistentes";
 import { montarWhatsAppUrl } from "../lib/whatsapp";
+import { resolverAlertaMediaFichas } from "../services/alertasMediaFichas";
 
 const CORES_TILE = {
   red: "from-red-500 to-red-600",
@@ -381,6 +383,101 @@ function SecaoManutencaoRecorrente({ itens }) {
   );
 }
 
+function SecaoMediaForaPadrao({ itens, usuarioAtualId, isAdminLike, onResolver }) {
+  const navigate = useNavigate();
+  const [filtro, setFiltro] = useState("");
+  const [resolvendoId, setResolvendoId] = useState(null);
+
+  const itensFiltrados = useMemo(() => {
+    const termo = normalizarTexto(filtro);
+    if (!termo) return itens;
+    return itens.filter((item) =>
+      [item.maquinaCodigo, item.maquinaNome, item.lojaNome]
+        .map(normalizarTexto)
+        .some((campo) => campo.includes(termo)),
+    );
+  }, [itens, filtro]);
+
+  if (itens.length === 0) {
+    return <p className="text-sm text-gray-500">Nenhuma leitura fora da média no momento.</p>;
+  }
+
+  const resolver = async (item) => {
+    setResolvendoId(item.id);
+    try {
+      await onResolver(item.id);
+    } finally {
+      setResolvendoId(null);
+    }
+  };
+
+  return (
+    <>
+      {itens.length > LIMITE_PARA_FILTRO && (
+        <CampoFiltro
+          valor={filtro}
+          onChange={setFiltro}
+          placeholder="Buscar por máquina ou ponto..."
+        />
+      )}
+      {itensFiltrados.length === 0 ? (
+        <p className="text-sm text-gray-500">Nenhum alerta encontrado para essa busca.</p>
+      ) : (
+        <div className="grid gap-3">
+          {itensFiltrados.map((item) => {
+            const podeResolver =
+              isAdminLike || String(item.usuarioId || "") === String(usuarioAtualId || "");
+            return (
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4"
+              >
+                <div>
+                  <p className="font-bold text-gray-900">
+                    {item.maquinaCodigo} {item.maquinaNome ? `- ${item.maquinaNome}` : ""}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {item.lojaNome} · R$ {Number(item.mediaCalculada).toFixed(2)} por pelúcia
+                    (esperado R$ {Number(item.faixaMin).toFixed(2)} a R${" "}
+                    {Number(item.faixaMax).toFixed(2)} pra ficha de R${" "}
+                    {Number(item.valorFicha).toFixed(2)}) — R${" "}
+                    {Number(item.diferenca || 0).toFixed(2)} {item.direcao} do limite
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Registrado por {item.usuarioNome || "—"} em {formatarData(item.createdAt)}
+                    {item.ocorrencias > 1
+                      ? ` · ${item.ocorrencias}x seguidas fora da faixa`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/maquinas/${item.maquinaId}`)}
+                    className="px-4 py-2 text-sm bg-gray-100 text-[#24094E] font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Ver Máquina
+                  </button>
+                  {podeResolver && (
+                    <button
+                      type="button"
+                      onClick={() => resolver(item)}
+                      disabled={resolvendoId === item.id}
+                      className="px-4 py-2 text-sm bg-green-100 text-green-800 font-semibold rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                    >
+                      {resolvendoId === item.id ? "Resolvendo..." : "Marcar como resolvido"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
 function SecaoContas({ itens, cor, mensagemVazio, rotuloDias }) {
   const navigate = useNavigate();
   const [filtro, setFiltro] = useState("");
@@ -441,9 +538,26 @@ function SecaoContas({ itens, cor, mensagemVazio, rotuloDias }) {
 }
 
 export default function Alertas() {
-  const { tipos, totalGeral, carregando, podeVerAlertas, podeVerAlertaManutencao } =
-    useAlertas();
+  const {
+    tipos,
+    totalGeral,
+    carregando,
+    podeVerAlertas,
+    podeVerAlertaManutencao,
+    recarregar,
+  } = useAlertas();
+  const { usuario } = useAuth();
+  const isAdminLike = ["ADMIN", "GERENCIADOR"].includes(usuario?.role);
   const [secoesAbertas, setSecoesAbertas] = useState(() => new Set());
+
+  const resolverAlertaMedia = async (alertaId) => {
+    try {
+      await resolverAlertaMediaFichas(alertaId);
+      await recarregar();
+    } catch (error) {
+      console.error("Erro ao resolver alerta de média fora do padrão:", error);
+    }
+  };
 
   const alternarSecao = (id) => {
     setSecoesAbertas((prev) => {
@@ -573,6 +687,27 @@ export default function Alertas() {
             itens={tipos.find((t) => t.id === "manutencao-recorrente")?.itens || []}
           />
         </SecaoColapsavel>
+
+        {(podeVerAlertas || podeVerAlertaManutencao) && (
+          <SecaoColapsavel
+            id="alerta-secao-media-fora-padrao"
+            titulo="🎯 Jogadas fora da média"
+            total={tipos.find((t) => t.id === "media-fora-padrao")?.total}
+            aberta={secoesAbertas.has("media-fora-padrao")}
+            onToggle={() => alternarSecao("media-fora-padrao")}
+          >
+            <p className="text-sm text-gray-600 mb-4">
+              Leituras cuja média de jogadas por pelúcia saiu da faixa esperada pro valor
+              da ficha da máquina.
+            </p>
+            <SecaoMediaForaPadrao
+              itens={tipos.find((t) => t.id === "media-fora-padrao")?.itens || []}
+              usuarioAtualId={usuario?.id}
+              isAdminLike={isAdminLike}
+              onResolver={resolverAlertaMedia}
+            />
+          </SecaoColapsavel>
+        )}
 
         {podeVerAlertas && (
           <SecaoColapsavel

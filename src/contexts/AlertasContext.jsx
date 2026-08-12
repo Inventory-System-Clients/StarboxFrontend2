@@ -14,6 +14,7 @@ import {
   getDaysUntilDue,
 } from "../lib/financeiroRecurringBills";
 import { useManutencoesPersistentes } from "../hooks/useManutencoesPersistentes";
+import { useAlertasMediaFichas } from "../hooks/useAlertasMediaFichas";
 
 const AlertasContext = createContext(null);
 
@@ -54,6 +55,15 @@ export function AlertasProvider({ children }) {
     usuarioId: usuario?.id,
     ativo: podeVerAlertaManutencao,
   });
+
+  // Mesmo motivo do hook de manutenção acima: precisa aparecer também pra
+  // funcionário comum (não só admin/gerenciador), então roda fora do
+  // carregar() abaixo (que é todo gateado por podeVerAlertas).
+  const {
+    alertasMediaFichas,
+    carregando: carregandoMediaFichas,
+    recarregar: recarregarMediaFichas,
+  } = useAlertasMediaFichas({ ativo: podeVerAlertaManutencao });
 
   const carregar = useCallback(async () => {
     if (!podeVerAlertas || emAndamentoRef.current) return;
@@ -175,6 +185,15 @@ export function AlertasProvider({ children }) {
     total: manutencoesPersistentes.length,
   };
 
+  const tipoMediaForaPadrao = {
+    id: "media-fora-padrao",
+    label: "Jogadas fora da média",
+    icone: "🎯",
+    cor: "rose",
+    itens: alertasMediaFichas,
+    total: alertasMediaFichas.length,
+  };
+
   const tipos = podeVerAlertas
     ? [
         // Ocultos a pedido do usuário (2026-08-11). A lógica e os dados
@@ -222,6 +241,7 @@ export function AlertasProvider({ children }) {
           total: leituraAntiga.length,
         },
         tipoManutencaoRecorrente,
+        tipoMediaForaPadrao,
         {
           id: "contas-vencidas",
           label: "Contas vencidas",
@@ -240,14 +260,15 @@ export function AlertasProvider({ children }) {
         },
       ]
     : podeVerAlertaManutencao
-      ? [tipoManutencaoRecorrente]
+      ? [tipoManutencaoRecorrente, tipoMediaForaPadrao]
       : [];
 
   const totalGeral = tipos.reduce((soma, tipo) => soma + tipo.total, 0);
 
   const recarregar = useCallback(
-    () => Promise.all([carregar(), recarregarManutencoes()]),
-    [carregar, recarregarManutencoes],
+    () =>
+      Promise.all([carregar(), recarregarManutencoes(), recarregarMediaFichas()]),
+    [carregar, recarregarManutencoes, recarregarMediaFichas],
   );
 
   return (
@@ -255,7 +276,7 @@ export function AlertasProvider({ children }) {
       value={{
         tipos,
         totalGeral,
-        carregando: carregando || carregandoManutencoes,
+        carregando: carregando || carregandoManutencoes || carregandoMediaFichas,
         recarregar,
         podeVerAlertas,
         podeVerAlertaManutencao,
