@@ -11,7 +11,9 @@ const ADMIN_LIKE = ["ADMIN", "GERENCIADOR"];
 // deve oferecer links que vão só jogar o usuário de volta.
 const ROTAS_PERMITIDAS_MANUTENCAO = ["/pecas", "/manutencoes"];
 
-const podeVerItem = (item, role, temVeiculoNoRoteiro) => {
+const FUNCIONARIO_ROLES = ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"];
+
+const podeVerItem = (item, role, temVeiculoNoRoteiro, permiteGastosEmRoteiro) => {
   if (role === "MANUTENCAO") {
     return ROTAS_PERMITIDAS_MANUTENCAO.includes(item.to);
   }
@@ -27,6 +29,15 @@ const podeVerItem = (item, role, temVeiculoNoRoteiro) => {
   ) {
     return false;
   }
+  // Funcionario so ve "Lançar Gasto" se algum roteiro dele realmente
+  // permite lançamento de gastos (senão a página só mostraria vazio).
+  if (
+    item.requiresPermiteGastos &&
+    FUNCIONARIO_ROLES.includes(role) &&
+    !permiteGastosEmRoteiro
+  ) {
+    return false;
+  }
   return true;
 };
 
@@ -36,7 +47,8 @@ const itensSoltos = [
     to: "/lancar-gasto",
     label: "Lançar Gasto",
     icon: "💸",
-    allowedRoles: ["FUNCIONARIO", "FUNCIONARIO_TODAS_LOJAS"],
+    allowedRoles: FUNCIONARIO_ROLES,
+    requiresPermiteGastos: true,
   },
 ];
 
@@ -186,31 +198,42 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [gruposAbertos, setGruposAbertos] = useState({});
   const [temVeiculoNoRoteiro, setTemVeiculoNoRoteiro] = useState(false);
+  const [permiteGastosEmRoteiro, setPermiteGastosEmRoteiro] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
 
-    async function verificarVeiculoNoRoteiro() {
-      if (usuario?.role !== "FUNCIONARIO_TODAS_LOJAS" || !usuario?.id) {
+    async function carregarInfoRoteirosDoFuncionario() {
+      if (!FUNCIONARIO_ROLES.includes(usuario?.role) || !usuario?.id) {
         setTemVeiculoNoRoteiro(false);
+        setPermiteGastosEmRoteiro(false);
         return;
       }
 
       try {
         const res = await api.get("/roteiros");
         const todos = Array.isArray(res.data) ? res.data : [];
-        const possuiVeiculo = todos.some(
-          (roteiro) =>
-            String(roteiro?.funcionarioId || "") === String(usuario.id) &&
-            roteiroTemVeiculoAssociado(roteiro),
+        const meusRoteiros = todos.filter(
+          (roteiro) => String(roteiro?.funcionarioId || "") === String(usuario.id),
         );
-        if (!cancelado) setTemVeiculoNoRoteiro(possuiVeiculo);
+
+        if (!cancelado) {
+          setTemVeiculoNoRoteiro(
+            meusRoteiros.some((roteiro) => roteiroTemVeiculoAssociado(roteiro)),
+          );
+          setPermiteGastosEmRoteiro(
+            meusRoteiros.some((roteiro) => roteiro.permiteGastos !== false),
+          );
+        }
       } catch {
-        if (!cancelado) setTemVeiculoNoRoteiro(false);
+        if (!cancelado) {
+          setTemVeiculoNoRoteiro(false);
+          setPermiteGastosEmRoteiro(false);
+        }
       }
     }
 
-    verificarVeiculoNoRoteiro();
+    carregarInfoRoteirosDoFuncionario();
 
     return () => {
       cancelado = true;
@@ -250,7 +273,9 @@ export default function Navbar() {
 
   const itensSoltosVisiveis = (
     isAbastecedor ? itensSoltosAbastecedor : itensSoltos
-  ).filter((item) => podeVerItem(item, usuario?.role, temVeiculoNoRoteiro));
+  ).filter((item) =>
+    podeVerItem(item, usuario?.role, temVeiculoNoRoteiro, permiteGastosEmRoteiro),
+  );
 
   const gruposVisiveis = isAbastecedor
     ? []
@@ -258,7 +283,12 @@ export default function Navbar() {
         .map((grupo) => ({
           ...grupo,
           itens: grupo.itens.filter((item) =>
-            podeVerItem(item, usuario?.role, temVeiculoNoRoteiro),
+            podeVerItem(
+              item,
+              usuario?.role,
+              temVeiculoNoRoteiro,
+              permiteGastosEmRoteiro,
+            ),
           ),
         }))
         .filter((grupo) => grupo.itens.length > 0);
