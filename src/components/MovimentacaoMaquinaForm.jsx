@@ -1593,6 +1593,12 @@ export function MovimentacaoMaquinaForm({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (alertaMediaForaPadrao && !alertaMediaVisto) {
+      setError(
+        "Confirme o alerta de leitura fora da média (\"Entendi, confirmar\") antes de salvar.",
+      );
+      return;
+    }
     setError("");
     setSuccess("");
     setDadosConfirmacao(montarDadosConfirmacao());
@@ -2321,7 +2327,16 @@ export function MovimentacaoMaquinaForm({
           >
             {variant === "modal" ? "Cancelar" : "Voltar"}
           </button>
-          <button type="submit" className="btn-primary w-full md:w-auto">
+          <button
+            type="submit"
+            className="btn-primary w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={Boolean(alertaMediaForaPadrao && !alertaMediaVisto)}
+            title={
+              alertaMediaForaPadrao && !alertaMediaVisto
+                ? 'Confirme o alerta de leitura fora da média ("Entendi, confirmar") antes de salvar.'
+                : undefined
+            }
+          >
             Salvar e Enviar no WhatsApp
           </button>
         </div>
