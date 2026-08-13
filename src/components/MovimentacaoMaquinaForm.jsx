@@ -1646,13 +1646,6 @@ export function MovimentacaoMaquinaForm({
     if (formData.ignoreInOut) return null;
     if (!maquina) return null;
 
-    const usaFichas =
-      maquina?.usaFichas === true ||
-      maquina?.usa_fichas === true ||
-      maquina?.usaFichas === 1 ||
-      maquina?.usa_fichas === 1;
-    if (!usaFichas) return null;
-
     const valorFicha = Number(maquina?.valorFicha || 0);
     const faixa = FAIXAS_MEDIA_POR_VALOR_FICHA[valorFicha];
     if (!faixa) return null;
