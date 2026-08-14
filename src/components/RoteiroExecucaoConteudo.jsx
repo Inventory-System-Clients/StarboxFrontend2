@@ -3638,18 +3638,15 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                                       className="flex flex-col sm:flex-row sm:items-center gap-2"
                                     >
                                       <button
-                                        className={`p-3 rounded border font-medium w-full text-left transition-all flex items-center gap-2 flex-wrap whitespace-normal sm:flex-1 
-                                ${maquinaConcluida ? "bg-green-100 border-green-600 text-green-700" : "bg-gray-50 hover:border-blue-600"}
-                                ${maquinaConcluida ? "opacity-70 cursor-not-allowed" : ""}`}
+                                        className={`p-3 rounded border font-medium w-full text-left transition-all flex items-center gap-2 flex-wrap whitespace-normal sm:flex-1
+                                ${maquinaConcluida ? "bg-green-100 border-green-600 text-green-700" : "bg-gray-50 hover:border-blue-600"}`}
                                         onClick={() => {
-                                          if (maquinaConcluida) return;
                                           setModalMovimentacao({
                                             roteiroId: roteiro.id,
                                             lojaId: loja.id,
                                             maquinaId: maquina.id,
                                           });
                                         }}
-                                        disabled={maquinaConcluida}
                                       >
                                         <span>
                                           🖲️ {obterNomeMaquinaExibicao(maquina)}{" "}
