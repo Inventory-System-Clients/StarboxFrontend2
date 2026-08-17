@@ -3250,6 +3250,323 @@ export function Relatorios() {
           <RelatorioTodasLojas relatorio={relatorio} />
         )}
 
+        {/* Cards de Totais Gerais - Resumo Geral da Loja — primeira coisa exibida no relatório */}
+        {relatorio &&
+          !loading &&
+          relatorio.tipo !== "todas-lojas" &&
+          !isRelatorioRoteiro && (
+            <div className="card bg-linear-to-r from-purple-50 to-purple-100 border-2 border-purple-300">
+              <h3 className="text-lg sm:text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span className="text-2xl sm:text-3xl">📊</span>
+                Resumo Geral da Loja
+              </h3>
+              <div className="flex flex-wrap gap-4 sm:gap-4">
+                {/* Bruto Consolidado */}
+                <div className="card bg-linear-to-br from-yellow-500 to-orange-600 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">💰</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(valorConsolidadoRelatorio || 0).toLocaleString(
+                      "pt-BR",
+                      { minimumFractionDigits: 2 },
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Valor Recebido (Fluxo de Caixa)
+                  </div>
+                </div>
+
+                {/* Produtos Entraram */}
+                <div className="card bg-linear-to-br from-green-500 to-green-600 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">📥</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    {(relatorio.totais?.produtosEntraram || 0).toLocaleString(
+                      "pt-BR",
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Contador prêmios
+                  </div>
+                </div>
+
+                {/* Ticket por Prêmio (Total) */}
+                <div className="card bg-linear-to-br from-indigo-500 to-indigo-700 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">🎯</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(
+                      relatorio.totais?.ticketPorPremioTotal || 0,
+                    ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Ticket por Prêmio (Total)
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    Fórmula: Faturamento Bruto ÷ Produtos Saíram
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    {`R$ ${Number(relatorio.totais?.valorTotalLojaBruto || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / ${(relatorio.totais?.produtosSairam || 0).toLocaleString("pt-BR")} saídas`}
+                  </div>
+                </div>
+
+                {/* Custo Total de Produtos + Produtos Saíram */}
+                <div className="card bg-linear-to-br from-yellow-100 to-yellow-400 text-yellow-900 border-yellow-400 border-2">
+                  <div className="text-2xl sm:text-3xl mb-2">💸</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(custoProdutosRelatorio || 0).toLocaleString(
+                      "pt-BR",
+                      {
+                        minimumFractionDigits: 2,
+                      },
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Custo Total de Produtos
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    Fórmula: soma do valorTotal dos itens em produtosSairam[]
+                  </div>
+                  <div className="text-2xl sm:text-3xl mb-2 mt-3">📤</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    {resumoProdutosConsolidado.totalQuantidadeItens.toLocaleString(
+                      "pt-BR",
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Produtos Saíram
+                  </div>
+                  {resumoProdutosConsolidado.divergenciaQuantidade && (
+                    <div className="text-[10px] sm:text-xs opacity-90 mt-1">
+                      Conferência: itens (
+                      {resumoProdutosConsolidado.totalQuantidadeItens.toLocaleString(
+                        "pt-BR",
+                      )}
+                      ) diferente de totais.produtosSairam (
+                      {resumoProdutosConsolidado.totalQuantidadeDeclarado.toLocaleString(
+                        "pt-BR",
+                      )}
+                      )
+                    </div>
+                  )}
+                  {resumoProdutosConsolidado.divergenciaCusto && (
+                    <div className="text-[10px] sm:text-xs opacity-90 mt-1">
+                      Conferência: soma valorTotal (R${" "}
+                      {formatarMoeda(
+                        resumoProdutosConsolidado.custoTotalItens,
+                      )}
+                      ) diferente de totais.custoProdutosSairam (R${" "}
+                      {formatarMoeda(
+                        resumoProdutosConsolidado.custoTotalDeclarado,
+                      )}
+                      )
+                    </div>
+                  )}
+                </div>
+
+                {/* Gastos Fixos da Loja (Detalhado) */}
+                <div className="card bg-linear-to-br from-violet-500 to-purple-800 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">🏷️</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(totalGastosFixosDaLoja || 0).toLocaleString(
+                      "pt-BR",
+                      { minimumFractionDigits: 2 },
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Gastos Fixos no Período (rateio diário)
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    Mensal da loja: R${" "}
+                    {Number(totalGastosFixosMensalDaLoja || 0).toLocaleString(
+                      "pt-BR",
+                      { minimumFractionDigits: 2 },
+                    )}
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-2 space-y-1 max-h-24 overflow-y-auto pr-1">
+                    {gastosFixosProporcionaisPeriodo.length > 0 ? (
+                      gastosFixosProporcionaisPeriodo.map((gasto) => (
+                        <div
+                          key={`${gasto.id || gasto.nome}`}
+                          className="truncate"
+                        >
+                          {gasto.nome}: R${" "}
+                          {Number(
+                            gasto.valorProporcionalPeriodo || 0,
+                          ).toLocaleString("pt-BR", {
+                            minimumFractionDigits: 2,
+                          })}{" "}
+                          <span className="opacity-80">
+                            (mensal: R${" "}
+                            {Number(gasto.valor || 0).toLocaleString(
+                              "pt-BR",
+                              {
+                                minimumFractionDigits: 2,
+                              },
+                            )}
+                            )
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div>Sem gastos fixos com valor maior que zero</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Gasto Total */}
+                <div className="card bg-linear-to-br from-rose-500 to-red-700 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">🧮</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(
+                      custoTotalConsideradoRelatorio || 0,
+                    ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Gasto Total
+                  </div>
+                  {custosNaoMapeadosBackendRelatorio > 0 && (
+                    <div className="text-[10px] sm:text-xs opacity-90 mt-1">
+                      Ignorado do backend (não mapeado em fixo/produto): R${" "}
+                      {Number(
+                        custosNaoMapeadosBackendRelatorio,
+                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Quebra de Caixa como Custo */}
+                {Boolean(relatorio?.loja?.id) &&
+                  custoQuebraCaixaRelatorio > 0 && (
+                    <div className="card bg-linear-to-br from-red-700 to-rose-900 text-white border-2 border-red-300">
+                      <div className="text-2xl sm:text-3xl mb-2">💥</div>
+                      <div className="text-xl sm:text-2xl font-bold">
+                        R${" "}
+                        {Number(
+                          custoQuebraCaixaRelatorio || 0,
+                        ).toLocaleString("pt-BR", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </div>
+                      <div className="text-xs sm:text-sm opacity-90">
+                        Quebra de Caixa (custo)
+                      </div>
+                    </div>
+                  )}
+
+                {/* Lucro Líquido */}
+                <div className="card bg-linear-to-br from-emerald-600 to-green-800 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">📉</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(lucroLiquidoRelatorio || 0).toLocaleString(
+                      "pt-BR",
+                      { minimumFractionDigits: 2 },
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Lucro Líquido
+                  </div>
+                </div>
+
+                {/* Lucro sem custo fixo */}
+                <div className="card bg-linear-to-br from-teal-600 to-cyan-800 text-white">
+                  <div className="text-2xl sm:text-3xl mb-2">🟢</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(lucroSemCustoFixoRelatorio || 0).toLocaleString(
+                      "pt-BR",
+                      { minimumFractionDigits: 2 },
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Lucro sem custo fixo
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    Considera apenas custo dos produtos que saíram
+                  </div>
+                </div>
+
+                {/* Valor Esperado (Contadores) */}
+                <div className="card bg-linear-to-br from-amber-500 to-yellow-600 text-white border-2 border-amber-300">
+                  <div className="text-2xl sm:text-3xl mb-2">🔮</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(valorEsperadoRelatorio).toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Valor Esperado (Fluxo de Caixa)
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    Soma da coluna valor esperado com os filtros do relatório
+                  </div>
+                </div>
+
+                {/* Lucro Esperado */}
+                <div
+                  className={`card border-2 text-white ${
+                    lucroEsperadoRelatorio >= 0
+                      ? "bg-linear-to-br from-lime-500 to-green-700 border-lime-300"
+                      : "bg-linear-to-br from-red-600 to-rose-800 border-red-300"
+                  }`}
+                >
+                  <div className="text-2xl sm:text-3xl mb-2">🎯</div>
+                  <div className="text-xl sm:text-2xl font-bold">
+                    R${" "}
+                    {Number(lucroEsperadoRelatorio).toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </div>
+                  <div className="text-xs sm:text-sm opacity-90">
+                    Lucro Esperado
+                  </div>
+                  <div className="text-[10px] sm:text-xs opacity-80 mt-1">
+                    Valor Esperado − Custos Totais
+                  </div>
+                </div>
+              </div>
+
+              {/* Leituras (coletas) do período */}
+              {Array.isArray(relatorio.leituras) &&
+                relatorio.leituras.length > 0 && (
+                  <div className="mt-4 bg-white/70 rounded-xl border border-purple-200 p-4">
+                    <h4 className="text-sm sm:text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <span className="text-lg">🧾</span>
+                      Leituras do Período ({relatorio.leituras.length})
+                    </h4>
+                    <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
+                      {relatorio.leituras.map((leitura) => (
+                        <div
+                          key={leitura.movimentacaoId}
+                          className="flex items-center justify-between gap-3 text-sm bg-white rounded-lg border border-purple-100 px-3 py-2"
+                        >
+                          <span className="text-gray-600">
+                            {leitura.dataColeta
+                              ? new Date(leitura.dataColeta).toLocaleString(
+                                  "pt-BR",
+                                  { dateStyle: "short", timeStyle: "short" },
+                                )
+                              : "-"}
+                          </span>
+                          <span className="font-semibold text-gray-900">
+                            R${" "}
+                            {Number(leitura.valor || 0).toLocaleString(
+                              "pt-BR",
+                              { minimumFractionDigits: 2 },
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </div>
+          )}
+
             {/* Detalhamento por máquina — mostra pra qualquer tipo de
                 relatório (loja única, roteiro ou consolidado) */}
             {relatorio && !loading && relatorio.maquinas && relatorio.maquinas.length > 0 && (() => {
@@ -3966,285 +4283,6 @@ export function Relatorios() {
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* Cards de Totais Gerais - Resumo Geral da Loja */}
-            {!isRelatorioRoteiro && (
-              <div className="card bg-linear-to-r from-purple-50 to-purple-100 border-2 border-purple-300">
-                <h3 className="text-lg sm:text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <span className="text-2xl sm:text-3xl">📊</span>
-                  Resumo Geral da Loja
-                </h3>
-                <div className="flex flex-wrap gap-4 sm:gap-4">
-                  {/* Bruto Consolidado */}
-                  <div className="card bg-linear-to-br from-yellow-500 to-orange-600 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">💰</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(valorConsolidadoRelatorio || 0).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 },
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Valor Recebido (Fluxo de Caixa)
-                    </div>
-                  </div>
-
-                  {/* Produtos Entraram */}
-                  <div className="card bg-linear-to-br from-green-500 to-green-600 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">📥</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      {(relatorio.totais?.produtosEntraram || 0).toLocaleString(
-                        "pt-BR",
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Contador prêmios
-                    </div>
-                  </div>
-
-                  {/* Ticket por Prêmio (Total) */}
-                  <div className="card bg-linear-to-br from-indigo-500 to-indigo-700 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">🎯</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(
-                        relatorio.totais?.ticketPorPremioTotal || 0,
-                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Ticket por Prêmio (Total)
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      Fórmula: Faturamento Bruto ÷ Produtos Saíram
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      {`R$ ${Number(relatorio.totais?.valorTotalLojaBruto || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} / ${(relatorio.totais?.produtosSairam || 0).toLocaleString("pt-BR")} saídas`}
-                    </div>
-                  </div>
-
-                  {/* Custo Total de Produtos + Produtos Saíram */}
-                  <div className="card bg-linear-to-br from-yellow-100 to-yellow-400 text-yellow-900 border-yellow-400 border-2">
-                    <div className="text-2xl sm:text-3xl mb-2">💸</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(custoProdutosRelatorio || 0).toLocaleString(
-                        "pt-BR",
-                        {
-                          minimumFractionDigits: 2,
-                        },
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Custo Total de Produtos
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      Fórmula: soma do valorTotal dos itens em produtosSairam[]
-                    </div>
-                    <div className="text-2xl sm:text-3xl mb-2 mt-3">📤</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      {resumoProdutosConsolidado.totalQuantidadeItens.toLocaleString(
-                        "pt-BR",
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Produtos Saíram
-                    </div>
-                    {resumoProdutosConsolidado.divergenciaQuantidade && (
-                      <div className="text-[10px] sm:text-xs opacity-90 mt-1">
-                        Conferência: itens (
-                        {resumoProdutosConsolidado.totalQuantidadeItens.toLocaleString(
-                          "pt-BR",
-                        )}
-                        ) diferente de totais.produtosSairam (
-                        {resumoProdutosConsolidado.totalQuantidadeDeclarado.toLocaleString(
-                          "pt-BR",
-                        )}
-                        )
-                      </div>
-                    )}
-                    {resumoProdutosConsolidado.divergenciaCusto && (
-                      <div className="text-[10px] sm:text-xs opacity-90 mt-1">
-                        Conferência: soma valorTotal (R${" "}
-                        {formatarMoeda(
-                          resumoProdutosConsolidado.custoTotalItens,
-                        )}
-                        ) diferente de totais.custoProdutosSairam (R${" "}
-                        {formatarMoeda(
-                          resumoProdutosConsolidado.custoTotalDeclarado,
-                        )}
-                        )
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Gastos Fixos da Loja (Detalhado) */}
-                  <div className="card bg-linear-to-br from-violet-500 to-purple-800 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">🏷️</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(totalGastosFixosDaLoja || 0).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 },
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Gastos Fixos no Período (rateio diário)
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      Mensal da loja: R${" "}
-                      {Number(totalGastosFixosMensalDaLoja || 0).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 },
-                      )}
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-2 space-y-1 max-h-24 overflow-y-auto pr-1">
-                      {gastosFixosProporcionaisPeriodo.length > 0 ? (
-                        gastosFixosProporcionaisPeriodo.map((gasto) => (
-                          <div
-                            key={`${gasto.id || gasto.nome}`}
-                            className="truncate"
-                          >
-                            {gasto.nome}: R${" "}
-                            {Number(
-                              gasto.valorProporcionalPeriodo || 0,
-                            ).toLocaleString("pt-BR", {
-                              minimumFractionDigits: 2,
-                            })}{" "}
-                            <span className="opacity-80">
-                              (mensal: R${" "}
-                              {Number(gasto.valor || 0).toLocaleString(
-                                "pt-BR",
-                                {
-                                  minimumFractionDigits: 2,
-                                },
-                              )}
-                              )
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div>Sem gastos fixos com valor maior que zero</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Gasto Total */}
-                  <div className="card bg-linear-to-br from-rose-500 to-red-700 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">🧮</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(
-                        custoTotalConsideradoRelatorio || 0,
-                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Gasto Total
-                    </div>
-                    {custosNaoMapeadosBackendRelatorio > 0 && (
-                      <div className="text-[10px] sm:text-xs opacity-90 mt-1">
-                        Ignorado do backend (não mapeado em fixo/produto): R${" "}
-                        {Number(
-                          custosNaoMapeadosBackendRelatorio,
-                        ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Quebra de Caixa como Custo */}
-                  {Boolean(relatorio?.loja?.id) &&
-                    custoQuebraCaixaRelatorio > 0 && (
-                      <div className="card bg-linear-to-br from-red-700 to-rose-900 text-white border-2 border-red-300">
-                        <div className="text-2xl sm:text-3xl mb-2">💥</div>
-                        <div className="text-xl sm:text-2xl font-bold">
-                          R${" "}
-                          {Number(
-                            custoQuebraCaixaRelatorio || 0,
-                          ).toLocaleString("pt-BR", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </div>
-                        <div className="text-xs sm:text-sm opacity-90">
-                          Quebra de Caixa (custo)
-                        </div>
-                      </div>
-                    )}
-
-                  {/* Lucro Líquido */}
-                  <div className="card bg-linear-to-br from-emerald-600 to-green-800 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">📉</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(lucroLiquidoRelatorio || 0).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 },
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Lucro Líquido
-                    </div>
-                  </div>
-
-                  {/* Lucro sem custo fixo */}
-                  <div className="card bg-linear-to-br from-teal-600 to-cyan-800 text-white">
-                    <div className="text-2xl sm:text-3xl mb-2">🟢</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(lucroSemCustoFixoRelatorio || 0).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 },
-                      )}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Lucro sem custo fixo
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      Considera apenas custo dos produtos que saíram
-                    </div>
-                  </div>
-
-                  {/* Valor Esperado (Contadores) */}
-                  <div className="card bg-linear-to-br from-amber-500 to-yellow-600 text-white border-2 border-amber-300">
-                    <div className="text-2xl sm:text-3xl mb-2">🔮</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(valorEsperadoRelatorio).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Valor Esperado (Fluxo de Caixa)
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      Soma da coluna valor esperado com os filtros do relatório
-                    </div>
-                  </div>
-
-                  {/* Lucro Esperado */}
-                  <div
-                    className={`card border-2 text-white ${
-                      lucroEsperadoRelatorio >= 0
-                        ? "bg-linear-to-br from-lime-500 to-green-700 border-lime-300"
-                        : "bg-linear-to-br from-red-600 to-rose-800 border-red-300"
-                    }`}
-                  >
-                    <div className="text-2xl sm:text-3xl mb-2">🎯</div>
-                    <div className="text-xl sm:text-2xl font-bold">
-                      R${" "}
-                      {Number(lucroEsperadoRelatorio).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </div>
-                    <div className="text-xs sm:text-sm opacity-90">
-                      Lucro Esperado
-                    </div>
-                    <div className="text-[10px] sm:text-xs opacity-80 mt-1">
-                      Valor Esperado − Custos Totais
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
