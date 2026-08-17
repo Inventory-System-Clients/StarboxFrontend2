@@ -3538,27 +3538,50 @@ export function Relatorios() {
                       <span className="text-lg">🧾</span>
                       Leituras do Período ({relatorio.leituras.length})
                     </h4>
-                    <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
+                    <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
                       {relatorio.leituras.map((leitura) => (
                         <div
                           key={leitura.movimentacaoId}
-                          className="flex items-center justify-between gap-3 text-sm bg-white rounded-lg border border-purple-100 px-3 py-2"
+                          className="flex flex-col gap-1 text-sm bg-white rounded-lg border border-purple-100 px-3 py-2"
                         >
-                          <span className="text-gray-600">
-                            {leitura.dataColeta
-                              ? new Date(leitura.dataColeta).toLocaleString(
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold text-gray-900 truncate">
+                              {leitura.maquinaCodigo
+                                ? `${leitura.maquinaCodigo} — ${leitura.maquinaNome || "Máquina"}`
+                                : leitura.maquinaNome || "Máquina"}
+                            </span>
+                            <span className="text-gray-500 text-xs sm:text-sm shrink-0">
+                              {leitura.dataColeta
+                                ? new Date(leitura.dataColeta).toLocaleString(
+                                    "pt-BR",
+                                    { dateStyle: "short", timeStyle: "short" },
+                                  )
+                                : "-"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
+                            <span className="text-gray-600">
+                              Recebido:{" "}
+                              <span className="font-semibold text-gray-900">
+                                R${" "}
+                                {Number(leitura.valor || 0).toLocaleString(
                                   "pt-BR",
-                                  { dateStyle: "short", timeStyle: "short" },
-                                )
-                              : "-"}
-                          </span>
-                          <span className="font-semibold text-gray-900">
-                            R${" "}
-                            {Number(leitura.valor || 0).toLocaleString(
-                              "pt-BR",
-                              { minimumFractionDigits: 2 },
-                            )}
-                          </span>
+                                  { minimumFractionDigits: 2 },
+                                )}
+                              </span>
+                            </span>
+                            <span className="text-gray-600">
+                              Esperado:{" "}
+                              <span className="font-semibold text-amber-700">
+                                R${" "}
+                                {Number(
+                                  leitura.valorEsperado || 0,
+                                ).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </span>
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
