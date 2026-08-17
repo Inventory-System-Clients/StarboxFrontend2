@@ -33,6 +33,7 @@ export function Lojas() {
           cidade: filtros.cidade || undefined,
           estado: filtros.estado || undefined,
           roteiroId: filtros.roteiroId || undefined,
+          maquinaId: filtros.maquinaId || undefined,
           ...paginacao,
         },
       }),
@@ -42,6 +43,7 @@ export function Lojas() {
       cidade: "",
       estado: "",
       roteiroId: "",
+      maquinaId: "",
     },
     pageSize: 20,
   });
@@ -88,6 +90,15 @@ export function Lojas() {
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listaLojas.filters.busca]);
+
+  // Busca automática pelo filtro de máquina (código ou id), com o mesmo debounce.
+  useEffect(() => {
+    const termo = listaLojas.filters.maquinaId.trim();
+    if (termo.length < 2) return;
+    const timeout = setTimeout(() => listaLojas.search(), 400);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaLojas.filters.maquinaId]);
 
   const primeiraRenderFiltrosRef = useRef(true);
   useEffect(() => {
@@ -424,6 +435,17 @@ export function Lojas() {
                 </option>
               ))}
             </select>
+          </FilterField>
+          <FilterField label="ID da Máquina">
+            <input
+              type="text"
+              value={listaLojas.filters.maquinaId}
+              onChange={(e) =>
+                listaLojas.setFilter("maquinaId", e.target.value)
+              }
+              placeholder="Código ou ID da máquina"
+              className="input-field"
+            />
           </FilterField>
         </ListFilterBar>
 
