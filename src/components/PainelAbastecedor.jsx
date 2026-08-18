@@ -316,12 +316,15 @@ export default function PainelAbastecedor() {
         inAtual: Number(movimentacaoAtualizada?.contadorInAtual || 0),
         outAnterior: Number(movimentacaoAtualizada?.contadorOutAnterior || 0),
         outAtual: Number(movimentacaoAtualizada?.contadorOutAtual || 0),
-        diferencaIn: Number(movimentacaoAtualizada?.diferencaIn || 0),
+        // O abastecedor so reabastece produto, nunca faz leitura de contador -
+        // a mensagem de WhatsApp dele nao pode mostrar dinheiro (Saldo/Jogada/
+        // Entradas/etc). Zerar aqui e o suficiente porque
+        // construirMensagemDeItensWhatsApp deriva todo o financeiro (saldo,
+        // jogada por pelucia e os totais da loja) a partir de diferencaIn/jogado.
+        diferencaIn: 0,
         quantidadeSaiu: Number(movimentacaoAtualizada?.quantidadeSaiu || 0),
-        jogado: Number(movimentacaoAtualizada?.jogado || 0),
-        jogadasMediasPorPelucia: Number(
-          movimentacaoAtualizada?.jogadasMediasPorPelucia || 0,
-        ),
+        jogado: 0,
+        jogadasMediasPorPelucia: 0,
         diasDesdeUltimaMovimentacao:
           movimentacaoAtualizada?.diasDesdeUltimaMovimentacao,
         quantidadeAbastecimentoExtra: quantidadeNumero,
