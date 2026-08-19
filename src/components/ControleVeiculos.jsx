@@ -322,19 +322,29 @@ export default function ControleVeiculos({
     setFormFinalizar((prev) => ({ ...prev, [name]: value }));
   };
 
-  const validarLimiteKmPorUltimaMovimentacao = (veiculo, kmInformado) => {
+  // Referência para validações de KM: usa o maior valor entre o KM atual do
+  // veículo (que pode ter sido editado manualmente pelo admin) e o KM da
+  // última movimentação, para não bloquear com base em um valor desatualizado.
+  const obterKmReferencia = (veiculo) => {
     const ultimaMov = ultimasMovs?.[veiculo?.id];
     const kmUltimaMov = Number(ultimaMov?.km);
+    const kmAtualVeiculo = Number(veiculo?.km);
+    const candidatos = [kmUltimaMov, kmAtualVeiculo].filter(Number.isFinite);
+    return candidatos.length > 0 ? Math.max(...candidatos) : null;
+  };
 
-    if (!Number.isFinite(kmUltimaMov)) {
+  const validarLimiteKmPorUltimaMovimentacao = (veiculo, kmInformado) => {
+    const kmReferencia = obterKmReferencia(veiculo);
+
+    if (kmReferencia === null) {
       return { permitido: true };
     }
 
-    const limiteMaximo = kmUltimaMov + 10000;
+    const limiteMaximo = kmReferencia + 10000;
     if (kmInformado > limiteMaximo) {
       return {
         permitido: false,
-        kmUltimaMov,
+        kmUltimaMov: kmReferencia,
         limiteMaximo,
       };
     }
@@ -435,13 +445,15 @@ export default function ControleVeiculos({
 
     const kmValue =
       formFinalizar.km === "" ? 0 : parseInt(formFinalizar.km, 10);
-    // Bloqueio: não pode finalizar com KM menor que o da última movimentação
-    const ultimaMov = ultimasMovs[veiculoSelecionado.id];
-    if (ultimaMov && kmValue < Number(ultimaMov.km)) {
+    // Bloqueio: não pode finalizar com KM menor que o KM de referência
+    // (o maior entre o KM atual do veículo e o da última movimentação,
+    // pois o KM atual pode ter sido corrigido manualmente pelo admin)
+    const kmReferenciaFinalizar = obterKmReferencia(veiculoSelecionado);
+    if (kmReferenciaFinalizar !== null && kmValue < kmReferenciaFinalizar) {
       Swal.fire({
         icon: "warning",
         title: "KM inválido",
-        text: `O KM informado (${kmValue}) não pode ser menor que o KM da última movimentação (${ultimaMov.km}).`,
+        text: `O KM informado (${kmValue}) não pode ser menor que o KM atual do veículo (${kmReferenciaFinalizar}).`,
         confirmButtonColor: "#62A1D9",
       });
       return;
@@ -637,6 +649,9 @@ export default function ControleVeiculos({
 
   const usuarioPodeFinalizarPilotagem = (veiculo) => {
     if (!veiculo?.emUso) return false;
+
+    // Admin pode devolver o veículo mesmo não sendo quem o retirou
+    if (usuario?.role === "ADMIN") return true;
 
     const usuarioDaPilotagem = obterUsuarioDaPilotagemAtiva(veiculo);
     const usuarioLogadoId = normalizarId(usuario?.id);
