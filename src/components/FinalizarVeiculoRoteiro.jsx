@@ -41,7 +41,7 @@ export default function FinalizarVeiculoRoteiro({
   const [carregando, setCarregando] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
   const [veiculo, setVeiculo] = useState(null);
-  const [kmUltimaMov, setKmUltimaMov] = useState(null);
+  const [kmReferencia, setKmReferencia] = useState(null);
   const [finalizando, setFinalizando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -61,10 +61,7 @@ export default function FinalizarVeiculoRoteiro({
       setCarregando(true);
       setErroCarregamento("");
       try {
-        const [veiculosRes, ultimasMovRes] = await Promise.all([
-          api.get("/veiculos", { params: { all: true } }),
-          api.get("/movimentacao-veiculos/ultimas"),
-        ]);
+        const veiculosRes = await api.get("/veiculos", { params: { all: true } });
 
         if (!ativo) return;
 
@@ -79,13 +76,13 @@ export default function FinalizarVeiculoRoteiro({
           return;
         }
 
-        const ultimasMovObj = ultimasMovRes.data || {};
-        const ultimaMov = ultimasMovObj?.[veiculoId];
-        const kmUltimaMovNumero = Number(ultimaMov?.km);
+        // Referência = KM atual do veículo (veiculo.km), não o da última
+        // movimentação, que pode estar desatualizado se o admin editou o KM.
+        const kmAtualVeiculoNumero = Number(encontrado?.km);
 
         setVeiculo(encontrado);
-        setKmUltimaMov(
-          Number.isFinite(kmUltimaMovNumero) ? kmUltimaMovNumero : null,
+        setKmReferencia(
+          Number.isFinite(kmAtualVeiculoNumero) ? kmAtualVeiculoNumero : null,
         );
         setForm({
           estado: encontrado.estado || "Bom",
@@ -124,18 +121,18 @@ export default function FinalizarVeiculoRoteiro({
 
     const kmValue = form.km === "" ? 0 : parseInt(form.km, 10);
 
-    if (Number.isFinite(kmUltimaMov) && kmValue < kmUltimaMov) {
+    if (Number.isFinite(kmReferencia) && kmValue < kmReferencia) {
       setErro(
-        `O KM informado (${kmValue}) não pode ser menor que o KM da última movimentação (${kmUltimaMov}).`,
+        `O KM informado (${kmValue}) não pode ser menor que o KM atual do veículo (${kmReferencia}).`,
       );
       return;
     }
 
-    if (Number.isFinite(kmUltimaMov)) {
-      const limiteMaximo = kmUltimaMov + 10000;
+    if (Number.isFinite(kmReferencia)) {
+      const limiteMaximo = kmReferencia + 10000;
       if (kmValue > limiteMaximo) {
         setErro(
-          `O KM informado (${kmValue}) excede o limite permitido com base na última movimentação (${kmUltimaMov}). Máximo aceito: ${limiteMaximo}.`,
+          `O KM informado (${kmValue}) excede o limite permitido com base no KM atual do veículo (${kmReferencia}). Máximo aceito: ${limiteMaximo}.`,
         );
         return;
       }

@@ -44,7 +44,7 @@ export default function PilotarVeiculoRoteiro({
   const [carregando, setCarregando] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
   const [veiculo, setVeiculo] = useState(null);
-  const [kmUltimaMov, setKmUltimaMov] = useState(null);
+  const [kmReferencia, setKmReferencia] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -65,10 +65,7 @@ export default function PilotarVeiculoRoteiro({
       setCarregando(true);
       setErroCarregamento("");
       try {
-        const [veiculosRes, ultimasMovRes] = await Promise.all([
-          api.get("/veiculos", { params: { all: true } }),
-          api.get("/movimentacao-veiculos/ultimas"),
-        ]);
+        const veiculosRes = await api.get("/veiculos", { params: { all: true } });
 
         if (!ativo) return;
 
@@ -83,13 +80,13 @@ export default function PilotarVeiculoRoteiro({
           return;
         }
 
-        const ultimasMovObj = ultimasMovRes.data || {};
-        const ultimaMov = ultimasMovObj?.[veiculoId];
-        const kmUltimaMovNumero = Number(ultimaMov?.km);
+        // Referência = KM atual do veículo (veiculo.km), não o da última
+        // movimentação, que pode estar desatualizado se o admin editou o KM.
+        const kmAtualVeiculoNumero = Number(encontrado?.km);
 
         setVeiculo(encontrado);
-        setKmUltimaMov(
-          Number.isFinite(kmUltimaMovNumero) ? kmUltimaMovNumero : null,
+        setKmReferencia(
+          Number.isFinite(kmAtualVeiculoNumero) ? kmAtualVeiculoNumero : null,
         );
         setForm({
           estado: encontrado.estado || "Bom",
@@ -135,11 +132,11 @@ export default function PilotarVeiculoRoteiro({
       return;
     }
 
-    if (Number.isFinite(kmUltimaMov)) {
-      const limiteMaximo = kmUltimaMov + 10000;
+    if (Number.isFinite(kmReferencia)) {
+      const limiteMaximo = kmReferencia + 10000;
       if (kmValue > limiteMaximo) {
         setErro(
-          `O KM informado (${kmValue}) excede o limite permitido com base na última movimentação (${kmUltimaMov}). Máximo aceito: ${limiteMaximo}.`,
+          `O KM informado (${kmValue}) excede o limite permitido com base no KM atual do veículo (${kmReferencia}). Máximo aceito: ${limiteMaximo}.`,
         );
         return;
       }

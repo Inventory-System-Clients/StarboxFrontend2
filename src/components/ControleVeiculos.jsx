@@ -322,15 +322,13 @@ export default function ControleVeiculos({
     setFormFinalizar((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Referência para validações de KM: usa o maior valor entre o KM atual do
-  // veículo (que pode ter sido editado manualmente pelo admin) e o KM da
-  // última movimentação, para não bloquear com base em um valor desatualizado.
+  // Referência para validações de KM: sempre o KM atual do veículo (o campo
+  // veiculo.km), não o da última movimentação — o KM do veículo pode ter
+  // sido editado manualmente pelo admin e ficar diferente do registrado na
+  // última movimentação.
   const obterKmReferencia = (veiculo) => {
-    const ultimaMov = ultimasMovs?.[veiculo?.id];
-    const kmUltimaMov = Number(ultimaMov?.km);
     const kmAtualVeiculo = Number(veiculo?.km);
-    const candidatos = [kmUltimaMov, kmAtualVeiculo].filter(Number.isFinite);
-    return candidatos.length > 0 ? Math.max(...candidatos) : null;
+    return Number.isFinite(kmAtualVeiculo) ? kmAtualVeiculo : null;
   };
 
   const validarLimiteKmPorUltimaMovimentacao = (veiculo, kmInformado) => {
