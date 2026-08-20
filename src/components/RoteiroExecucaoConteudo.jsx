@@ -1700,7 +1700,26 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         }
       }
 
-      await enviarWhatsAppLoja(lojaSelecionada);
+      const mensagemAbastecimentoExtra = montarMensagemDeLeiturasWhatsApp([
+        {
+          maquinaId: String(maquina?.id || ""),
+          maquinaNome: nomeMaquina,
+          resumo: resumoAbastecimentoExtra,
+          createdAt: resumoAbastecimentoExtra.dataMovimentacao,
+        },
+      ]);
+
+      const abriuWhatsApp = abrirWhatsAppComMensagem(
+        mensagemAbastecimentoExtra,
+        null,
+        { preferSameTab: true, noFallback: true },
+      );
+      if (!abriuWhatsApp) {
+        setError(
+          "Nao foi possivel abrir o WhatsApp. Verifique se o navegador bloqueou a abertura de janelas.",
+        );
+      }
+
       setSuccess("Abastecimento extra salvo com sucesso!");
       setModalAbastecimentoExtra({
         aberto: false,
