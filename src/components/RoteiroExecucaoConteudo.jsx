@@ -129,6 +129,13 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   );
   const [pontosPuladosPorLoja, setPontosPuladosPorLoja] = useState({});
   const [modalMovimentacao, setModalMovimentacao] = useState(null);
+  const [modalReenviarAbastecimentoExtra, setModalReenviarAbastecimentoExtra] =
+    useState({
+      aberto: false,
+      lojasSelecionadasIds: [],
+      enviando: false,
+      erro: "",
+    });
 
   const perfisPermitidosEditarMovimentacaoRota = new Set([
     "FUNCIONARIO",
@@ -617,6 +624,115 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       ...prev,
       [String(loja.id)]: false,
     }));
+  };
+
+  const abrirModalReenviarAbastecimentoExtra = () => {
+    setModalReenviarAbastecimentoExtra({
+      aberto: true,
+      lojasSelecionadasIds: [],
+      enviando: false,
+      erro: "",
+    });
+  };
+
+  const fecharModalReenviarAbastecimentoExtra = () => {
+    setModalReenviarAbastecimentoExtra({
+      aberto: false,
+      lojasSelecionadasIds: [],
+      enviando: false,
+      erro: "",
+    });
+  };
+
+  const alternarLojaReenvioAbastecimentoExtra = (lojaId) => {
+    setModalReenviarAbastecimentoExtra((prev) => {
+      const idTexto = String(lojaId);
+      const jaSelecionada = prev.lojasSelecionadasIds.includes(idTexto);
+      return {
+        ...prev,
+        erro: "",
+        lojasSelecionadasIds: jaSelecionada
+          ? prev.lojasSelecionadasIds.filter((item) => item !== idTexto)
+          : [...prev.lojasSelecionadasIds, idTexto],
+      };
+    });
+  };
+
+  // Reenvia, loja por loja, so os blocos de abastecimento extra (ignora
+  // leituras normais de contador). Util quando o auto-envio na hora do
+  // abastecimento falhou (popup bloqueado, aba fechada etc.) e ninguem
+  // percebeu na hora - o usuario escolhe depois quais lojas quer reenviar.
+  const confirmarReenvioAbastecimentoExtra = async () => {
+    const lojasSelecionadasIds = modalReenviarAbastecimentoExtra.lojasSelecionadasIds;
+    if (lojasSelecionadasIds.length === 0) {
+      setModalReenviarAbastecimentoExtra((prev) => ({
+        ...prev,
+        erro: "Selecione ao menos uma loja.",
+      }));
+      return;
+    }
+
+    setModalReenviarAbastecimentoExtra((prev) => ({
+      ...prev,
+      enviando: true,
+      erro: "",
+    }));
+
+    const lojas = Array.isArray(roteiro?.lojas) ? roteiro.lojas : [];
+    const lojasSemAbastecimentoExtra = [];
+    let algumaMensagemEnviada = false;
+
+    for (const lojaId of lojasSelecionadasIds) {
+      const loja = lojas.find((item) => String(item.id) === lojaId);
+      if (!loja) continue;
+
+      let leituras = [];
+      try {
+        const resposta = await api.get("/movimentacoes/leituras-whatsapp", {
+          params: { roteiroId: id, lojaId: loja.id },
+        });
+        leituras = Array.isArray(resposta?.data) ? resposta.data : [];
+      } catch {
+        lojasSemAbastecimentoExtra.push(loja.nome || "loja");
+        continue;
+      }
+
+      const leiturasComAbastecimentoExtra = leituras.filter(
+        (item) => Number(item?.resumo?.quantidadeAbastecimentoExtra || 0) > 0,
+      );
+
+      if (leiturasComAbastecimentoExtra.length === 0) {
+        lojasSemAbastecimentoExtra.push(loja.nome || "loja");
+        continue;
+      }
+
+      const mensagem = montarMensagemDeLeiturasWhatsApp(
+        leiturasComAbastecimentoExtra,
+      );
+      if (!mensagem) {
+        lojasSemAbastecimentoExtra.push(loja.nome || "loja");
+        continue;
+      }
+
+      abrirWhatsAppComMensagem(mensagem, null, {
+        preferSameTab: lojasSelecionadasIds.length === 1,
+      });
+      algumaMensagemEnviada = true;
+    }
+
+    fecharModalReenviarAbastecimentoExtra();
+
+    if (algumaMensagemEnviada) {
+      setSuccess(
+        lojasSemAbastecimentoExtra.length > 0
+          ? `Mensagem enviada. Sem abastecimento extra pendente em: ${lojasSemAbastecimentoExtra.join(", ")}.`
+          : "Mensagem(ns) de abastecimento extra enviada(s) para o WhatsApp.",
+      );
+    } else {
+      setError(
+        "Nenhuma das lojas selecionadas tem abastecimento extra pendente para enviar.",
+      );
+    }
   };
 
   const roteiroTemPendencias = (roteiroAtual) => {
@@ -3553,9 +3669,20 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         )}
 
         <div className="mb-8">
-          <h2 className="text-lg font-bold mb-2">
-            Selecione uma loja para movimentar:
-          </h2>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <h2 className="text-lg font-bold">
+              Selecione uma loja para movimentar:
+            </h2>
+            {roteiro.lojas && roteiro.lojas.length > 0 && (
+              <button
+                type="button"
+                className="text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg"
+                onClick={abrirModalReenviarAbastecimentoExtra}
+              >
+                📤 Enviar somente abastecimento extra
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {roteiro.lojas && roteiro.lojas.length > 0 ? (
               [...roteiro.lojas]
@@ -4135,6 +4262,76 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                 {modalAbastecimentoExtra.loading
                   ? "Salvando..."
                   : "Sim, trocar produto"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          isOpen={modalReenviarAbastecimentoExtra.aberto}
+          onClose={fecharModalReenviarAbastecimentoExtra}
+          title="Enviar somente abastecimento extra"
+          size="md"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Escolha a(s) loja(s) para reenviar, no WhatsApp, somente os
+              abastecimentos extras registrados nesta execução (sem o
+              relatório completo do ponto).
+            </p>
+
+            {modalReenviarAbastecimentoExtra.erro && (
+              <AlertBox
+                type="error"
+                message={modalReenviarAbastecimentoExtra.erro}
+                onClose={() =>
+                  setModalReenviarAbastecimentoExtra((prev) => ({
+                    ...prev,
+                    erro: "",
+                  }))
+                }
+              />
+            )}
+
+            <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-3">
+              {(roteiro.lojas || [])
+                .slice()
+                .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+                .map((loja) => (
+                  <label
+                    key={loja.id}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={modalReenviarAbastecimentoExtra.lojasSelecionadasIds.includes(
+                        String(loja.id),
+                      )}
+                      onChange={() =>
+                        alternarLojaReenvioAbastecimentoExtra(loja.id)
+                      }
+                    />
+                    🏪 {loja.nome}
+                  </label>
+                ))}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                className="btn-secondary"
+                onClick={fecharModalReenviarAbastecimentoExtra}
+                disabled={modalReenviarAbastecimentoExtra.enviando}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                onClick={confirmarReenvioAbastecimentoExtra}
+                disabled={modalReenviarAbastecimentoExtra.enviando}
+              >
+                {modalReenviarAbastecimentoExtra.enviando
+                  ? "Enviando..."
+                  : "Enviar para o WhatsApp"}
               </button>
             </div>
           </div>
