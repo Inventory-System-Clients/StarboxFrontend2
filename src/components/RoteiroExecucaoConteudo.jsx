@@ -3732,191 +3732,220 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         )}
 
         <div className="mb-8">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-            <h2 className="text-lg font-bold">
-              Selecione uma loja para movimentar:
-            </h2>
-            {roteiro.lojas && roteiro.lojas.length > 0 && (
-              <button
-                type="button"
-                className="text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg"
-                onClick={abrirModalReenviarAbastecimentoExtra}
-              >
-                📤 Enviar somente abastecimento extra
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {roteiro.lojas && roteiro.lojas.length > 0 ? (
-              [...roteiro.lojas]
-                .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
-                .map((loja, index) => {
-                  const pontoFinalizado = lojaComMaquinasFinalizadas(loja);
-                  const leituraAtualizadaDoPonto =
-                    leiturasAtualizadasPorLoja[String(loja.id)] === true;
-                  const justificativaEdicaoDoPonto =
-                    justificativasEdicaoPorLoja[String(loja.id)] || null;
-                  const pontoPuladoJustificado =
-                    pontosPuladosPorLoja[String(loja.id)]?.justificativaEnviada ===
-                    true;
+          {lojaSelecionada ? (
+            (() => {
+              const loja = lojaSelecionada;
+              const pontoFinalizado = lojaComMaquinasFinalizadas(loja);
+              const leituraAtualizadaDoPonto =
+                leiturasAtualizadasPorLoja[String(loja.id)] === true;
+              const justificativaEdicaoDoPonto =
+                justificativasEdicaoPorLoja[String(loja.id)] || null;
+              const pontoPuladoJustificado =
+                pontosPuladosPorLoja[String(loja.id)]?.justificativaEnviada ===
+                true;
 
-                  return (
-                    <div key={loja.id} className="space-y-3">
-                      <button
-                        onClick={() => handleSelecionarLoja(loja)}
-                        className={`p-4 rounded-lg shadow border-2 font-bold text-lg transition-all flex flex-col items-start w-full 
-                        ${lojaSelecionada?.id === loja.id ? "border-blue-600" : "border-transparent"}
-                        ${pontoEstaConcluido(loja) ? "bg-green-100 border-green-600 text-green-700" : "bg-white"}`}
-                      >
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="bg-[#24094E] text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">
-                            {index + 1}
-                          </span>
-                          <span>🏪 {loja.nome}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 ml-9">
-                          {loja.cidade}, {loja.estado}
+              return (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setLojaSelecionada(null)}
+                    className="mb-3 flex items-center gap-1 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                  >
+                    ← Voltar para os pontos
+                  </button>
+
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Ponto
+                    </p>
+                    <h2 className="text-xl sm:text-2xl font-bold break-words">
+                      🏪 {loja.nome}
+                    </h2>
+                    <p className="text-xs text-gray-500">
+                      {loja.cidade}, {loja.estado}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {pontoEstaConcluido(loja) && (
+                        <span className="px-2 py-0.5 rounded-full bg-green-200 text-green-800 text-xs font-semibold">
+                          Concluída
                         </span>
-                        {pontoEstaConcluido(loja) && (
-                          <span className="mt-1 ml-9 px-2 py-0.5 rounded-full bg-green-200 text-green-800 text-xs font-semibold">
-                            Concluída
-                          </span>
-                        )}
-                        {pontoPuladoJustificado && (
-                          <span className="mt-1 ml-9 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-300">
-                            Ponto pulado justificado
-                          </span>
-                        )}
-                      </button>
-
-                      {pontoFinalizado && (
-                        <div className="ml-9 flex flex-col items-start gap-2">
-                          <button
-                            className="text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg"
-                            onClick={() => enviarWhatsAppLoja(loja)}
-                          >
-                            {leituraAtualizadaDoPonto
-                              ? "Enviar leitura atualizada"
-                              : "Enviar leituras do ponto no WhatsApp"}
-                          </button>
-                          {justificativaEdicaoDoPonto?.mensagem &&
-                            justificativaEdicaoDoPonto?.justificativa && (
-                              <button
-                                className="text-xs sm:text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg"
-                                onClick={() =>
-                                  reenviarJustificativaEdicao(loja)
-                                }
-                              >
-                                Reenviar justificativa da edicao
-                              </button>
-                            )}
-                        </div>
                       )}
+                      {pontoPuladoJustificado && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-300">
+                          Ponto pulado justificado
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                      {lojaSelecionada?.id === loja.id && (
-                        <div className="bg-white rounded-xl shadow p-4 border border-blue-100">
-                          <h3 className="text-base sm:text-lg font-bold mb-3">
-                            Máquinas da loja: {loja.nome}
-                          </h3>
-                          <div className="mb-4">
-                            <button
-                              className="bg-indigo-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-indigo-700"
-                              onClick={() => {
-                                if (lojaSelecionada?.id !== loja.id) {
-                                  setLojaSelecionada(loja);
-                                }
-                                abrirModalNovaManutencao();
-                              }}
-                            >
-                              ➕ Adicionar manutenção
-                            </button>
-                          </div>
-                          <div className="space-y-3">
-                            {loja.maquinas && loja.maquinas.length > 0 ? (
-                              loja.maquinas.map((maquina) =>
-                                (() => {
-                                  const maquinaConcluida =
-                                    maquinaEstaConcluidaNoBackend(maquina);
-                                  const podeEditarUltimaMovimentacao =
-                                    podeEditarUltimaMovimentacaoDaMaquina(
-                                      maquina,
-                                    );
-                                  return (
-                                    <div
-                                      key={maquina.id}
-                                      className="flex flex-col sm:flex-row sm:items-center gap-2"
-                                    >
-                                      <button
-                                        className={`p-3 rounded border font-medium w-full text-left transition-all flex items-center gap-2 flex-wrap whitespace-normal sm:flex-1
-                                ${maquinaConcluida ? "bg-green-100 border-green-600 text-green-700" : "bg-gray-50 hover:border-blue-600"}`}
-                                        onClick={() => {
-                                          setModalMovimentacao({
-                                            roteiroId: roteiro.id,
-                                            lojaId: loja.id,
-                                            maquinaId: maquina.id,
-                                          });
-                                        }}
-                                      >
-                                        <span>
-                                          🖲️ {obterNomeMaquinaExibicao(maquina)}{" "}
-                                          - Tipo:{" "}
-                                          {obterTipoMaquinaExibicao(maquina)}
-                                        </span>
-                                        {maquinaConcluida && (
-                                          <span className="ml-2 px-2 py-0.5 rounded-full bg-green-200 text-green-800 text-xs font-semibold">
-                                            Finalizada
-                                          </span>
-                                        )}
-                                      </button>
+                  {pontoFinalizado && (
+                    <div className="mb-4 flex flex-col items-start gap-2">
+                      <button
+                        className="w-full sm:w-auto text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg"
+                        onClick={() => enviarWhatsAppLoja(loja)}
+                      >
+                        {leituraAtualizadaDoPonto
+                          ? "Enviar leitura atualizada"
+                          : "Enviar leituras do ponto no WhatsApp"}
+                      </button>
+                      {justificativaEdicaoDoPonto?.mensagem &&
+                        justificativaEdicaoDoPonto?.justificativa && (
+                          <button
+                            className="w-full sm:w-auto text-xs sm:text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg"
+                            onClick={() => reenviarJustificativaEdicao(loja)}
+                          >
+                            Reenviar justificativa da edicao
+                          </button>
+                        )}
+                    </div>
+                  )}
 
-                                      {maquinaConcluida && (
-                                        <button
-                                          className="w-full sm:w-auto px-3 py-2 rounded border border-blue-500 bg-blue-50 text-blue-800 text-xs font-semibold hover:bg-blue-100 whitespace-normal"
-                                          onClick={() =>
-                                            abrirModalAbastecimentoExtra(
-                                              maquina,
-                                            )
-                                          }
-                                          title="Lançar apenas abastecimento extra sem alterar contadores"
-                                        >
-                                          Abastecimento extra
-                                        </button>
-                                      )}
+                  <div className="bg-white rounded-xl shadow p-4 border border-blue-100">
+                    <h3 className="text-base sm:text-lg font-bold mb-3">
+                      Máquinas da loja: {loja.nome}
+                    </h3>
+                    <div className="mb-4">
+                      <button
+                        className="w-full sm:w-auto bg-indigo-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-indigo-700"
+                        onClick={abrirModalNovaManutencao}
+                      >
+                        ➕ Adicionar manutenção
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {loja.maquinas && loja.maquinas.length > 0 ? (
+                        loja.maquinas.map((maquina) =>
+                          (() => {
+                            const maquinaConcluida =
+                              maquinaEstaConcluidaNoBackend(maquina);
+                            const podeEditarUltimaMovimentacao =
+                              podeEditarUltimaMovimentacaoDaMaquina(maquina);
+                            return (
+                              <div
+                                key={maquina.id}
+                                className="flex flex-col sm:flex-row sm:items-center gap-2"
+                              >
+                                <button
+                                  className={`p-3 rounded border font-medium w-full text-left transition-all flex items-center gap-2 flex-wrap whitespace-normal sm:flex-1
+                          ${maquinaConcluida ? "bg-green-100 border-green-600 text-green-700" : "bg-gray-50 hover:border-blue-600"}`}
+                                  onClick={() => {
+                                    setModalMovimentacao({
+                                      roteiroId: roteiro.id,
+                                      lojaId: loja.id,
+                                      maquinaId: maquina.id,
+                                    });
+                                  }}
+                                >
+                                  <span>
+                                    🖲️ {obterNomeMaquinaExibicao(maquina)} -
+                                    Tipo: {obterTipoMaquinaExibicao(maquina)}
+                                  </span>
+                                  {maquinaConcluida && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full bg-green-200 text-green-800 text-xs font-semibold">
+                                      Finalizada
+                                    </span>
+                                  )}
+                                </button>
 
-                                      {podeEditarUltimaMovimentacao && (
-                                        <button
-                                          className="w-full sm:w-auto px-3 py-2 rounded border border-amber-500 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 whitespace-normal"
-                                          onClick={() =>
-                                            abrirFluxoJustificativaEdicao(
-                                              maquina,
-                                            )
-                                          }
-                                          title="Editar apenas a última movimentação feita por você"
-                                        >
-                                          Editar última movimentação
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })(),
-                              )
-                            ) : (
-                              <div className="text-gray-400">
-                                Nenhuma máquina cadastrada nesta loja.
+                                {maquinaConcluida && (
+                                  <button
+                                    className="w-full sm:w-auto px-3 py-2 rounded border border-blue-500 bg-blue-50 text-blue-800 text-xs font-semibold hover:bg-blue-100 whitespace-normal"
+                                    onClick={() =>
+                                      abrirModalAbastecimentoExtra(maquina)
+                                    }
+                                    title="Lançar apenas abastecimento extra sem alterar contadores"
+                                  >
+                                    Abastecimento extra
+                                  </button>
+                                )}
+
+                                {podeEditarUltimaMovimentacao && (
+                                  <button
+                                    className="w-full sm:w-auto px-3 py-2 rounded border border-amber-500 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 whitespace-normal"
+                                    onClick={() =>
+                                      abrirFluxoJustificativaEdicao(maquina)
+                                    }
+                                    title="Editar apenas a última movimentação feita por você"
+                                  >
+                                    Editar última movimentação
+                                  </button>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            );
+                          })(),
+                        )
+                      ) : (
+                        <div className="text-gray-400">
+                          Nenhuma máquina cadastrada nesta loja.
                         </div>
                       )}
                     </div>
-                  );
-                })
-            ) : (
-              <div className="col-span-2 text-center text-gray-400">
-                Nenhuma loja disponível neste roteiro.
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <>
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                <h2 className="text-lg font-bold">
+                  Selecione uma loja para movimentar:
+                </h2>
+                {roteiro.lojas && roteiro.lojas.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg"
+                    onClick={abrirModalReenviarAbastecimentoExtra}
+                  >
+                    📤 Enviar somente abastecimento extra
+                  </button>
+                )}
               </div>
-            )}
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {roteiro.lojas && roteiro.lojas.length > 0 ? (
+                  [...roteiro.lojas]
+                    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+                    .map((loja, index) => {
+                      const pontoPuladoJustificado =
+                        pontosPuladosPorLoja[String(loja.id)]
+                          ?.justificativaEnviada === true;
+
+                      return (
+                        <button
+                          key={loja.id}
+                          onClick={() => handleSelecionarLoja(loja)}
+                          className={`p-4 rounded-lg shadow border-2 font-bold text-lg transition-all flex flex-col items-start w-full
+                          ${pontoEstaConcluido(loja) ? "bg-green-100 border-green-600 text-green-700" : "bg-white border-transparent"}`}
+                        >
+                          <div className="flex items-center gap-2 w-full">
+                            <span className="bg-[#24094E] text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">
+                              {index + 1}
+                            </span>
+                            <span>🏪 {loja.nome}</span>
+                          </div>
+                          <span className="text-xs text-gray-500 ml-9">
+                            {loja.cidade}, {loja.estado}
+                          </span>
+                          {pontoEstaConcluido(loja) && (
+                            <span className="mt-1 ml-9 px-2 py-0.5 rounded-full bg-green-200 text-green-800 text-xs font-semibold">
+                              Concluída
+                            </span>
+                          )}
+                          {pontoPuladoJustificado && (
+                            <span className="mt-1 ml-9 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-300">
+                              Ponto pulado justificado
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                ) : (
+                  <div className="col-span-2 text-center text-gray-400">
+                    Nenhuma loja disponível neste roteiro.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
         {!isFuncionarioAbastecedor && mostrarFinalizarVeiculo ? (
           <div className="bg-white rounded-xl shadow p-5 border border-gray-200 mb-4">
