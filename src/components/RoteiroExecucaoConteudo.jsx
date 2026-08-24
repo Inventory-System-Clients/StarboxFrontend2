@@ -3139,6 +3139,39 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     return () => registrarFinalizacaoRoteiro(id, null);
   }, [roteiro, isFuncionarioAbastecedor, mostrarFinalizarVeiculo, id]);
 
+  // Botão "Whats" (reenviar o resumo final no WhatsApp): só existe depois
+  // que a rota já está finalizada — mesma mecânica do "Finalizar Rota"
+  // acima, registrado na Navbar logo abaixo dele.
+  const chaveFinalizacaoWhats = `${id}-whats`;
+  useEffect(() => {
+    if (!roteiro || isFuncionarioAbastecedor || mostrarFinalizarVeiculo) {
+      registrarFinalizacaoRoteiro(chaveFinalizacaoWhats, null);
+      return;
+    }
+
+    const jaFinalizada =
+      roteiroEstaFinalizado(roteiro.status) && !roteiroTemPendencias(roteiro);
+
+    if (!jaFinalizada) {
+      registrarFinalizacaoRoteiro(chaveFinalizacaoWhats, null);
+      return;
+    }
+
+    registrarFinalizacaoRoteiro(chaveFinalizacaoWhats, {
+      label: enviandoResumoWhatsapp ? "Enviando..." : "Whats",
+      icone: "📤",
+      onClick: enviarResumoWhatsapp,
+    });
+
+    return () => registrarFinalizacaoRoteiro(chaveFinalizacaoWhats, null);
+  }, [
+    roteiro,
+    isFuncionarioAbastecedor,
+    mostrarFinalizarVeiculo,
+    chaveFinalizacaoWhats,
+    enviandoResumoWhatsapp,
+  ]);
+
   const handleVeiculoDevolvido = async (kmFinal) => {
     setMostrarFinalizarVeiculo(false);
     setKmFinalVeiculoInput(String(kmFinal));
@@ -3897,18 +3930,6 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
           <div className="flex flex-col sm:flex-row gap-3">
             {!isFuncionarioAbastecedor && (
               <div className="flex gap-2 w-full sm:w-auto">
-                <button
-                  className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
-                    enviandoResumoWhatsapp
-                      ? "bg-emerald-300 cursor-not-allowed"
-                      : "bg-emerald-600 hover:bg-emerald-700"
-                  }`}
-                  onClick={enviarResumoWhatsapp}
-                  disabled={enviandoResumoWhatsapp}
-                  title="Enviar mensagem final do roteiro no WhatsApp"
-                >
-                  {enviandoResumoWhatsapp ? "Enviando..." : "📤 Whats"}
-                </button>
                 <button
                   className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
                     copiandoResumo

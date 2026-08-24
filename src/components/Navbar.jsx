@@ -399,7 +399,7 @@ export default function Navbar() {
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       <span className="text-lg" aria-hidden="true">
-                        🏁
+                        {item.icone || "🏁"}
                       </span>
                       <span className="truncate">{item.label}</span>
                     </span>
