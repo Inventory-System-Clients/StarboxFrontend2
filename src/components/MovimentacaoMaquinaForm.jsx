@@ -1659,8 +1659,7 @@ export function MovimentacaoMaquinaForm({
     const { diferencaIn, diferencaOut } = resumoPreConfirmacao;
     if (!diferencaOut) return null;
 
-    const saldo = diferencaIn * valorFicha;
-    const mediaCalculada = saldo / diferencaOut;
+    const mediaCalculada = diferencaIn / diferencaOut;
     if (mediaCalculada >= faixa.min && mediaCalculada <= faixa.max) {
       return null;
     }
@@ -2075,11 +2074,11 @@ export function MovimentacaoMaquinaForm({
                 <p className="text-sm text-orange-800 mt-1">
                   Máquinas de R${" "}
                   {alertaMediaForaPadrao.valorFicha.toFixed(2)} por ficha
-                  costumam ficar entre R${" "}
-                  {alertaMediaForaPadrao.faixaMin.toFixed(2)} e R${" "}
-                  {alertaMediaForaPadrao.faixaMax.toFixed(2)} por pelúcia —
-                  essa leitura deu R${" "}
-                  {alertaMediaForaPadrao.mediaCalculada.toFixed(2)}, R${" "}
+                  costumam ficar entre{" "}
+                  {alertaMediaForaPadrao.faixaMin.toFixed(2)} e{" "}
+                  {alertaMediaForaPadrao.faixaMax.toFixed(2)} jogadas por
+                  pelúcia — essa leitura deu{" "}
+                  {alertaMediaForaPadrao.mediaCalculada.toFixed(2)},{" "}
                   {alertaMediaForaPadrao.diferenca.toFixed(2)}{" "}
                   {alertaMediaForaPadrao.direcao} do esperado.
                 </p>
