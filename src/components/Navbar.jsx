@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { useAlertas } from "../contexts/AlertasContext.jsx";
+import { useRoteiroFinalizacao } from "../contexts/RoteiroFinalizacaoContext.jsx";
 import api from "../services/api";
 import { roteiroTemVeiculoAssociado } from "../lib/pilotagemRoteiro";
 
@@ -193,6 +194,7 @@ const grupos = [
 export default function Navbar() {
   const { usuario, logout } = useAuth();
   const { totalGeral, podeVerAlertas, podeVerAlertaManutencao } = useAlertas();
+  const { itensFinalizacao } = useRoteiroFinalizacao();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -383,6 +385,29 @@ export default function Navbar() {
       {isMenuOpen && (
         <div className="border-t border-white/10 bg-neutral-950">
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-3 sm:px-6 lg:px-8">
+            {itensFinalizacao.length > 0 && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {itensFinalizacao.map((item) => (
+                  <button
+                    key={item.chave}
+                    type="button"
+                    onClick={() => {
+                      closeMenu();
+                      item.onClick();
+                    }}
+                    className="relative flex min-h-12 items-center justify-between rounded-lg bg-linear-to-r from-green-600 to-green-500 px-4 py-3 text-sm font-bold text-white shadow-lg transition-all hover:from-green-700 hover:to-green-600"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="text-lg" aria-hidden="true">
+                        🏁
+                      </span>
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {itensSoltosVisiveis.map((item) => {
                 const active = isActive(item.to);

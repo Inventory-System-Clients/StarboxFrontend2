@@ -9,6 +9,7 @@ import ManutencaoModal from "./ManutencaoModal";
 import ModalEditarMovimentacao from "./ModalEditarMovimentacao";
 import FinalizarVeiculoRoteiro from "./FinalizarVeiculoRoteiro";
 import { useAuth } from "../contexts/AuthContext";
+import { useRoteiroFinalizacao } from "../contexts/RoteiroFinalizacaoContext.jsx";
 import {
   abrirWhatsAppComMensagem,
   montarMensagemDeLeiturasWhatsApp,
@@ -24,6 +25,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { usuario } = useAuth();
+  const { registrarFinalizacaoRoteiro } = useRoteiroFinalizacao();
   const CATEGORIAS_GASTO = [
     { value: "transporte", label: "Transporte" },
     { value: "estadia", label: "Estadia" },
@@ -3109,6 +3111,34 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     abrirModalFinalizacao();
   };
 
+  // O botão "Finalizar Rota"/"Finalizar Veículo" mora na Navbar (menu, acima
+  // do Dashboard) em vez de aqui embutido — Navbar é renderizada como irmã
+  // deste componente em cada página, então o registro via contexto é o jeito
+  // dela saber que existe um roteiro em execução pronto pra finalizar.
+  useEffect(() => {
+    if (!roteiro || isFuncionarioAbastecedor || mostrarFinalizarVeiculo) {
+      registrarFinalizacaoRoteiro(id, null);
+      return;
+    }
+
+    const precisaFinalizar =
+      !roteiroEstaFinalizado(roteiro.status) || roteiroTemPendencias(roteiro);
+
+    if (!precisaFinalizar) {
+      registrarFinalizacaoRoteiro(id, null);
+      return;
+    }
+
+    registrarFinalizacaoRoteiro(id, {
+      label: roteiroTemVeiculoAssociado(roteiro)
+        ? "Finalizar Veículo"
+        : "Finalizar Rota",
+      onClick: handleAbrirFinalizacao,
+    });
+
+    return () => registrarFinalizacaoRoteiro(id, null);
+  }, [roteiro, isFuncionarioAbastecedor, mostrarFinalizarVeiculo, id]);
+
   const handleVeiculoDevolvido = async (kmFinal) => {
     setMostrarFinalizarVeiculo(false);
     setKmFinalVeiculoInput(String(kmFinal));
@@ -3865,18 +3895,6 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row gap-3">
-            {!isFuncionarioAbastecedor &&
-              (!roteiroEstaFinalizado(roteiro.status) ||
-                roteiroTemPendencias(roteiro)) && (
-                <button
-                  className="w-full sm:w-auto bg-green-600 text-white py-2 px-6 rounded-lg font-bold hover:bg-green-700"
-                  onClick={handleAbrirFinalizacao}
-                >
-                  {roteiroTemVeiculoAssociado(roteiro)
-                    ? "Finalizar Veículo"
-                    : "Finalizar Rota"}
-                </button>
-              )}
             {!isFuncionarioAbastecedor && (
               <div className="flex gap-2 w-full sm:w-auto">
                 <button

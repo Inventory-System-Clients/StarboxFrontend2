@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.jsx";
 import { AlertasProvider } from "./contexts/AlertasContext.jsx";
+import { RoteiroFinalizacaoProvider } from "./contexts/RoteiroFinalizacaoContext.jsx";
 import { PrivateRoute } from "./components/PrivateRoute";
 import { Login } from "./pages/Login";
 import { Registrar } from "./pages/Registrar";
@@ -364,9 +365,11 @@ function App() {
   return (
     <AuthProvider>
       <AlertasProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <RoteiroFinalizacaoProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </RoteiroFinalizacaoProvider>
       </AlertasProvider>
     </AuthProvider>
   );
