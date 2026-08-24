@@ -2067,31 +2067,30 @@ export function MovimentacaoMaquinaForm({
             )}
 
             {alertaMediaForaPadrao && (
-              <div className="mb-4 p-4 bg-orange-50 border-2 border-orange-400 rounded-lg">
-                <p className="text-sm font-bold text-orange-900">
-                  ⚠️ Essa leitura está fora da média esperada
+              <div className="mb-4 p-5 bg-orange-50 border-2 border-orange-400 rounded-lg">
+                <p className="text-xl font-bold text-orange-900">
+                  ⚠️ Saída de pelúcia errada
                 </p>
-                <p className="text-sm text-orange-800 mt-1">
-                  Máquinas de R${" "}
-                  {alertaMediaForaPadrao.valorFicha.toFixed(2)} por ficha
-                  costumam ficar entre{" "}
-                  {alertaMediaForaPadrao.faixaMin.toFixed(2)} e{" "}
+                <p className="text-lg font-bold text-orange-900 mt-2">
+                  {alertaMediaForaPadrao.direcao === "abaixo"
+                    ? "Saiu muito"
+                    : "Saiu pouco"}
+                </p>
+                <p className="text-base text-orange-800 mt-2">
+                  Média ideal: {alertaMediaForaPadrao.faixaMin.toFixed(2)} a{" "}
                   {alertaMediaForaPadrao.faixaMax.toFixed(2)} jogadas por
-                  pelúcia — essa leitura deu{" "}
-                  {alertaMediaForaPadrao.mediaCalculada.toFixed(2)},{" "}
-                  {alertaMediaForaPadrao.diferenca.toFixed(2)}{" "}
-                  {alertaMediaForaPadrao.direcao} do esperado.
+                  pelúcia
                 </p>
                 {!alertaMediaVisto ? (
                   <button
                     type="button"
                     onClick={() => setAlertaMediaVisto(true)}
-                    className="mt-3 px-4 py-2 text-sm bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+                    className="mt-4 px-4 py-2 text-sm bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
                   >
-                    Entendi, confirmar
+                    Vou arrumar
                   </button>
                 ) : (
-                  <p className="mt-3 text-xs font-semibold text-orange-700">
+                  <p className="mt-4 text-xs font-semibold text-orange-700">
                     ✓ Confirmado — isso também vai ficar registrado na
                     Central de Alertas.
                   </p>
