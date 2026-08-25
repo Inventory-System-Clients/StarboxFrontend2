@@ -122,6 +122,8 @@ export function Roteiros() {
   const [novaObservacaoRoteiro, setNovaObservacaoRoteiro] = useState("");
   const [novoPermiteGastos, setNovoPermiteGastos] = useState(true);
   const [salvandoPermiteGastos, setSalvandoPermiteGastos] = useState({});
+  const [novoPermiteFinalizarRota, setNovoPermiteFinalizarRota] = useState(true);
+  const [salvandoPermiteFinalizarRota, setSalvandoPermiteFinalizarRota] = useState({});
   const [filtroNomeRoteiro, setFiltroNomeRoteiro] = useState("");
   const [filtroResponsavelId, setFiltroResponsavelId] = useState("");
   const [filtroLojaId, setFiltroLojaId] = useState("");
@@ -589,6 +591,39 @@ export function Roteiros() {
       setError("Erro ao atualizar permissão de gastos do roteiro.");
     } finally {
       setSalvandoPermiteGastos((prev) => ({ ...prev, [roteiroId]: false }));
+    }
+  };
+
+  // Controla se o botão "Finalizar Rota"/"Finalizar Veículo" aparece no
+  // navbar pra quem está executando esse roteiro. Desligado por padrão só
+  // pra funcionário ABASTECEDOR (que já nem finaliza rota hoje); os demais
+  // vêm ligados por padrão.
+  const alternarPermiteFinalizarRota = async (roteiro) => {
+    const roteiroId = roteiro.id;
+    const valorAtual = roteiro?.permiteFinalizarRota !== false;
+    const novoValor = !valorAtual;
+
+    try {
+      setSalvandoPermiteFinalizarRota((prev) => ({ ...prev, [roteiroId]: true }));
+      await api.patch(`/roteiros/${roteiroId}`, {
+        permiteFinalizarRota: novoValor,
+      });
+      setRoteiros((prev) =>
+        prev.map((item) =>
+          item.id === roteiroId
+            ? { ...item, permiteFinalizarRota: novoValor }
+            : item,
+        ),
+      );
+      setSuccess(
+        novoValor
+          ? "Finalização da rota liberada para este roteiro."
+          : "Finalização da rota bloqueada para este roteiro.",
+      );
+    } catch {
+      setError("Erro ao atualizar permissão de finalizar rota.");
+    } finally {
+      setSalvandoPermiteFinalizarRota((prev) => ({ ...prev, [roteiroId]: false }));
     }
   };
 
@@ -1181,6 +1216,7 @@ export function Roteiros() {
         diasSemana: novosDiasRoteiro,
         veiculoId,
         permiteGastos: novoPermiteGastos,
+        permiteFinalizarRota: novoPermiteFinalizarRota,
       };
 
       // Observação é opcional na criação: só envia se houver texto.
@@ -1194,6 +1230,7 @@ export function Roteiros() {
       setNovosDiasRoteiro([]);
       setNovaObservacaoRoteiro("");
       setNovoPermiteGastos(true);
+      setNovoPermiteFinalizarRota(true);
       setShowModalCriarRoteiro(false);
       setSuccess("Roteiro criado com sucesso!");
       carregarDadosIniciais();
@@ -2026,6 +2063,37 @@ export function Roteiros() {
                 )}
               </div>
 
+              {/* Seção Permitir Finalizar Rota */}
+              <div className="mb-4">
+                <label className="text-xs font-bold text-gray-400 block mb-2">
+                  FINALIZAÇÃO DA ROTA
+                </label>
+                {isGestorRoteiro ? (
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-[#24094E]"
+                      checked={roteiro.permiteFinalizarRota !== false}
+                      disabled={salvandoPermiteFinalizarRota[roteiro.id]}
+                      onChange={() => alternarPermiteFinalizarRota(roteiro)}
+                    />
+                    <span className="text-sm text-gray-700">
+                      {salvandoPermiteFinalizarRota[roteiro.id]
+                        ? "Salvando..."
+                        : "Permitir finalizar rota"}
+                    </span>
+                  </label>
+                ) : (
+                  <p
+                    className={`text-sm font-semibold ${roteiro.permiteFinalizarRota !== false ? "text-green-700" : "text-gray-500"}`}
+                  >
+                    {roteiro.permiteFinalizarRota !== false
+                      ? "Liberado"
+                      : "Bloqueado pelo admin"}
+                  </p>
+                )}
+              </div>
+
               {/* Seção de Observação */}
               <div className="mb-4">
                 <label className="text-xs font-bold text-gray-400 block mb-2">
@@ -2389,7 +2457,7 @@ export function Roteiros() {
             <p className="text-xs text-gray-500 mb-4">
               {novaObservacaoRoteiro.length}/{LIMITE_OBSERVACAO_ROTEIRO}
             </p>
-            <label className="flex items-center gap-2 mb-5 cursor-pointer select-none">
+            <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
               <input
                 type="checkbox"
                 className="w-4 h-4 accent-[#24094E]"
@@ -2400,6 +2468,17 @@ export function Roteiros() {
                 Permitir lançamento de gastos pelo funcionário
               </span>
             </label>
+            <label className="flex items-center gap-2 mb-5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-[#24094E]"
+                checked={novoPermiteFinalizarRota}
+                onChange={(e) => setNovoPermiteFinalizarRota(e.target.checked)}
+              />
+              <span className="text-sm font-semibold text-gray-700">
+                Permitir finalizar rota
+              </span>
+            </label>
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -2408,6 +2487,7 @@ export function Roteiros() {
                   setNovosDiasRoteiro([]);
                   setNovaObservacaoRoteiro("");
                   setNovoPermiteGastos(true);
+                  setNovoPermiteFinalizarRota(true);
                 }}
                 className="flex-1 py-3 text-gray-500 font-bold"
               >

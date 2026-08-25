@@ -3097,7 +3097,12 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   // deste componente em cada página, então o registro via contexto é o jeito
   // dela saber que existe um roteiro em execução pronto pra finalizar.
   useEffect(() => {
-    if (!roteiro || isFuncionarioAbastecedor || mostrarFinalizarVeiculo) {
+    if (
+      !roteiro ||
+      isFuncionarioAbastecedor ||
+      mostrarFinalizarVeiculo ||
+      roteiro.permiteFinalizarRota === false
+    ) {
       registrarFinalizacaoRoteiro(id, null);
       return;
     }
