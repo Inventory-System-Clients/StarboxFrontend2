@@ -1029,20 +1029,17 @@ export function MovimentacaoMaquinaForm({
       (p) => String(p.id) === String(formData.produto_id),
     );
     const precoProduto = Number(produtoSelecionado?.preco || 0);
-    // "Valor por pelúcia": quanto em R$ foi jogado pra cada pelúcia
-    // liberada. "Jogada" (jogadasMediasPorPelucia): o mesmo valor
-    // convertido pra número de fichas, dividindo pelo valor da própria
-    // ficha — são duas leituras diferentes da mesma leitura, não confundir.
-    const deveConverterParaFichas = usaFichas && valorJogada > 0;
+    // "Valor por pelúcia" e "Jogada": jogadas ÷ saíram, direto do contador
+    // de entrada — não dependem de "usa fichas" nem passam pelo saldo, pra
+    // bater sempre com o mesmo cálculo do alerta no backend
+    // (verificarMediaJogadasForaPadrao).
     const valorMedidoSaidaPelucia =
-      quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
-    const jogadasMediasPorPelucia = deveConverterParaFichas
-      ? valorMedidoSaidaPelucia / valorJogada
-      : valorMedidoSaidaPelucia;
+      quantidadeSaiu > 0 ? diferencaIn / quantidadeSaiu : 0;
+    const jogadasMediasPorPelucia = valorMedidoSaidaPelucia;
 
     const faixaValorMediaFicha = FAIXAS_MEDIA_POR_VALOR_FICHA[valorJogada];
     let alertaMediaForaPadraoWhats = null;
-    if (deveConverterParaFichas && faixaValorMediaFicha && quantidadeSaiu > 0) {
+    if (valorJogada > 0 && faixaValorMediaFicha && quantidadeSaiu > 0) {
       const faixaJogadas = {
         min: faixaValorMediaFicha.min / valorJogada,
         max: faixaValorMediaFicha.max / valorJogada,

@@ -719,19 +719,17 @@ const construirMensagemDeItensWhatsApp = (itens) => {
       ? quantidadeJogadas * valorJogada
       : quantidadeJogadas;
     const quantidadeSaiu = Number(resumo?.quantidadeSaiu || 0);
-    // "Valor por pelúcia": R$ jogado por pelúcia liberada. "Jogada"
-    // (jogadaPorPelucia): o mesmo valor convertido pra número de fichas,
-    // dividindo pelo valor da própria ficha — são duas leituras diferentes
-    // da mesma leitura, não confundir.
+    // "Valor por pelúcia" e "Jogada": jogadas ÷ saíram, direto do contador
+    // de entrada — não dependem de "usa fichas" nem passam pelo saldo, pra
+    // bater sempre com o mesmo cálculo do alerta no backend
+    // (verificarMediaJogadasForaPadrao).
     const valorMedidoSaidaPelucia =
-      quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
-    const jogadaPorPelucia = deveMultiplicarPorFicha
-      ? valorMedidoSaidaPelucia / valorJogada
-      : valorMedidoSaidaPelucia;
+      quantidadeSaiu > 0 ? quantidadeJogadas / quantidadeSaiu : 0;
+    const jogadaPorPelucia = valorMedidoSaidaPelucia;
 
     const faixaValor = FAIXAS_MEDIA_POR_VALOR_FICHA[valorJogada];
     let alertaMediaForaPadrao = null;
-    if (deveMultiplicarPorFicha && faixaValor && quantidadeSaiu > 0) {
+    if (valorJogada > 0 && faixaValor && quantidadeSaiu > 0) {
       const faixaJogadas = {
         min: faixaValor.min / valorJogada,
         max: faixaValor.max / valorJogada,

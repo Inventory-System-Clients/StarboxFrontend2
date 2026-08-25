@@ -86,7 +86,6 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   });
   const [resumoExecucaoBackend, setResumoExecucaoBackend] = useState(null);
   const [resumoExecucaoRawBackend, setResumoExecucaoRawBackend] = useState(null);
-  const [resumoExecucaoExpandido, setResumoExecucaoExpandido] = useState(false);
   const [tiposMaquinaPorId, setTiposMaquinaPorId] = useState({});
   const [ultimasMovimentacoesPorMaquina, setUltimasMovimentacoesPorMaquina] =
     useState({});
@@ -3278,72 +3277,6 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
             🚗 Veículo: {veiculoResumo}
           </p>
         )}
-        <section className="mb-6 rounded-xl border border-violet-200 bg-violet-50 p-4">
-          <button
-            type="button"
-            onClick={() => setResumoExecucaoExpandido((prev) => !prev)}
-            className="w-full flex items-center justify-between text-left"
-          >
-            <h3 className="text-sm font-bold text-violet-900">
-              📋 Resumo da execução (backend)
-            </h3>
-            <span className="text-xs font-semibold text-violet-700">
-              {resumoExecucaoExpandido ? "▲ Ocultar" : "▾ Ver resumo"}
-            </span>
-          </button>
-          {resumoExecucaoExpandido && (
-            !resumoExecucaoBackend ? (
-              <p className="text-xs text-violet-900 mt-2">
-                Resumo persistido ainda não disponível para hoje.
-              </p>
-            ) : (
-              <div className="space-y-2 text-xs text-violet-900 mt-2">
-                <p>Roteiro: {resumoExecucaoBackend.roteiro || "-"}</p>
-                <p className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                  Total de pontos na rota: {Number(resumoExecucaoBackend.totalPontosNaRota || 0)}
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Pontos feitos: {resumoExecucaoBackend.pontosFeitos.length}
-                  </span>
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Pontos não feitos: {resumoExecucaoBackend.pontosNaoFeitos.length}
-                  </span>
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Máquinas feitas: {resumoExecucaoBackend.maquinasFeitas.length}
-                  </span>
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Máquinas não feitas: {resumoExecucaoBackend.maquinasNaoFeitas.length}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Estoque inicial: {Number(resumoExecucaoBackend.estoqueInicial || 0)} produtos
-                  </span>
-                  {Number(resumoExecucaoBackend.estoqueAdicional || 0) > 0 && (
-                    <span className="rounded-md bg-blue-50 px-2 py-1 border border-blue-300 text-blue-900 font-semibold">
-                      Estoque adicional: {Number(resumoExecucaoBackend.estoqueAdicional || 0)} produtos
-                    </span>
-                  )}
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Estoque final: {Number(resumoExecucaoBackend.estoqueFinal || 0)} produtos
-                  </span>
-                  <span className="rounded-md bg-white/70 px-2 py-1 border border-violet-200">
-                    Total gasto na rota: {Number(resumoExecucaoBackend.totalGastoRota || 0)} produtos
-                  </span>
-                </div>
-                {!isFuncionarioAbastecedor && obterTextoResumoParaCompartilhar() && (
-                  <div>
-                    <p className="font-semibold mb-1">Texto do resumo (inclui KM):</p>
-                    <pre className="whitespace-pre-wrap rounded-md border border-violet-200 bg-white/70 p-2 text-[11px]">
-                      {obterTextoResumoParaCompartilhar()}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )
-          )}
-        </section>
         {error && (
           <AlertBox type="error" message={error} onClose={() => setError("")} />
         )}
