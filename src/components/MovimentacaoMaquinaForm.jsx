@@ -2126,6 +2126,10 @@ export function MovimentacaoMaquinaForm({
                   {Math.round(alertaMediaForaPadrao.faixaMax)} jogadas por
                   pelúcia
                 </p>
+                <p className="text-base font-semibold text-orange-900 mt-1">
+                  Média de agora: {Math.round(alertaMediaForaPadrao.mediaCalculada)}{" "}
+                  jogadas por pelúcia
+                </p>
                 {!alertaMediaVisto ? (
                   <button
                     type="button"
