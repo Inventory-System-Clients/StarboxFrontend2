@@ -1,3 +1,14 @@
+// Faixa esperada de "valor jogado por pelúcia liberada" (em R$) por valor
+// de ficha da máquina. A faixa em JOGADAS (fichas por pelúcia) é esse R$
+// dividido pelo valor da própria ficha. Mantenha em sync com
+// FAIXAS_MEDIA_POR_VALOR_FICHA em
+// frontend2/src/components/MovimentacaoMaquinaForm.jsx e
+// backend2/src/services/alertaMediaFichasService.js.
+const FAIXAS_MEDIA_POR_VALOR_FICHA = {
+  2: { min: 34, max: 45 },
+  5: { min: 65, max: 85 },
+};
+
 const STATUS_CONCLUIDO = new Set([
   "concluido",
   "concluida",
@@ -708,12 +719,41 @@ const construirMensagemDeItensWhatsApp = (itens) => {
       ? quantidadeJogadas * valorJogada
       : quantidadeJogadas;
     const quantidadeSaiu = Number(resumo?.quantidadeSaiu || 0);
-    const jogadaPorPelucia = quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
+    // "Valor medido de saída de pelúcia": R$ jogado por pelúcia liberada.
+    // "Jogada" (jogadaPorPelucia): o mesmo valor convertido pra número de
+    // fichas, dividindo pelo valor da própria ficha — são duas leituras
+    // diferentes da mesma leitura, não confundir.
+    const valorMedidoSaidaPelucia =
+      quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
+    const jogadaPorPelucia = deveMultiplicarPorFicha
+      ? valorMedidoSaidaPelucia / valorJogada
+      : valorMedidoSaidaPelucia;
+
+    const faixaValor = FAIXAS_MEDIA_POR_VALOR_FICHA[valorJogada];
+    let alertaMediaForaPadrao = null;
+    if (deveMultiplicarPorFicha && faixaValor && quantidadeSaiu > 0) {
+      const faixaJogadas = {
+        min: faixaValor.min / valorJogada,
+        max: faixaValor.max / valorJogada,
+      };
+      if (
+        jogadaPorPelucia < faixaJogadas.min ||
+        jogadaPorPelucia > faixaJogadas.max
+      ) {
+        alertaMediaForaPadrao = {
+          saiu: jogadaPorPelucia < faixaJogadas.min ? "muito" : "pouco",
+          faixaMin: faixaJogadas.min,
+          faixaMax: faixaJogadas.max,
+        };
+      }
+    }
 
     return {
       quantidadeJogadas,
       saldo,
+      valorMedidoSaidaPelucia,
       jogadaPorPelucia,
+      alertaMediaForaPadrao,
     };
   };
 
@@ -732,8 +772,13 @@ const construirMensagemDeItensWhatsApp = (itens) => {
     const quantidadeAbastecidaInformada = Number(
       r?.quantidadeAbastecidaInformada,
     );
-    const { quantidadeJogadas, saldo, jogadaPorPelucia } =
-      calcularFinanceiroResumo(r);
+    const {
+      quantidadeJogadas,
+      saldo,
+      valorMedidoSaidaPelucia,
+      jogadaPorPelucia,
+      alertaMediaForaPadrao,
+    } = calcularFinanceiroResumo(r);
     const dias = r?.diasDesdeUltimaMovimentacao;
     const quantidadeAbastecimentoExtra = Number(
       r?.quantidadeAbastecimentoExtra || 0,
@@ -759,7 +804,14 @@ const construirMensagemDeItensWhatsApp = (itens) => {
           ]
         : []),
       `Saldo: ${formatarMoeda(saldo)}`,
+      `Valor medido de saida de pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
       `Jogada: ${formatarMoeda(jogadaPorPelucia)}`,
+      ...(alertaMediaForaPadrao
+        ? [
+            `*⚠️ SAIDA DE PELUCIA ERRADA — SAIU ${alertaMediaForaPadrao.saiu.toUpperCase()}*`,
+            `*Jogada ideal: ${formatarMoeda(alertaMediaForaPadrao.faixaMin)} a ${formatarMoeda(alertaMediaForaPadrao.faixaMax)} por pelucia*`,
+          ]
+        : []),
       ...(Number.isFinite(Number(dias))
         ? [`Cobrado com ${formatarInteiro(dias)} dia(s)`]
         : []),

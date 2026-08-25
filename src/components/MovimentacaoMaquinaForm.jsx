@@ -1029,8 +1029,35 @@ export function MovimentacaoMaquinaForm({
       (p) => String(p.id) === String(formData.produto_id),
     );
     const precoProduto = Number(produtoSelecionado?.preco || 0);
-    const jogadasMediasPorPelucia =
+    // "Valor medido de saída de pelúcia": quanto em R$ foi jogado pra cada
+    // pelúcia liberada. "Jogada" (jogadasMediasPorPelucia): o mesmo valor
+    // convertido pra número de fichas (dividindo pelo valor da própria
+    // ficha) — são duas leituras diferentes da mesma leitura, não confundir.
+    const deveConverterParaFichas = usaFichas && valorJogada > 0;
+    const valorMedidoSaidaPelucia =
       quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
+    const jogadasMediasPorPelucia = deveConverterParaFichas
+      ? valorMedidoSaidaPelucia / valorJogada
+      : valorMedidoSaidaPelucia;
+
+    const faixaValorMediaFicha = FAIXAS_MEDIA_POR_VALOR_FICHA[valorJogada];
+    let alertaMediaForaPadraoWhats = null;
+    if (deveConverterParaFichas && faixaValorMediaFicha && quantidadeSaiu > 0) {
+      const faixaJogadas = {
+        min: faixaValorMediaFicha.min / valorJogada,
+        max: faixaValorMediaFicha.max / valorJogada,
+      };
+      if (
+        jogadasMediasPorPelucia < faixaJogadas.min ||
+        jogadasMediasPorPelucia > faixaJogadas.max
+      ) {
+        alertaMediaForaPadraoWhats = {
+          saiu: jogadasMediasPorPelucia < faixaJogadas.min ? "muito" : "pouco",
+          faixaMin: faixaJogadas.min,
+          faixaMax: faixaJogadas.max,
+        };
+      }
+    }
 
     const lojaNome = maquina?.loja?.nome || "Ponto sem nome";
     const dataMovimentacao = new Date().toLocaleString("pt-BR");
@@ -1073,7 +1100,14 @@ export function MovimentacaoMaquinaForm({
       ? []
       : [
           `Saldo: R$${formatarMoeda(saldo)}`,
-          `Jogadas medias por pelucia: R$${formatarMoeda(jogadasMediasPorPelucia)}`,
+          `Valor medido de saida de pelucia: R$${formatarMoeda(valorMedidoSaidaPelucia)}`,
+          `Jogada: ${formatarMoeda(jogadasMediasPorPelucia)}`,
+          ...(alertaMediaForaPadraoWhats
+            ? [
+                `*⚠️ SAIDA DE PELUCIA ERRADA — SAIU ${alertaMediaForaPadraoWhats.saiu.toUpperCase()}*`,
+                `*Jogada ideal: ${formatarMoeda(alertaMediaForaPadraoWhats.faixaMin)} a ${formatarMoeda(alertaMediaForaPadraoWhats.faixaMax)} por pelucia*`,
+              ]
+            : []),
           "___________________________________",
           "Qtde Maqs....: 01",
           `Entradas.....: ${formatarInteiro(diferencaIn)}`,
@@ -1124,6 +1158,7 @@ export function MovimentacaoMaquinaForm({
       valorJogada,
       usaFichas,
       jogadasMediasPorPelucia,
+      valorMedidoSaidaPelucia,
       diasDesdeUltimaMovimentacao,
       quantidadeAbastecidaInformada,
       nomeProdutoAbastecido,
@@ -1653,8 +1688,16 @@ export function MovimentacaoMaquinaForm({
     if (!maquina) return null;
 
     const valorFicha = Number(maquina?.valorFicha || 0);
-    const faixa = FAIXAS_MEDIA_POR_VALOR_FICHA[valorFicha];
-    if (!faixa) return null;
+    const faixaValor = FAIXAS_MEDIA_POR_VALOR_FICHA[valorFicha];
+    if (!faixaValor || valorFicha <= 0) return null;
+
+    // faixaValor é em R$ (valor jogado por pelúcia); a faixa de JOGADAS
+    // (fichas por pelúcia) dessa máquina é esse R$ dividido pelo valor da
+    // própria ficha.
+    const faixa = {
+      min: faixaValor.min / valorFicha,
+      max: faixaValor.max / valorFicha,
+    };
 
     const { diferencaIn, diferencaOut } = resumoPreConfirmacao;
     if (!diferencaOut) return null;
@@ -1664,7 +1707,7 @@ export function MovimentacaoMaquinaForm({
       return null;
     }
 
-    const direcao = mediaCalculada > faixa.max ? "acima" : "abaixo";
+    const direcao = mediaCalculada < faixa.min ? "abaixo" : "acima";
     const limiteViolado = direcao === "acima" ? faixa.max : faixa.min;
 
     return {
@@ -1672,6 +1715,7 @@ export function MovimentacaoMaquinaForm({
       faixaMin: faixa.min,
       faixaMax: faixa.max,
       mediaCalculada,
+      valorMedidoSaidaPelucia: mediaCalculada * valorFicha,
       direcao,
       diferenca: Math.abs(mediaCalculada - limiteViolado),
     };

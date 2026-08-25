@@ -436,12 +436,20 @@ function SecaoMediaForaPadrao({ itens, usuarioAtualId, isAdminLike, onResolver }
                   <p className="font-bold text-gray-900">
                     {item.maquinaCodigo} {item.maquinaNome ? `- ${item.maquinaNome}` : ""}
                   </p>
+                  <p className="text-sm font-bold text-rose-800">
+                    Saída de pelúcia errada — Saiu{" "}
+                    {item.direcao === "abaixo" ? "muito" : "pouco"}
+                  </p>
                   <p className="text-sm text-gray-600">
                     {item.lojaNome} · {Number(item.mediaCalculada).toFixed(2)} jogadas por pelúcia
-                    (esperado {Number(item.faixaMin).toFixed(2)} a{" "}
-                    {Number(item.faixaMax).toFixed(2)} pra ficha de R${" "}
-                    {Number(item.valorFicha).toFixed(2)}) —{" "}
-                    {Number(item.diferenca || 0).toFixed(2)} {item.direcao} do limite
+                    (ideal {Number(item.faixaMin).toFixed(2)} a{" "}
+                    {Number(item.faixaMax).toFixed(2)}) — valor medido: R${" "}
+                    {Number(
+                      item.valorMedidoSaidaPelucia ??
+                        Number(item.mediaCalculada || 0) *
+                          Number(item.valorFicha || 0),
+                    ).toFixed(2)}{" "}
+                    (ficha de R$ {Number(item.valorFicha).toFixed(2)})
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     Registrado por {item.usuarioNome || "—"} em {formatarData(item.createdAt)}
