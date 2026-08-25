@@ -2349,7 +2349,12 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       (l) => l.id === lojaIdSalva,
     );
     if (lojaAtualizada) {
-      setLojaSelecionada(lojaAtualizada);
+      // Se essa era a última máquina pendente do ponto, volta sozinho pra
+      // lista de pontos em vez de esperar clicar em "Voltar para os
+      // pontos". Se ainda sobrar máquina, continua na tela do ponto.
+      setLojaSelecionada(
+        lojaComMaquinasFinalizadas(lojaAtualizada) ? null : lojaAtualizada,
+      );
       verificarEEnviarWhatsAppLojaSeCompleta(lojaAtualizada);
     }
   };
