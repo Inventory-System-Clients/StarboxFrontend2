@@ -5,6 +5,7 @@ import { useAlertas } from "../contexts/AlertasContext.jsx";
 import { useRoteiroFinalizacao } from "../contexts/RoteiroFinalizacaoContext.jsx";
 import api from "../services/api";
 import { roteiroTemVeiculoAssociado } from "../lib/pilotagemRoteiro";
+import { compartilharEstoquePessoal } from "../lib/compartilharEstoque";
 
 const ADMIN_LIKE = ["ADMIN", "GERENCIADOR"];
 // Usuário MANUTENCAO só consegue navegar pra /pecas e /manutencoes (o próprio
@@ -51,15 +52,26 @@ const itensSoltos = [
     allowedRoles: FUNCIONARIO_ROLES,
     requiresPermiteGastos: true,
   },
+  {
+    action: "compartilhar-estoque",
+    label: "Compartilhar Estoque",
+    icon: "📤",
+    allowedRoles: FUNCIONARIO_ROLES,
+  },
 ];
 
 // Abastecedor tem uma rotina bem restrita (rota + estoque pessoal), entao o
 // menu dele nao mostra os grupos administrativos/operacionais inteiros — so
-// os 2 links que ele realmente usa, direto sem dropdown.
+// os links que ele realmente usa, direto sem dropdown.
 const itensSoltosAbastecedor = [
   { to: "/", label: "Dashboard", icon: "📊" },
   { to: "/roteiros", label: "Roteiros", icon: "🗺️" },
   { to: "/estoque-usuarios", label: "Gerenciamento de Estoque", icon: "📦" },
+  {
+    action: "compartilhar-estoque",
+    label: "Compartilhar Estoque",
+    icon: "📤",
+  },
 ];
 
 const grupos = [
@@ -201,6 +213,7 @@ export default function Navbar() {
   const [gruposAbertos, setGruposAbertos] = useState({});
   const [temVeiculoNoRoteiro, setTemVeiculoNoRoteiro] = useState(false);
   const [permiteGastosEmRoteiro, setPermiteGastosEmRoteiro] = useState(false);
+  const [compartilhandoEstoque, setCompartilhandoEstoque] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -246,6 +259,19 @@ export default function Navbar() {
   const closeMenu = () => setIsMenuOpen(false);
   const toggleGrupo = (id) =>
     setGruposAbertos((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const handleCompartilharEstoque = async () => {
+    if (compartilhandoEstoque) return;
+    try {
+      setCompartilhandoEstoque(true);
+      await compartilharEstoquePessoal(usuario);
+      closeMenu();
+    } catch {
+      window.alert("Não foi possível carregar o estoque pra compartilhar.");
+    } finally {
+      setCompartilhandoEstoque(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -410,6 +436,29 @@ export default function Navbar() {
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {itensSoltosVisiveis.map((item) => {
+                if (item.action === "compartilhar-estoque") {
+                  return (
+                    <button
+                      key="compartilhar-estoque"
+                      type="button"
+                      onClick={handleCompartilharEstoque}
+                      disabled={compartilhandoEstoque}
+                      className="relative flex min-h-12 items-center justify-between rounded-lg px-4 py-3 text-sm font-medium text-gray-300 transition-all hover:bg-white/10 hover:text-white disabled:opacity-60"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="text-lg" aria-hidden="true">
+                          {item.icon}
+                        </span>
+                        <span className="truncate">
+                          {compartilhandoEstoque
+                            ? "Enviando..."
+                            : item.label}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                }
+
                 const active = isActive(item.to);
                 return (
                   <Link

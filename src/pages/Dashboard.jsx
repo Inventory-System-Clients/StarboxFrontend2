@@ -13,6 +13,7 @@ import DashboardGastosRoteirosTab from "../components/DashboardGastosRoteirosTab
 import AjusteMaquinaAtual from "../components/AjusteMaquinaAtual";
 import PainelAbastecedor from "../components/PainelAbastecedor";
 import PainelFuncionarioTodasLojas from "../components/PainelFuncionarioTodasLojas";
+import { compartilharEstoquePessoal } from "../lib/compartilharEstoque";
 
 import Swal from "sweetalert2";
 
@@ -68,6 +69,55 @@ export function Dashboard() {
     !ocultarAbaRevisaoVeiculos &&
     roleUsuarioNormalizado !== "CONTROLADOR_ESTOQUE";
   const resumoCardsGridClass = "grid gap-4 md:gap-6 mb-8";
+
+  // Lembrete de compartilhar o estoque pessoal: toda sexta-feira, só pra
+  // quem tem estoque pessoal de verdade (funcionário/abastecedor). Some
+  // depois de compartilhar ou dispensar, volta na sexta seguinte porque a
+  // chave do localStorage inclui a data do dia.
+  const [lembreteEstoqueVisivel, setLembreteEstoqueVisivel] = useState(false);
+  const [compartilhandoEstoqueLembrete, setCompartilhandoEstoqueLembrete] =
+    useState(false);
+  const chaveLembreteEstoqueHoje = () => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    return `starbox:lembrete-estoque:${usuario?.id}:${hoje}`;
+  };
+
+  useEffect(() => {
+    if (!usuario?.id || !(isFuncionario || isFuncionarioTodasLojas)) {
+      setLembreteEstoqueVisivel(false);
+      return;
+    }
+    const hojeEhSexta = new Date().getDay() === 5;
+    if (!hojeEhSexta) {
+      setLembreteEstoqueVisivel(false);
+      return;
+    }
+    const jaTratadoHoje = localStorage.getItem(chaveLembreteEstoqueHoje());
+    setLembreteEstoqueVisivel(!jaTratadoHoje);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario?.id, isFuncionario, isFuncionarioTodasLojas]);
+
+  const dispensarLembreteEstoque = () => {
+    localStorage.setItem(chaveLembreteEstoqueHoje(), "1");
+    setLembreteEstoqueVisivel(false);
+  };
+
+  const handleCompartilharEstoqueLembrete = async () => {
+    if (compartilhandoEstoqueLembrete) return;
+    try {
+      setCompartilhandoEstoqueLembrete(true);
+      await compartilharEstoquePessoal(usuario);
+      dispensarLembreteEstoque();
+    } catch {
+      Swal.fire(
+        "Erro",
+        "Não foi possível carregar o estoque pra compartilhar.",
+        "error",
+      );
+    } finally {
+      setCompartilhandoEstoqueLembrete(false);
+    }
+  };
   const [stats, setStats] = useState({
     alertas: [],
     balanco: null,
@@ -838,6 +888,44 @@ export function Dashboard() {
             </button>
           </div>
         </div>
+
+        {lembreteEstoqueVisivel && (
+          <div className="mb-6 flex flex-col gap-3 rounded-xl border-2 border-orange-300 bg-orange-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl" aria-hidden="true">
+                📤
+              </span>
+              <div>
+                <p className="font-bold text-orange-900">
+                  Sexta-feira: compartilhe seu estoque
+                </p>
+                <p className="text-sm text-orange-800">
+                  Manda seu estoque pessoal atualizado no WhatsApp antes de
+                  fechar a semana.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCompartilharEstoqueLembrete}
+                disabled={compartilhandoEstoqueLembrete}
+                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-60"
+              >
+                {compartilhandoEstoqueLembrete
+                  ? "Enviando..."
+                  : "Compartilhar agora"}
+              </button>
+              <button
+                type="button"
+                onClick={dispensarLembreteEstoque}
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+              >
+                Agora não
+              </button>
+            </div>
+          </div>
+        )}
 
         {isAbastecedor && <PainelAbastecedor />}
         {isFuncionarioTodasLojas && <PainelFuncionarioTodasLojas />}
