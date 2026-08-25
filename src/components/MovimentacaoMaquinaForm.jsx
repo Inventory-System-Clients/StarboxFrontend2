@@ -1029,13 +1029,15 @@ export function MovimentacaoMaquinaForm({
       (p) => String(p.id) === String(formData.produto_id),
     );
     const precoProduto = Number(produtoSelecionado?.preco || 0);
-    // "Valor por pelúcia" e "Jogada": jogadas ÷ saíram, direto do contador
-    // de entrada — não dependem de "usa fichas" nem passam pelo saldo, pra
-    // bater sempre com o mesmo cálculo do alerta no backend
-    // (verificarMediaJogadasForaPadrao).
+    // "Valor por pelúcia": jogadas ÷ saíram, direto do contador de entrada
+    // (R$, sem envolver ficha). "Jogada": esse mesmo valor dividido pelo
+    // valor da ficha da máquina — não depende de "usa fichas" (só do valor
+    // da ficha estar preenchido), pra bater sempre com o mesmo cálculo do
+    // alerta no backend (verificarMediaJogadasForaPadrao).
     const valorMedidoSaidaPelucia =
       quantidadeSaiu > 0 ? diferencaIn / quantidadeSaiu : 0;
-    const jogadasMediasPorPelucia = valorMedidoSaidaPelucia;
+    const jogadasMediasPorPelucia =
+      valorJogada > 0 ? valorMedidoSaidaPelucia / valorJogada : valorMedidoSaidaPelucia;
 
     const faixaValorMediaFicha = FAIXAS_MEDIA_POR_VALOR_FICHA[valorJogada];
     let alertaMediaForaPadraoWhats = null;
@@ -1700,7 +1702,7 @@ export function MovimentacaoMaquinaForm({
     const { diferencaIn, diferencaOut } = resumoPreConfirmacao;
     if (!diferencaOut) return null;
 
-    const mediaCalculada = diferencaIn / diferencaOut;
+    const mediaCalculada = diferencaIn / diferencaOut / valorFicha;
     if (mediaCalculada >= faixa.min && mediaCalculada <= faixa.max) {
       return null;
     }
