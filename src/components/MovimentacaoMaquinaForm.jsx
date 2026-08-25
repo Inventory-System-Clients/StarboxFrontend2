@@ -1029,10 +1029,10 @@ export function MovimentacaoMaquinaForm({
       (p) => String(p.id) === String(formData.produto_id),
     );
     const precoProduto = Number(produtoSelecionado?.preco || 0);
-    // "Valor medido de saída de pelúcia": quanto em R$ foi jogado pra cada
-    // pelúcia liberada. "Jogada" (jogadasMediasPorPelucia): o mesmo valor
-    // convertido pra número de fichas (dividindo pelo valor da própria
-    // ficha) — são duas leituras diferentes da mesma leitura, não confundir.
+    // "Valor por pelúcia": quanto em R$ foi jogado pra cada pelúcia
+    // liberada. "Jogada" (jogadasMediasPorPelucia): o mesmo valor
+    // convertido pra número de fichas, dividindo pelo valor da própria
+    // ficha — são duas leituras diferentes da mesma leitura, não confundir.
     const deveConverterParaFichas = usaFichas && valorJogada > 0;
     const valorMedidoSaidaPelucia =
       quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
@@ -1100,7 +1100,7 @@ export function MovimentacaoMaquinaForm({
       ? []
       : [
           `Saldo: R$${formatarMoeda(saldo)}`,
-          `Valor medido de saida de pelucia: R$${formatarMoeda(valorMedidoSaidaPelucia)}`,
+          `Valor por pelucia: R$${formatarMoeda(valorMedidoSaidaPelucia)}`,
           `Jogada: ${formatarInteiro(jogadasMediasPorPelucia)}`,
           ...(alertaMediaForaPadraoWhats
             ? [
@@ -1159,6 +1159,7 @@ export function MovimentacaoMaquinaForm({
       usaFichas,
       jogadasMediasPorPelucia,
       valorMedidoSaidaPelucia,
+      precoProduto,
       diasDesdeUltimaMovimentacao,
       quantidadeAbastecidaInformada,
       nomeProdutoAbastecido,

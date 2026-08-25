@@ -719,10 +719,10 @@ const construirMensagemDeItensWhatsApp = (itens) => {
       ? quantidadeJogadas * valorJogada
       : quantidadeJogadas;
     const quantidadeSaiu = Number(resumo?.quantidadeSaiu || 0);
-    // "Valor medido de saída de pelúcia": R$ jogado por pelúcia liberada.
-    // "Jogada" (jogadaPorPelucia): o mesmo valor convertido pra número de
-    // fichas, dividindo pelo valor da própria ficha — são duas leituras
-    // diferentes da mesma leitura, não confundir.
+    // "Valor por pelúcia": R$ jogado por pelúcia liberada. "Jogada"
+    // (jogadaPorPelucia): o mesmo valor convertido pra número de fichas,
+    // dividindo pelo valor da própria ficha — são duas leituras diferentes
+    // da mesma leitura, não confundir.
     const valorMedidoSaidaPelucia =
       quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
     const jogadaPorPelucia = deveMultiplicarPorFicha
@@ -804,7 +804,7 @@ const construirMensagemDeItensWhatsApp = (itens) => {
           ]
         : []),
       `Saldo: ${formatarMoeda(saldo)}`,
-      `Valor medido de saida de pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
+      `Valor por pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
       `Jogada: ${formatarInteiro(jogadaPorPelucia)}`,
       ...(alertaMediaForaPadrao
         ? [

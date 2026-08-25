@@ -47,7 +47,6 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   const [kmFinalVeiculoInput, setKmFinalVeiculoInput] = useState("");
   const [mostrarFinalizarVeiculo, setMostrarFinalizarVeiculo] = useState(false);
   const [enviandoResumoWhatsapp, setEnviandoResumoWhatsapp] = useState(false);
-  const [copiandoResumo, setCopiandoResumo] = useState(false);
   const [modalNovaManutencao, setModalNovaManutencao] = useState({
     aberto: false,
     loading: false,
@@ -1156,11 +1155,11 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     return { ok: true, numero };
   };
 
-  // Fonte única de resolução da mensagem de resumo, usada pelos 3 caminhos de
-  // envio (popup automático ao finalizar, botão "Enviar Whats" e "Copiar
-  // resumo") para garantir que os 3 mandem exatamente o mesmo texto, sempre
-  // filtrado por período. Aceita overrides porque, no momento do finalize, o
-  // state ainda não refletiu o resultado recém-recebido do backend.
+  // Fonte única de resolução da mensagem de resumo, usada pelos caminhos de
+  // envio (popup automático ao finalizar e botão "Whats") para garantir que
+  // mandem exatamente o mesmo texto, sempre filtrado por período. Aceita
+  // overrides porque, no momento do finalize, o state ainda não refletiu o
+  // resultado recém-recebido do backend.
   const obterTextoResumoParaCompartilhar = (
     resumoOverride = resumoExecucaoBackend,
     rawOverride = resumoExecucaoRawBackend,
@@ -1209,28 +1208,6 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       }
     } finally {
       setEnviandoResumoWhatsapp(false);
-    }
-  };
-
-  const copiarResumoFinalizacao = async () => {
-    if (copiandoResumo) return;
-
-    const textoResumo = obterTextoResumoParaCompartilhar();
-    if (!textoResumo) {
-      setError("Resumo ainda não disponível para cópia.");
-      return;
-    }
-
-    try {
-      setCopiandoResumo(true);
-      await navigator.clipboard.writeText(textoResumo);
-      setSuccess("Resumo copiado com sucesso");
-    } catch {
-      setError(
-        "Não foi possível copiar automaticamente. Verifique permissão de clipboard no navegador.",
-      );
-    } finally {
-      setCopiandoResumo(false);
     }
   };
 
@@ -3947,38 +3924,13 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
             </>
           )}
         </div>
-        {!isFuncionarioAbastecedor && mostrarFinalizarVeiculo ? (
+        {!isFuncionarioAbastecedor && mostrarFinalizarVeiculo && (
           <div className="bg-white rounded-xl shadow p-5 border border-gray-200 mb-4">
             <FinalizarVeiculoRoteiro
               veiculoId={roteiro?.veiculoId || roteiro?.veiculo?.id}
               onDevolvido={handleVeiculoDevolvido}
               onCancelar={() => setMostrarFinalizarVeiculo(false)}
             />
-          </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row gap-3">
-            {!isFuncionarioAbastecedor && (
-              <div className="flex gap-2 w-full sm:w-auto">
-                <button
-                  className={`flex-1 sm:flex-none py-2 px-4 rounded-lg font-bold text-white ${
-                    copiandoResumo
-                      ? "bg-blue-300 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  }`}
-                  onClick={copiarResumoFinalizacao}
-                  disabled={copiandoResumo}
-                  title="Copiar resumo para colar em outro lugar"
-                >
-                  {copiandoResumo ? "Copiando..." : "📋 Copiar"}
-                </button>
-              </div>
-            )}
-            <button
-              className="w-full sm:w-auto bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-bold"
-              onClick={() => navigate("/roteiros", { replace: true })}
-            >
-              Voltar
-            </button>
           </div>
         )}
 

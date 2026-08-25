@@ -67,8 +67,6 @@ export function Dashboard() {
   const podeVerAbaRevisaoVeiculos =
     !ocultarAbaRevisaoVeiculos &&
     roleUsuarioNormalizado !== "CONTROLADOR_ESTOQUE";
-  const podeVerDefeituosasNoDashboard =
-    usuario?.role === "FUNCIONARIO_TODAS_LOJAS";
   const resumoCardsGridClass = "grid gap-4 md:gap-6 mb-8";
   const [stats, setStats] = useState({
     alertas: [],
@@ -1337,98 +1335,6 @@ export function Dashboard() {
                   <p className="text-3xl font-bold">🚗🏍️</p>
                   <p className="text-xs opacity-75 mt-1">
                     Acessar controle de veículos
-                  </p>
-                </div>
-              </div>
-            )}
-            {/* Estoque por Usuário */}
-            <div
-              className="stat-card bg-linear-to-br from-cyan-500 to-cyan-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
-              onClick={() => navigate("/estoque-usuarios")}
-            >
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium opacity-90">
-                    Gerenciamento de Estoque
-                  </h3>
-                  <svg
-                    className="w-8 h-8 opacity-80"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M20 13V7a2 2 0 00-2-2h-3V3m0 2h-4m4 0v2M4 7h16M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7"
-                    />
-                  </svg>
-                </div>
-                <p className="text-3xl font-bold">📦</p>
-                <p className="text-xs opacity-75 mt-1">
-                  {alertasEstoqueUsuario.length} alertas pendentes
-                </p>
-              </div>
-            </div>
-            {podeVerDefeituosasNoDashboard && (
-              <div
-                className="stat-card order-3 md:order-0 bg-linear-to-br from-amber-500 to-orange-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer"
-                onClick={() => navigate("/dashboard/pecas-defeituosas")}
-              >
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium opacity-90">
-                      Peças Defeituosas
-                    </h3>
-                    <svg
-                      className="w-8 h-8 opacity-80"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-3xl font-bold">♻️</p>
-                  <p className="text-xs opacity-75 mt-1">
-                    Pendentes e histórico de devoluções
-                  </p>
-                </div>
-              </div>
-            )}
-            {!isAbastecedor && (
-              <div
-                className={`stat-card order-2 md:order-0 bg-linear-to-br from-indigo-500 to-indigo-700 p-4 sm:p-6 rounded-xl shadow-md flex flex-col justify-between min-h-30 cursor-pointer${temManutencaoPendente ? " maintenance-blink" : ""}`}
-                onClick={() => navigate("/manutencoes")}
-              >
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium opacity-90">
-                      Manutenções
-                    </h3>
-                    <svg
-                      className="w-8 h-8 opacity-80"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.75 17L9 21l3-1 3 1-.75-4M9 13V7a3 3 0 116 0v6m-6 0h6"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-3xl font-bold">🛠️</p>
-                  <p className="text-xs opacity-75 mt-1">
-                    Acessar manutenções do sistema
                   </p>
                 </div>
               </div>
