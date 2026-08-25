@@ -1101,11 +1101,11 @@ export function MovimentacaoMaquinaForm({
       : [
           `Saldo: R$${formatarMoeda(saldo)}`,
           `Valor medido de saida de pelucia: R$${formatarMoeda(valorMedidoSaidaPelucia)}`,
-          `Jogada: ${formatarMoeda(jogadasMediasPorPelucia)}`,
+          `Jogada: ${formatarInteiro(jogadasMediasPorPelucia)}`,
           ...(alertaMediaForaPadraoWhats
             ? [
                 `*⚠️ SAIDA DE PELUCIA ERRADA — SAIU ${alertaMediaForaPadraoWhats.saiu.toUpperCase()}*`,
-                `*Jogada ideal: ${formatarMoeda(alertaMediaForaPadraoWhats.faixaMin)} a ${formatarMoeda(alertaMediaForaPadraoWhats.faixaMax)} por pelucia*`,
+                `*Jogada ideal: ${formatarInteiro(alertaMediaForaPadraoWhats.faixaMin)} a ${formatarInteiro(alertaMediaForaPadraoWhats.faixaMax)} por pelucia*`,
               ]
             : []),
           "___________________________________",
@@ -2121,8 +2121,8 @@ export function MovimentacaoMaquinaForm({
                     : "Saiu pouco"}
                 </p>
                 <p className="text-base text-orange-800 mt-2">
-                  Média ideal: {alertaMediaForaPadrao.faixaMin.toFixed(2)} a{" "}
-                  {alertaMediaForaPadrao.faixaMax.toFixed(2)} jogadas por
+                  Média ideal: {Math.round(alertaMediaForaPadrao.faixaMin)} a{" "}
+                  {Math.round(alertaMediaForaPadrao.faixaMax)} jogadas por
                   pelúcia
                 </p>
                 {!alertaMediaVisto ? (

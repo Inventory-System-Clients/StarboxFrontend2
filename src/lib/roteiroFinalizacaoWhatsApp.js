@@ -805,11 +805,11 @@ const construirMensagemDeItensWhatsApp = (itens) => {
         : []),
       `Saldo: ${formatarMoeda(saldo)}`,
       `Valor medido de saida de pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
-      `Jogada: ${formatarMoeda(jogadaPorPelucia)}`,
+      `Jogada: ${formatarInteiro(jogadaPorPelucia)}`,
       ...(alertaMediaForaPadrao
         ? [
             `*⚠️ SAIDA DE PELUCIA ERRADA — SAIU ${alertaMediaForaPadrao.saiu.toUpperCase()}*`,
-            `*Jogada ideal: ${formatarMoeda(alertaMediaForaPadrao.faixaMin)} a ${formatarMoeda(alertaMediaForaPadrao.faixaMax)} por pelucia*`,
+            `*Jogada ideal: ${formatarInteiro(alertaMediaForaPadrao.faixaMin)} a ${formatarInteiro(alertaMediaForaPadrao.faixaMax)} por pelucia*`,
           ]
         : []),
       ...(Number.isFinite(Number(dias))

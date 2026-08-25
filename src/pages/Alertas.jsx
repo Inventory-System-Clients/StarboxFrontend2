@@ -441,9 +441,9 @@ function SecaoMediaForaPadrao({ itens, usuarioAtualId, isAdminLike, onResolver }
                     {item.direcao === "abaixo" ? "muito" : "pouco"}
                   </p>
                   <p className="text-sm text-gray-600">
-                    {item.lojaNome} · {Number(item.mediaCalculada).toFixed(2)} jogadas por pelúcia
-                    (ideal {Number(item.faixaMin).toFixed(2)} a{" "}
-                    {Number(item.faixaMax).toFixed(2)}) — valor medido: R${" "}
+                    {item.lojaNome} · {Math.round(Number(item.mediaCalculada))} jogadas por pelúcia
+                    (ideal {Math.round(Number(item.faixaMin))} a{" "}
+                    {Math.round(Number(item.faixaMax))}) — valor medido: R${" "}
                     {Number(
                       item.valorMedidoSaidaPelucia ??
                         Number(item.mediaCalculada || 0) *
