@@ -736,12 +736,20 @@ const construirMensagemDeItensWhatsApp = (itens) => {
         min: faixaValor.min / valorJogada,
         max: faixaValor.max / valorJogada,
       };
+      // Compara pelo número ARREDONDADO (o mesmo que aparece na linha
+      // "Jogada: X" da mensagem), não pelo valor cru — senão um valor como
+      // 12,6 (exibido como "Jogada: 13") já dispara por estar abaixo de
+      // faixaJogadas.min=13, e no WhatsApp parece um alerta batendo em cima
+      // do próprio limite ("ideal: 13 a 17") em vez de abaixo dele.
+      const jogadaArredondada = Math.round(jogadaPorPelucia);
+      const faixaMinArredondada = Math.round(faixaJogadas.min);
+      const faixaMaxArredondada = Math.round(faixaJogadas.max);
       if (
-        jogadaPorPelucia < faixaJogadas.min ||
-        jogadaPorPelucia > faixaJogadas.max
+        jogadaArredondada < faixaMinArredondada ||
+        jogadaArredondada > faixaMaxArredondada
       ) {
         alertaMediaForaPadrao = {
-          saiu: jogadaPorPelucia < faixaJogadas.min ? "muito" : "pouco",
+          saiu: jogadaArredondada < faixaMinArredondada ? "muito" : "pouco",
           faixaMin: faixaJogadas.min,
           faixaMax: faixaJogadas.max,
         };

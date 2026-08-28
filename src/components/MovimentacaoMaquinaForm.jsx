@@ -1046,12 +1046,18 @@ export function MovimentacaoMaquinaForm({
         min: faixaValorMediaFicha.min / valorJogada,
         max: faixaValorMediaFicha.max / valorJogada,
       };
+      // Compara pelo número ARREDONDADO (o mesmo que vai pra mensagem do
+      // WhatsApp), não pelo valor cru — senão um valor como 12,6 (exibido
+      // como "Jogada: 13") já dispara por estar abaixo de faixaJogadas.min=13.
+      const jogadaArredondada = Math.round(jogadasMediasPorPelucia);
+      const faixaMinArredondada = Math.round(faixaJogadas.min);
+      const faixaMaxArredondada = Math.round(faixaJogadas.max);
       if (
-        jogadasMediasPorPelucia < faixaJogadas.min ||
-        jogadasMediasPorPelucia > faixaJogadas.max
+        jogadaArredondada < faixaMinArredondada ||
+        jogadaArredondada > faixaMaxArredondada
       ) {
         alertaMediaForaPadraoWhats = {
-          saiu: jogadasMediasPorPelucia < faixaJogadas.min ? "muito" : "pouco",
+          saiu: jogadaArredondada < faixaMinArredondada ? "muito" : "pouco",
           faixaMin: faixaJogadas.min,
           faixaMax: faixaJogadas.max,
         };
@@ -1703,11 +1709,22 @@ export function MovimentacaoMaquinaForm({
     if (!diferencaOut) return null;
 
     const mediaCalculada = diferencaIn / diferencaOut / valorFicha;
-    if (mediaCalculada >= faixa.min && mediaCalculada <= faixa.max) {
+
+    // Compara pelo número ARREDONDADO (o mesmo exibido como "Média de
+    // agora"/"Média ideal" no banner), não pelo valor cru — senão uma média
+    // de 12,6 (exibida como 13) já dispara por estar abaixo de faixa.min=13,
+    // mas parece um alerta batendo em cima do próprio limite exibido.
+    const mediaArredondada = Math.round(mediaCalculada);
+    const faixaMinArredondada = Math.round(faixa.min);
+    const faixaMaxArredondada = Math.round(faixa.max);
+    if (
+      mediaArredondada >= faixaMinArredondada &&
+      mediaArredondada <= faixaMaxArredondada
+    ) {
       return null;
     }
 
-    const direcao = mediaCalculada < faixa.min ? "abaixo" : "acima";
+    const direcao = mediaArredondada < faixaMinArredondada ? "abaixo" : "acima";
     const limiteViolado = direcao === "acima" ? faixa.max : faixa.min;
 
     return {
