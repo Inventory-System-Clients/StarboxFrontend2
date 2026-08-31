@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
@@ -180,8 +181,8 @@ export function MaquinaDetalhes() {
                   { data: { maquinaId: maquina.id } },
                 );
                 window.location.assign("/alertas");
-              } catch (error) {
-                alert("Erro ao marcar como corrigido.", error);
+              } catch {
+                Swal.fire("Erro", "Erro ao marcar como corrigido.", "error");
               }
             }}
             disabled={!maquina.alertaId}

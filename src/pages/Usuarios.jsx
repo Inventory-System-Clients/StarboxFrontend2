@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import Swal from "sweetalert2";
 import Navbar from "../components/Navbar";
 import api from "../services/api";
 import { useFilteredList } from "../hooks/useFilteredList";
@@ -22,13 +23,26 @@ export function Usuarios() {
   });
 
   const handleDesativar = async (id) => {
-    if (!window.confirm("Deseja realmente desativar este usuário?")) return;
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Desativar usuário",
+      text: "Deseja realmente desativar este usuário?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, desativar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) return;
 
     try {
       await api.delete(`/usuarios/${id}`);
       listaUsuarios.goToPage(listaUsuarios.pagination.page);
     } catch (error) {
-      alert(error.response?.data?.error || "Erro ao desativar usuário");
+      Swal.fire(
+        "Erro",
+        error.response?.data?.error || "Erro ao desativar usuário",
+        "error",
+      );
     }
   };
 
@@ -37,7 +51,11 @@ export function Usuarios() {
       await api.patch(`/usuarios/${id}/reativar`);
       listaUsuarios.goToPage(listaUsuarios.pagination.page);
     } catch (error) {
-      alert(error.response?.data?.error || "Erro ao reativar usuário");
+      Swal.fire(
+        "Erro",
+        error.response?.data?.error || "Erro ao reativar usuário",
+        "error",
+      );
     }
   };
 

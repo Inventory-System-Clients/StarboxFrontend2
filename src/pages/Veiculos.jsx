@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import ControleVeiculos from "../components/ControleVeiculos";
 import RegistroVeiculosMovimentacao from "../components/RegistroVeiculosMovimentacao";
 import AbastecimentosVeiculos from "../components/AbastecimentosVeiculos";
@@ -67,7 +68,7 @@ export default function Veiculos() {
     delete proximoState.alertaFinalizarVeiculo;
     delete proximoState.alertaFinalizarVeiculoToken;
 
-    alert(mensagem);
+    Swal.fire("Atenção", mensagem, "warning");
     navigate(location.pathname, {
       replace: true,
       state: Object.keys(proximoState).length > 0 ? proximoState : {},
@@ -76,7 +77,7 @@ export default function Veiculos() {
 
   const abrirModal = () => {
     if (!podeCriarVeiculo) {
-      alert("Somente administradores podem cadastrar veículos.");
+      Swal.fire("Atenção", "Somente administradores podem cadastrar veículos.", "warning");
       return;
     }
     setModalCadastro(true);
@@ -104,7 +105,7 @@ export default function Veiculos() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!podeCriarVeiculo) {
-      alert("Somente administradores podem cadastrar veículos.");
+      Swal.fire("Atenção", "Somente administradores podem cadastrar veículos.", "warning");
       return;
     }
 
@@ -112,10 +113,10 @@ export default function Veiculos() {
       await api.post("/veiculos", form);
       fetchVeiculos();
       fecharModal();
-      alert("Veículo cadastrado com sucesso!");
+      Swal.fire("Sucesso", "Veículo cadastrado com sucesso!", "success");
     } catch (error) {
       console.error("Erro no cadastro:", error);
-      alert("Erro ao cadastrar veículo");
+      Swal.fire("Erro", "Erro ao cadastrar veículo", "error");
     }
   };
 

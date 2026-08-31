@@ -375,7 +375,9 @@ export default function PainelAbastecedor() {
         params: { roteiroId, lojaId: loja.id },
       });
       const leituras = Array.isArray(resposta?.data) ? resposta.data : [];
-      const mensagem = montarMensagemDeLeiturasWhatsApp(leituras);
+      const mensagem = montarMensagemDeLeiturasWhatsApp(leituras, {
+        ocultarFinanceiro: true,
+      });
 
       if (!mensagem) {
         setErro(`Não há leituras salvas para ${loja.nome} ainda.`);

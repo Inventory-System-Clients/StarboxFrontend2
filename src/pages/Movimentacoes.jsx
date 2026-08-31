@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
@@ -485,13 +486,18 @@ export function Movimentacoes() {
             const nome = item.produtoNome || item.produtoId;
             return `- ${nome}: saldo pessoal ${item.saldoUsuario}`;
           })
-          .join("\n");
+          .join("<br>");
 
-        const confirmar = window.confirm(
-          `Voce possui saldo no estoque pessoal para alguns produtos:\n\n${resumoDetalhes}\n\nDeseja retirar do estoque do ponto mesmo assim?`,
-        );
+        const confirmar = await Swal.fire({
+          icon: "question",
+          title: "Usar estoque do ponto?",
+          html: `Voce possui saldo no estoque pessoal para alguns produtos:<br><br>${resumoDetalhes}<br><br>Deseja retirar do estoque do ponto mesmo assim?`,
+          showCancelButton: true,
+          confirmButtonText: "Sim, retirar do ponto",
+          cancelButtonText: "Cancelar",
+        });
 
-        if (!confirmar) {
+        if (!confirmar.isConfirmed) {
           setError("Movimentacao cancelada. Origem de estoque nao confirmada.");
           return;
         }

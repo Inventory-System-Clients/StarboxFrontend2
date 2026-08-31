@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { AlertBox, Modal } from "./UIComponents";
@@ -60,8 +61,16 @@ export default function AlertAdmin() {
   };
 
   const corrigirAlerta = async (alertaId, maquinaId) => {
-    if (!window.confirm("Deseja marcar este alerta como corrigido?")) return;
-    
+    const confirmacao = await Swal.fire({
+      icon: "question",
+      title: "Marcar como corrigido",
+      text: "Deseja marcar este alerta como corrigido?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, marcar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirmacao.isConfirmed) return;
+
     setRemovendo(true);
     try {
       await api.delete(`/relatorios/alertas-movimentacao-inconsistente/${alertaId}`, {

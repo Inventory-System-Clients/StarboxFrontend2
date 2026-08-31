@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import { AlertBox, PageHeader } from "../components/UIComponents";
 import { PageLoader, EmptyState } from "../components/Loading";
@@ -775,8 +776,16 @@ function Manutencoes() {
 
   const handleDelete = async () => {
     if (!detalhe) return;
-    if (!window.confirm("Tem certeza que deseja excluir esta manutenção?"))
-      return;
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Excluir manutenção",
+      text: "Tem certeza que deseja excluir esta manutenção?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, excluir",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) return;
 
     try {
       setLoading(true);

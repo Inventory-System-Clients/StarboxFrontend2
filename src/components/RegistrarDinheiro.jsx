@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Swal from "sweetalert2";
 
 const RegistrarDinheiro = ({ lojas, maquinas, onSubmit }) => {
   const [lojaSelecionada, setLojaSelecionada] = useState("");
@@ -19,7 +20,11 @@ const RegistrarDinheiro = ({ lojas, maquinas, onSubmit }) => {
     e.preventDefault();
     // Garantir que campos obrigatórios estejam preenchidos corretamente
     if (!lojaSelecionada || !inicio || !fim) {
-      alert("Preencha todos os campos obrigatórios: ponto, início e fim.");
+      Swal.fire(
+        "Atenção",
+        "Preencha todos os campos obrigatórios: ponto, início e fim.",
+        "warning",
+      );
       return;
     }
     await onSubmit({

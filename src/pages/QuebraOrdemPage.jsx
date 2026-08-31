@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
@@ -274,9 +275,11 @@ export function QuebraOrdemPage() {
                           );
                           carregarQuebrasOrdem();
                         } catch (err) {
-                          alert(
+                          Swal.fire(
+                            "Erro",
                             "Erro ao ocultar justificativa: " +
                               (err.response?.data?.error || err.message),
+                            "error",
                           );
                         }
                       }}

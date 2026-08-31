@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Swal from "sweetalert2";
 import { Modal } from "./UIComponents";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -121,7 +122,15 @@ export default function ModalEditarMovimentacao({
     e.preventDefault();
 
     // Confirmação antes de salvar
-    if (!window.confirm("Deseja realmente atualizar esta movimentação?")) {
+    const confirmacao = await Swal.fire({
+      icon: "question",
+      title: "Atualizar movimentação",
+      text: "Deseja realmente atualizar esta movimentação?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, atualizar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirmacao.isConfirmed) {
       return;
     }
 
@@ -167,7 +176,7 @@ export default function ModalEditarMovimentacao({
       );
 
       // Sucesso
-      alert("Movimentação atualizada com sucesso!");
+      Swal.fire("Sucesso", "Movimentação atualizada com sucesso!", "success");
 
       // Chamar callback de sucesso com dados atualizados
       if (onSucesso) {
@@ -184,15 +193,25 @@ export default function ModalEditarMovimentacao({
         error.response?.status === 403 &&
         error.response?.data?.code === "MOVIMENTACAO_TOTAL_PRE_ADMIN_ONLY"
       ) {
-        alert("Somente ADMIN pode editar a quantidade pré de produtos.");
+        Swal.fire(
+          "Erro",
+          "Somente ADMIN pode editar a quantidade pré de produtos.",
+          "error",
+        );
       } else if (error.response?.status === 403) {
-        alert("Você não tem permissão para editar esta movimentação.");
+        Swal.fire(
+          "Erro",
+          "Você não tem permissão para editar esta movimentação.",
+          "error",
+        );
       } else if (error.response?.status === 404) {
-        alert("Movimentação não encontrada.");
+        Swal.fire("Erro", "Movimentação não encontrada.", "error");
       } else {
-        alert(
+        Swal.fire(
+          "Erro",
           error.response?.data?.error ||
             "Erro ao atualizar movimentação. Tente novamente.",
+          "error",
         );
       }
     } finally {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import { Modal } from "./UIComponents";
 
@@ -1499,11 +1500,16 @@ export function MovimentacaoMaquinaForm({
         Number.isFinite(totalPreAjustado) &&
         totalPreAjustado > totalPosUltima
       ) {
-        const confirmou = window.confirm(
-          `Atenção: A quantidade informada (${totalPreAjustado}) é maior do que o total pós da última movimentação (${totalPosUltima}). Confira o que você digitou.\n\nDeseja continuar mesmo assim?`,
-        );
+        const confirmou = await Swal.fire({
+          icon: "warning",
+          title: "Confira a quantidade",
+          html: `Atenção: A quantidade informada (${totalPreAjustado}) é maior do que o total pós da última movimentação (${totalPosUltima}). Confira o que você digitou.<br><br>Deseja continuar mesmo assim?`,
+          showCancelButton: true,
+          confirmButtonText: "Sim, continuar",
+          cancelButtonText: "Cancelar",
+        });
 
-        if (!confirmou) {
+        if (!confirmou.isConfirmed) {
           setError(
             "Movimentação cancelada. Ajuste a quantidade antes de continuar.",
           );
@@ -1576,13 +1582,18 @@ export function MovimentacaoMaquinaForm({
             const nome = item.produtoNome || item.produtoId;
             return `- ${nome}: saldo pessoal ${item.saldoUsuario}`;
           })
-          .join("\n");
+          .join("<br>");
 
-        const confirmar = window.confirm(
-          `Voce possui saldo no estoque pessoal para alguns produtos:\n\n${resumoDetalhes}\n\nDeseja retirar do estoque do ponto mesmo assim?`,
-        );
+        const confirmar = await Swal.fire({
+          icon: "question",
+          title: "Usar estoque do ponto?",
+          html: `Voce possui saldo no estoque pessoal para alguns produtos:<br><br>${resumoDetalhes}<br><br>Deseja retirar do estoque do ponto mesmo assim?`,
+          showCancelButton: true,
+          confirmButtonText: "Sim, retirar do ponto",
+          cancelButtonText: "Cancelar",
+        });
 
-        if (!confirmar) {
+        if (!confirmar.isConfirmed) {
           if (popupReservado && !popupReservado.closed) {
             popupReservado.close();
           }

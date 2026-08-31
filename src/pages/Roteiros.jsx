@@ -1240,11 +1240,17 @@ export function Roteiros() {
   };
 
   const handleExcluirRoteiro = async (roteiro) => {
-    const confirmar = window.confirm(
-      `Deseja realmente apagar o roteiro "${roteiro.nome}"? Essa ação não pode ser desfeita.`,
-    );
+    const confirmar = await Swal.fire({
+      icon: "warning",
+      title: "Apagar roteiro?",
+      html: `Deseja realmente apagar o roteiro <b>${roteiro.nome}</b>? Essa ação não pode ser desfeita.`,
+      showCancelButton: true,
+      confirmButtonText: "Sim, apagar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
 
-    if (!confirmar) return;
+    if (!confirmar.isConfirmed) return;
 
     try {
       setError("");
@@ -1393,11 +1399,16 @@ export function Roteiros() {
   const handleDesfinalizarRoteiro = async (roteiro) => {
     if (!roteiro?.id || desfinalizandoRoteiros[roteiro.id]) return;
 
-    const confirmar = window.confirm(
-      "Tem certeza que deseja desfinalizar este roteiro? Ele voltará para pendente.",
-    );
+    const confirmar = await Swal.fire({
+      icon: "warning",
+      title: "Desfinalizar roteiro?",
+      text: "Tem certeza que deseja desfinalizar este roteiro? Ele voltará para pendente.",
+      showCancelButton: true,
+      confirmButtonText: "Sim, desfinalizar",
+      cancelButtonText: "Cancelar",
+    });
 
-    if (!confirmar) return;
+    if (!confirmar.isConfirmed) return;
 
     try {
       setError("");

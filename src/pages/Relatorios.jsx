@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import { buscarRoteiros } from "../services/roteiros";
 import Navbar from "../components/Navbar";
@@ -1964,10 +1965,15 @@ export function Relatorios() {
         : lojaSelecionada === TODAS_LOJAS_VALUE
           ? lojas.length
           : lojasSelecionadasConsolidado.length;
-      const confirmar = window.confirm(
-        `Isso vai consolidar ${qtdLojas} lojas de uma vez, o que pode demorar bastante. Continuar?`,
-      );
-      if (!confirmar) return;
+      const confirmar = await Swal.fire({
+        icon: "warning",
+        title: "Consolidar muitas lojas?",
+        text: `Isso vai consolidar ${qtdLojas} lojas de uma vez, o que pode demorar bastante. Continuar?`,
+        showCancelButton: true,
+        confirmButtonText: "Sim, continuar",
+        cancelButtonText: "Cancelar",
+      });
+      if (!confirmar.isConfirmed) return;
     }
 
     const inicio = new Date(dataInicio);

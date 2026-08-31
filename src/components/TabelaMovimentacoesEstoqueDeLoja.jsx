@@ -1,4 +1,5 @@
 import React from "react";
+import Swal from "sweetalert2";
 
 import api from "../services/api";
 
@@ -14,13 +15,21 @@ export default function TabelaMovimentacoesEstoqueDeLoja({
 }) {
   // Função para deletar movimentação e recarregar estoque consolidado
   const handleDelete = async (mov) => {
-    if (!window.confirm("Tem certeza que deseja deletar esta movimentação?"))
-      return;
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Deletar movimentação",
+      text: "Tem certeza que deseja deletar esta movimentação?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, deletar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) return;
     try {
       await api.delete(`/movimentacao-estoque-loja/${mov.id}`);
       if (typeof onChangeEstoqueLoja === "function") onChangeEstoqueLoja();
-    } catch (err) {
-      alert("Erro ao deletar movimentação de estoque de loja.");
+    } catch {
+      Swal.fire("Erro", "Erro ao deletar movimentação de estoque de loja.", "error");
     }
   };
 

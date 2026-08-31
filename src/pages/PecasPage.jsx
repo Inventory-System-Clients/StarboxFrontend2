@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import Navbar from "../components/Navbar";
@@ -149,11 +150,15 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
 
   const adicionarAoProprioCarrinho = async (peca) => {
     if (!peca || peca.quantidade === 0) {
-      alert("Não é possível adicionar ao carrinho: peça sem estoque disponível.");
+      Swal.fire(
+        "Atenção",
+        "Não é possível adicionar ao carrinho: peça sem estoque disponível.",
+        "warning",
+      );
       return;
     }
     if (!usuario?.id) {
-      alert("Usuário não autenticado");
+      Swal.fire("Atenção", "Usuário não autenticado", "warning");
       return;
     }
     try {
@@ -162,19 +167,32 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
         quantidade: 1,
       });
       await carregarPecas();
-      alert("Peça adicionada ao seu carrinho!");
+      Swal.fire("Sucesso", "Peça adicionada ao seu carrinho!", "success");
     } catch (err) {
-      alert(err.response?.data?.error || "Erro ao adicionar peça ao carrinho");
+      Swal.fire(
+        "Erro",
+        err.response?.data?.error || "Erro ao adicionar peça ao carrinho",
+        "error",
+      );
     }
   };
 
   const handleExcluir = async (pecaId, nomePeca) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a peça "${nomePeca}"?`)) return;
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Excluir peça",
+      text: `Tem certeza que deseja excluir a peça "${nomePeca}"?`,
+      showCancelButton: true,
+      confirmButtonText: "Sim, excluir",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) return;
     try {
       await api.delete(`/pecas/${pecaId}`);
       await carregarPecas();
     } catch (err) {
-      alert(err.response?.data?.error || "Erro ao excluir peça");
+      Swal.fire("Erro", err.response?.data?.error || "Erro ao excluir peça", "error");
     }
   };
 
@@ -194,7 +212,11 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
       setPecaEditando(null);
       await carregarPecas();
     } catch (err) {
-      alert(err.response?.data?.error || err.response?.data?.message || "Erro ao salvar peça");
+      Swal.fire(
+        "Erro",
+        err.response?.data?.error || err.response?.data?.message || "Erro ao salvar peça",
+        "error",
+      );
     }
   };
 
@@ -360,18 +382,27 @@ function AbaMeuCarrinho({ usuario }) {
   const removerDoCarrinho = async (item) => {
     const pecaId = item.pecaId || item.id || item.Peca?.id;
     if (!usuario?.id || !pecaId) return;
-    if (
-      !window.confirm(
-        "Deseja realmente remover esta peça do carrinho? Ela será devolvida ao estoque.",
-      )
-    ) {
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Remover peça",
+      text: "Deseja realmente remover esta peça do carrinho? Ela será devolvida ao estoque.",
+      showCancelButton: true,
+      confirmButtonText: "Sim, remover",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) {
       return;
     }
     try {
       await api.delete(`/usuarios/${usuario.id}/carrinho/${pecaId}`);
       await carregarCarrinho();
     } catch (err) {
-      alert(err.response?.data?.error || "Erro ao remover peça do carrinho");
+      Swal.fire(
+        "Erro",
+        err.response?.data?.error || "Erro ao remover peça do carrinho",
+        "error",
+      );
     }
   };
 
@@ -476,7 +507,7 @@ function AbaCarrinhos() {
     if (!funcionarioSelecionado) return;
     const peca = pecasDisponiveis.find((p) => p.id === pecaId);
     if (!peca || peca.quantidade === 0) {
-      alert("Peça sem estoque disponível");
+      Swal.fire("Atenção", "Peça sem estoque disponível", "warning");
       return;
     }
     try {
@@ -489,17 +520,26 @@ function AbaCarrinhos() {
         recarregarPecas(),
       ]);
     } catch (err) {
-      alert(err.response?.data?.error || "Erro ao adicionar peça ao carrinho");
+      Swal.fire(
+        "Erro",
+        err.response?.data?.error || "Erro ao adicionar peça ao carrinho",
+        "error",
+      );
     }
   };
 
   const removerPecaDoCarrinho = async (pecaId) => {
     if (!funcionarioSelecionado) return;
-    if (
-      !window.confirm(
-        "Deseja realmente remover esta peça do carrinho? Ela será devolvida ao estoque.",
-      )
-    ) {
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Remover peça",
+      text: "Deseja realmente remover esta peça do carrinho? Ela será devolvida ao estoque.",
+      showCancelButton: true,
+      confirmButtonText: "Sim, remover",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) {
       return;
     }
     try {
@@ -509,7 +549,11 @@ function AbaCarrinhos() {
         recarregarPecas(),
       ]);
     } catch (err) {
-      alert(err.response?.data?.error || "Erro ao remover peça do carrinho");
+      Swal.fire(
+        "Erro",
+        err.response?.data?.error || "Erro ao remover peça do carrinho",
+        "error",
+      );
     }
   };
 
@@ -681,11 +725,11 @@ function ModalEditarPeca({ peca, onFechar, onSalvar }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.nome || !formData.categoria) {
-      alert("Nome e Categoria são obrigatórios!");
+      Swal.fire("Atenção", "Nome e Categoria são obrigatórios!", "warning");
       return;
     }
     if (formData.quantidade < 0) {
-      alert("Quantidade não pode ser negativa!");
+      Swal.fire("Atenção", "Quantidade não pode ser negativa!", "warning");
       return;
     }
     onSalvar(formData);

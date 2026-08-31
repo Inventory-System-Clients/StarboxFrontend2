@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 
 import api from "../services/api";
 
@@ -286,10 +287,15 @@ export default function AjusteMaquinaAtual() {
     event.preventDefault();
     if (formularioInvalido) return;
 
-    const confirmou = window.confirm(
-      "Confirmar ajuste dos valores atuais desta maquina?",
-    );
-    if (!confirmou) return;
+    const confirmou = await Swal.fire({
+      icon: "question",
+      title: "Confirmar ajuste",
+      text: "Confirmar ajuste dos valores atuais desta maquina?",
+      showCancelButton: true,
+      confirmButtonText: "Sim, confirmar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirmou.isConfirmed) return;
 
     const payload = { lojaId };
     CAMPOS_AJUSTE.forEach((campo) => {

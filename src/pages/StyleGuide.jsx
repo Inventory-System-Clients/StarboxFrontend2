@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Swal from "sweetalert2";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import {
@@ -410,7 +411,7 @@ export function StyleGuide() {
       <ConfirmDialog
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={() => alert("Confirmado!")}
+        onConfirm={() => Swal.fire("Sucesso", "Confirmado!", "success")}
         title="Confirmar Ação"
         message="Tem certeza que deseja realizar esta ação? Esta operação não pode ser desfeita."
         confirmText="Sim, confirmar"

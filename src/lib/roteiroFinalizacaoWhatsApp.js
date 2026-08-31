@@ -661,7 +661,10 @@ const extrairResumoLegadoDaMensagem = (mensagem = "", item = {}) => {
 // montarMensagemDeLeiturasWhatsApp). Nao agrupa por maquina de proposito:
 // se a mesma maquina teve duas leituras, as duas entram como blocos
 // separados na mensagem.
-const construirMensagemDeItensWhatsApp = (itens) => {
+const construirMensagemDeItensWhatsApp = (
+  itens,
+  { ocultarFinanceiro = false } = {},
+) => {
   if (!Array.isArray(itens) || itens.length === 0) return "";
 
   const itensOrdenados = [...itens].sort((a, b) => {
@@ -765,67 +768,118 @@ const construirMensagemDeItensWhatsApp = (itens) => {
     };
   };
 
-  const blocosMaquinas = itensNormalizados.map((item) => {
-    const r = item.resumo;
-    const codigo = normalizarTexto(
-      r?.codigoMaquina || item?.maquinaNome || "-",
-    );
-    const tipo = normalizarTexto(r?.tipoMaquina || "Máquina");
-    const nomeProdutoAbastecido = normalizarTexto(
-      r?.nomeProdutoAbastecido || r?.nomeProdutoAbastecimentoExtra,
-    );
-    const alteracoesLeitura = Array.isArray(r?.alteracoesLeitura)
-      ? r.alteracoesLeitura.map(normalizarTexto).filter(Boolean)
-      : [];
-    const quantidadeAbastecidaInformada = Number(
-      r?.quantidadeAbastecidaInformada,
-    );
-    const {
-      quantidadeJogadas,
-      saldo,
-      valorMedidoSaidaPelucia,
-      jogadaPorPelucia,
-      alertaMediaForaPadrao,
-    } = calcularFinanceiroResumo(r);
-    const dias = r?.diasDesdeUltimaMovimentacao;
-    const quantidadeAbastecimentoExtra = Number(
-      r?.quantidadeAbastecimentoExtra || 0,
-    );
-    const nomeProdutoAbastecimentoExtra = normalizarTexto(
-      r?.nomeProdutoAbastecimentoExtra,
-    );
+  const blocosMaquinas = itensNormalizados
+    .map((item) => {
+      const r = item.resumo;
+      const codigo = normalizarTexto(
+        r?.codigoMaquina || item?.maquinaNome || "-",
+      );
+      const tipo = normalizarTexto(r?.tipoMaquina || "Máquina");
+      const nomeProdutoAbastecido = normalizarTexto(
+        r?.nomeProdutoAbastecido || r?.nomeProdutoAbastecimentoExtra,
+      );
+      const alteracoesLeitura = Array.isArray(r?.alteracoesLeitura)
+        ? r.alteracoesLeitura.map(normalizarTexto).filter(Boolean)
+        : [];
+      const quantidadeAbastecidaInformada = Number(
+        r?.quantidadeAbastecidaInformada,
+      );
+      const {
+        quantidadeJogadas,
+        saldo,
+        valorMedidoSaidaPelucia,
+        jogadaPorPelucia,
+        alertaMediaForaPadrao,
+      } = calcularFinanceiroResumo(r);
+      const dias = r?.diasDesdeUltimaMovimentacao;
+      const quantidadeAbastecimentoExtra = Number(
+        r?.quantidadeAbastecimentoExtra || 0,
+      );
+      const nomeProdutoAbastecimentoExtra = normalizarTexto(
+        r?.nomeProdutoAbastecimentoExtra,
+      );
+
+      // Quem so pode ver o proprio abastecimento (ex.: ABASTECEDOR) nao
+      // recebe leitura de contador (E/S), saldo/jogada, alerta de saida
+      // errada nem "cobrado com X dias" - so os produtos que ele reabasteceu.
+      // Maquina sem nada reabastecido nem entra na mensagem.
+      if (ocultarFinanceiro) {
+        const linhasAbastecimento = [
+          ...(nomeProdutoAbastecido &&
+          nomeProdutoAbastecido.toLowerCase() !== "produto não informado"
+            ? [
+                `Produto abastecido: ${nomeProdutoAbastecido}${Number.isFinite(quantidadeAbastecidaInformada) && quantidadeAbastecidaInformada > 0 ? ` (Qtd: ${formatarInteiro(quantidadeAbastecidaInformada)})` : ""}`,
+              ]
+            : []),
+          ...(quantidadeAbastecimentoExtra > 0
+            ? [
+                `Abastecimento extra: +${formatarInteiro(quantidadeAbastecimentoExtra)}${nomeProdutoAbastecimentoExtra ? ` (${nomeProdutoAbastecimentoExtra})` : ""}`,
+              ]
+            : []),
+        ];
+
+        if (linhasAbastecimento.length === 0) return null;
+
+        return [
+          `${codigo} - ${tipo}`,
+          ...linhasAbastecimento,
+          "___________________________________",
+        ].join("\n");
+      }
+
+      return [
+        `${codigo} - ${tipo}`,
+        ...(nomeProdutoAbastecido
+          ? [
+              `Produto abastecido: ${nomeProdutoAbastecido}${Number.isFinite(quantidadeAbastecidaInformada) && quantidadeAbastecidaInformada > 0 ? ` (Qtd: ${formatarInteiro(quantidadeAbastecidaInformada)})` : ""}`,
+            ]
+          : []),
+        ...(r?.leituraAtualizada ? ["Leitura atualizada"] : []),
+        ...alteracoesLeitura.map((item) => `Alteracao: ${item}`),
+        `E  ${formatarInteiro(r?.inAnterior)}  ${formatarInteiro(r?.inAtual)}_____${formatarMoeda(quantidadeJogadas)}`,
+        `S  ${formatarInteiro(r?.outAnterior)}  ${formatarInteiro(r?.outAtual)}________${formatarInteiro(r?.quantidadeSaiu)}`,
+        ...(quantidadeAbastecimentoExtra > 0
+          ? [
+              `Abastecimento extra: +${formatarInteiro(quantidadeAbastecimentoExtra)}${nomeProdutoAbastecimentoExtra ? ` (${nomeProdutoAbastecimentoExtra})` : ""}`,
+            ]
+          : []),
+        `Saldo: ${formatarMoeda(saldo)}`,
+        `Valor por pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
+        `Jogada: ${formatarInteiro(jogadaPorPelucia)}`,
+        ...(alertaMediaForaPadrao
+          ? [
+              `*⚠️ SAIDA DE PELUCIA ERRADA — SAIU ${alertaMediaForaPadrao.saiu.toUpperCase()}*`,
+              `*Jogada ideal: ${formatarInteiro(alertaMediaForaPadrao.faixaMin)} a ${formatarInteiro(alertaMediaForaPadrao.faixaMax)} por pelucia*`,
+            ]
+          : []),
+        ...(Number.isFinite(Number(dias))
+          ? [`Cobrado com ${formatarInteiro(dias)} dia(s)`]
+          : []),
+        "___________________________________",
+      ].join("\n");
+    })
+    .filter(Boolean);
+
+  if (ocultarFinanceiro) {
+    if (blocosMaquinas.length === 0) return "";
 
     return [
-      `${codigo} - ${tipo}`,
-      ...(nomeProdutoAbastecido
-        ? [
-            `Produto abastecido: ${nomeProdutoAbastecido}${Number.isFinite(quantidadeAbastecidaInformada) && quantidadeAbastecidaInformada > 0 ? ` (Qtd: ${formatarInteiro(quantidadeAbastecidaInformada)})` : ""}`,
-          ]
-        : []),
-      ...(r?.leituraAtualizada ? ["Leitura atualizada"] : []),
-      ...alteracoesLeitura.map((item) => `Alteracao: ${item}`),
-      `E  ${formatarInteiro(r?.inAnterior)}  ${formatarInteiro(r?.inAtual)}_____${formatarMoeda(quantidadeJogadas)}`,
-      `S  ${formatarInteiro(r?.outAnterior)}  ${formatarInteiro(r?.outAtual)}________${formatarInteiro(r?.quantidadeSaiu)}`,
-      ...(quantidadeAbastecimentoExtra > 0
-        ? [
-            `Abastecimento extra: +${formatarInteiro(quantidadeAbastecimentoExtra)}${nomeProdutoAbastecimentoExtra ? ` (${nomeProdutoAbastecimentoExtra})` : ""}`,
-          ]
-        : []),
-      `Saldo: ${formatarMoeda(saldo)}`,
-      `Valor por pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
-      `Jogada: ${formatarInteiro(jogadaPorPelucia)}`,
-      ...(alertaMediaForaPadrao
-        ? [
-            `*⚠️ SAIDA DE PELUCIA ERRADA — SAIU ${alertaMediaForaPadrao.saiu.toUpperCase()}*`,
-            `*Jogada ideal: ${formatarInteiro(alertaMediaForaPadrao.faixaMin)} a ${formatarInteiro(alertaMediaForaPadrao.faixaMax)} por pelucia*`,
-          ]
-        : []),
-      ...(Number.isFinite(Number(dias))
-        ? [`Cobrado com ${formatarInteiro(dias)} dia(s)`]
-        : []),
+      "STAR BOX",
+      `*${normalizarTexto(primeiroResumo?.lojaNome) || "LOJA"}*`,
+      `Data: ${formatarDataCurta(ultimoResumo?.dataMovimentacao)}`,
+      `Lançado por: ${
+        normalizarTexto(ultimoResumo?.nomeUsuario) ||
+        normalizarTexto(
+          itensNormalizados.find((item) =>
+            normalizarTexto(item?.resumo?.nomeUsuario),
+          )?.resumo?.nomeUsuario,
+        ) ||
+        "-"
+      }`,
       "___________________________________",
+      ...blocosMaquinas,
     ].join("\n");
-  });
+  }
 
   const totalEntradas = itensNormalizados.reduce(
     (acc, item) => acc + calcularFinanceiroResumo(item?.resumo).saldo,
@@ -880,6 +934,7 @@ export const montarMensagemMovimentacoesWhatsAppLoja = ({
   roteiroId,
   usuarioId,
   lojaId,
+  ocultarFinanceiro = false,
 }) => {
   const itens = obterMovimentacoesWhatsAppPendentesLoja({
     roteiroId,
@@ -887,7 +942,7 @@ export const montarMensagemMovimentacoesWhatsAppLoja = ({
     lojaId,
   });
 
-  return construirMensagemDeItensWhatsApp(itens);
+  return construirMensagemDeItensWhatsApp(itens, { ocultarFinanceiro });
 };
 
 // Fluxo atual: recebe as leituras buscadas do banco (endpoint
@@ -896,7 +951,10 @@ export const montarMensagemMovimentacoesWhatsAppLoja = ({
 // mensagem combinada do ponto. Independe de navegador/dispositivo porque a
 // origem dos dados e o banco, nao o localStorage - e pode ser chamada de
 // novo a qualquer momento para reenviar (nao ha estado de "ja enviado").
-export const montarMensagemDeLeiturasWhatsApp = (leituras) => {
+export const montarMensagemDeLeiturasWhatsApp = (
+  leituras,
+  { ocultarFinanceiro = false } = {},
+) => {
   const itens = (Array.isArray(leituras) ? leituras : [])
     .filter((item) => item?.resumo && typeof item.resumo === "object")
     .map((item) => ({
@@ -907,7 +965,7 @@ export const montarMensagemDeLeiturasWhatsApp = (leituras) => {
       createdAt: item?.createdAt || null,
     }));
 
-  return construirMensagemDeItensWhatsApp(itens);
+  return construirMensagemDeItensWhatsApp(itens, { ocultarFinanceiro });
 };
 
 export const obterManutencaoResumoSnapshotRoteiro = ({
@@ -1629,6 +1687,30 @@ export const montarMensagemFinalizacaoRoteiro = ({
   ].join("\n");
 };
 
+// Detecção de mobile compartilhada — usada aqui e por quem precisa decidir
+// se reserva um popup "about:blank" no clique (útil só no desktop; no
+// celular o envio é feito por navegação direta da própria aba, então reservar
+// um popup só cria uma aba em branco que abre e fecha à toa).
+export const isDispositivoMovel = () => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  if (navigator.userAgentData?.mobile) {
+    return true;
+  }
+
+  const userAgent = String(
+    navigator.userAgent || navigator.vendor || window.opera || "",
+  );
+
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(
+      userAgent,
+    ) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(userAgent))
+  );
+};
+
 export const abrirWhatsAppComMensagem = (
   mensagem,
   popupReservado = null,
@@ -1648,11 +1730,7 @@ export const abrirWhatsAppComMensagem = (
   const userAgent = String(
     navigator.userAgent || navigator.vendor || window?.opera || "",
   );
-  const isMobile =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(
-      userAgent,
-    ) ||
-    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(userAgent));
+  const isMobile = isDispositivoMovel();
   const isAndroid = /Android/i.test(userAgent);
 
   const redirecionarSeAindaVisivel = (url, delay) => {

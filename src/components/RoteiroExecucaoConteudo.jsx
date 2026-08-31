@@ -14,6 +14,7 @@ import {
   abrirWhatsAppComMensagem,
   montarMensagemDeLeiturasWhatsApp,
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
+  isDispositivoMovel,
 } from "../lib/roteiroFinalizacaoWhatsApp";
 
 // Miolo funcional de RoteiroExecucao.jsx, extraido para poder ser embutido
@@ -598,7 +599,9 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       return;
     }
 
-    const mensagem = montarMensagemDeLeiturasWhatsApp(leituras);
+    const mensagem = montarMensagemDeLeiturasWhatsApp(leituras, {
+      ocultarFinanceiro: usuario?.role === "ABASTECEDOR",
+    });
 
     if (!mensagem) {
       setError(
@@ -708,6 +711,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
 
       const mensagem = montarMensagemDeLeiturasWhatsApp(
         leiturasComAbastecimentoExtra,
+        { ocultarFinanceiro: usuario?.role === "ABASTECEDOR" },
       );
       if (!mensagem) {
         lojasSemAbastecimentoExtra.push(loja.nome || "loja");
@@ -1190,7 +1194,11 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       return;
     }
 
-    const popupReservado = window.open("about:blank", "_blank");
+    // No celular o envio navega a propria aba (whatsapp://, intent:// etc.) -
+    // reservar um popup so cria uma aba em branco que abre e fecha a toa.
+    const popupReservado = isDispositivoMovel()
+      ? null
+      : window.open("about:blank", "_blank");
 
     try {
       setError("");
@@ -1794,14 +1802,17 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         }
       }
 
-      const mensagemAbastecimentoExtra = montarMensagemDeLeiturasWhatsApp([
-        {
-          maquinaId: String(maquina?.id || ""),
-          maquinaNome: nomeMaquina,
-          resumo: resumoAbastecimentoExtra,
-          createdAt: resumoAbastecimentoExtra.dataMovimentacao,
-        },
-      ]);
+      const mensagemAbastecimentoExtra = montarMensagemDeLeiturasWhatsApp(
+        [
+          {
+            maquinaId: String(maquina?.id || ""),
+            maquinaNome: nomeMaquina,
+            resumo: resumoAbastecimentoExtra,
+            createdAt: resumoAbastecimentoExtra.dataMovimentacao,
+          },
+        ],
+        { ocultarFinanceiro: usuario?.role === "ABASTECEDOR" },
+      );
 
       const abriuWhatsApp = abrirWhatsAppComMensagem(
         mensagemAbastecimentoExtra,
@@ -2564,7 +2575,11 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     }
 
     // Reserva popup no clique para evitar bloqueio ao abrir WhatsApp apos chamada async.
-    const popupReservado = window.open("about:blank", "_blank");
+    // No celular o envio navega a propria aba (whatsapp://, intent:// etc.) -
+    // reservar um popup so cria uma aba em branco que abre e fecha a toa.
+    const popupReservado = isDispositivoMovel()
+      ? null
+      : window.open("about:blank", "_blank");
 
     try {
       // Salvar justificativa via API
@@ -2985,15 +3000,21 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         kmFinalVeiculoOverride ?? kmFinalVeiculoInput,
       );
       if (!kmFinalValidado.ok) {
-        setError(
+        Swal.fire(
+          "Atenção",
           "Informe um KM final de devolução válido (inteiro maior ou igual a zero).",
+          "warning",
         );
         return;
       }
       payload.kmFinalVeiculo = kmFinalValidado.numero;
     }
 
-    const popupReservado = window.open("about:blank", "_blank");
+    // No celular o envio navega a propria aba (whatsapp://, intent:// etc.) -
+    // reservar um popup so cria uma aba em branco que abre e fecha a toa.
+    const popupReservado = isDispositivoMovel()
+      ? null
+      : window.open("about:blank", "_blank");
 
     try {
       setError("");
@@ -3006,11 +3027,13 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       if (pendencias.length > 0) {
         const nomes = pendencias.map((p) => p.maquinaNome).join(", ");
         const envioWhatsApp = res?.data?.alertaWhatsApp?.status;
-        setSuccess(
-          `Roteiro finalizado com pendências: ${nomes}. Alerta WhatsApp: ${envioWhatsApp || "não enviado"}.`,
+        Swal.fire(
+          "Roteiro finalizado com pendências",
+          `Máquinas pendentes: ${nomes}. Alerta WhatsApp: ${envioWhatsApp || "não enviado"}.`,
+          "warning",
         );
       } else {
-        setSuccess("Roteiro finalizado com sucesso!");
+        Swal.fire("Sucesso", "Roteiro finalizado com sucesso!", "success");
       }
 
       const resumoNormalizado = normalizarResumoExecucaoBackend(
@@ -3025,22 +3048,33 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         res?.data,
       );
 
+      // A rota já foi finalizada no backend nesse ponto — mesmo se a
+      // mensagem de WhatsApp vier vazia ou o navegador bloquear a abertura,
+      // não podemos abortar aqui sem recarregar o roteiro: se sair sem
+      // chamar carregarRoteiro(), o status local fica desatualizado e o
+      // botão "Finalizar Rota" continua aparecendo na Navbar como se nada
+      // tivesse acontecido, levando o funcionário a tentar finalizar de novo.
       if (!mensagemWhatsApp) {
-        setError(
-          "Rota finalizada, mas o backend nao retornou mensagemResumoWhatsapp.",
+        if (popupReservado && !popupReservado.closed) {
+          popupReservado.close();
+        }
+        Swal.fire(
+          "Rota finalizada",
+          "A rota foi finalizada, mas não foi possível montar a mensagem de WhatsApp automaticamente.",
+          "warning",
         );
-        setModalFinalizar((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-
-      const abriuWhatsApp = abrirWhatsAppComMensagem(
-        mensagemWhatsApp,
-        popupReservado,
-      );
-      if (!abriuWhatsApp) {
-        setSuccess(
-          "Roteiro finalizado, mas o navegador bloqueou a abertura do WhatsApp. Libere pop-up para o StarBox.",
+      } else {
+        const abriuWhatsApp = abrirWhatsAppComMensagem(
+          mensagemWhatsApp,
+          popupReservado,
         );
+        if (!abriuWhatsApp) {
+          Swal.fire(
+            "Rota finalizada",
+            "O navegador bloqueou a abertura do WhatsApp. Libere pop-up para o StarBox e tente reenviar pelo botão \"Whats\".",
+            "warning",
+          );
+        }
       }
 
       limparEdicoesMovimentacaoRota();
@@ -3060,15 +3094,19 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       const mensagemApi = err?.response?.data?.error;
 
       if (status === 400) {
-        setError(mensagemApi || "KM final inválido para finalizar a rota.");
+        Swal.fire(
+          "Erro",
+          mensagemApi || "KM final inválido para finalizar a rota.",
+          "error",
+        );
       } else if (status === 403) {
-        setError("Você não tem permissão para esta ação.");
+        Swal.fire("Erro", "Você não tem permissão para esta ação.", "error");
       } else if (status === 404) {
-        setError("Roteiro ou veículo não encontrado.");
+        Swal.fire("Erro", "Roteiro ou veículo não encontrado.", "error");
       } else if (status === 500) {
-        setError("Erro interno. Tente novamente.");
+        Swal.fire("Erro", "Erro interno. Tente novamente.", "error");
       } else {
-        setError(mensagemApi || "Erro ao finalizar roteiro.");
+        Swal.fire("Erro", mensagemApi || "Erro ao finalizar roteiro.", "error");
       }
       setModalFinalizar((prev) => ({ ...prev, loading: false }));
     }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import Swal from "sweetalert2";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
@@ -873,7 +874,7 @@ function ItemFluxoCaixa({ fluxo, onConferir, isAdmin }) {
     const digital = roundTo2(formConferencia.valorRetiradoDigital);
 
     if (fisico < 0 || digital < 0) {
-      alert("⚠️ Os valores de retirada não podem ser negativos");
+      Swal.fire("Atenção", "Os valores de retirada não podem ser negativos", "warning");
       return;
     }
 
@@ -882,12 +883,12 @@ function ItemFluxoCaixa({ fluxo, onConferir, isAdmin }) {
       formConferencia.valorEsperado === null ||
       formConferencia.valorEsperado === undefined
     ) {
-      alert("⚠️ Digite o valor esperado");
+      Swal.fire("Atenção", "Digite o valor esperado", "warning");
       return;
     }
 
     if (formConferencia.conferencia === "pendente") {
-      alert("⚠️ Selecione se o valor bateu ou não bateu");
+      Swal.fire("Atenção", "Selecione se o valor bateu ou não bateu", "warning");
       return;
     }
 

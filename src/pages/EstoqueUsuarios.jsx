@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import api from "../services/api";
@@ -281,11 +282,16 @@ export default function EstoqueUsuarios() {
   };
 
   const excluirProdutoDoEstoque = async (row) => {
-    if (
-      !window.confirm(
-        `Excluir ${row.produtoNome} do estoque de ${usuarioSelecionado?.nome}?`,
-      )
-    ) {
+    const confirmacao = await Swal.fire({
+      icon: "warning",
+      title: "Excluir produto",
+      text: `Excluir ${row.produtoNome} do estoque de ${usuarioSelecionado?.nome}?`,
+      showCancelButton: true,
+      confirmButtonText: "Sim, excluir",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmacao.isConfirmed) {
       return;
     }
 
