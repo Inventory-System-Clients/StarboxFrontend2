@@ -1137,24 +1137,6 @@ export function Movimentacoes() {
                       </p>
                     </div>
                   </div>
-                  {/* Checkbox para ignorar IN/OUT */}
-                  <div className="flex items-center mt-2 mb-4">
-                    <input
-                      type="checkbox"
-                      id="ignoreInOut"
-                      name="ignoreInOut"
-                      checked={formData.ignoreInOut || false}
-                      onChange={handleChange}
-                      className="mr-2"
-                    />
-                    <label
-                      htmlFor="ignoreInOut"
-                      className="text-sm text-gray-700"
-                    >
-                      Não preciso informar IN/OUT nesta movimentação
-                    </label>
-                  </div>
-
                   {resumoContadores && (
                     <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                       <p className="text-sm font-semibold text-indigo-900">
@@ -1282,36 +1264,6 @@ export function Movimentacoes() {
                   <p className="text-xs text-gray-500 mt-1">
                     Fichas coletadas da máquina
                   </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    ❌ Retirada de Produto
-                  </label>
-                  <input
-                    type="number"
-                    name="retiradaProduto"
-                    value={formData.retiradaProduto}
-                    onChange={handleChange}
-                    className="input-field"
-                    placeholder="0"
-                    min="0"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Quantidade de produtos retirados (não conta como saída
-                    financeira)
-                  </p>
-                  <label className="flex items-center mt-2 gap-2">
-                    <input
-                      type="checkbox"
-                      name="retiradaProdutoDevolverEstoque"
-                      checked={formData.retiradaProdutoDevolverEstoque || false}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                    />
-                    <span className="text-xs text-green-700">
-                      Devolver retirada para o estoque do ponto
-                    </span>
-                  </label>
                 </div>
               </div>
 
