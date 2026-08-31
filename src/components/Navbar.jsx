@@ -6,6 +6,7 @@ import { useRoteiroFinalizacao } from "../contexts/RoteiroFinalizacaoContext.jsx
 import api from "../services/api";
 import { roteiroTemVeiculoAssociado } from "../lib/pilotagemRoteiro";
 import { compartilharEstoquePessoal } from "../lib/compartilharEstoque";
+import Swal from "sweetalert2";
 
 const ADMIN_LIKE = ["ADMIN", "GERENCIADOR"];
 // Usuário MANUTENCAO só consegue navegar pra /pecas e /manutencoes (o próprio
@@ -262,12 +263,18 @@ export default function Navbar() {
 
   const handleCompartilharEstoque = async () => {
     if (compartilhandoEstoque) return;
+    // Reserva a aba durante o clique para evitar bloqueio e nao trocar a aba atual.
+    const popupReservado = window.open("about:blank", "_blank");
     try {
       setCompartilhandoEstoque(true);
-      await compartilharEstoquePessoal(usuario);
+      await compartilharEstoquePessoal(usuario, popupReservado);
       closeMenu();
     } catch {
-      window.alert("Não foi possível carregar o estoque pra compartilhar.");
+      Swal.fire(
+        "Erro",
+        "Não foi possível carregar o estoque pra compartilhar.",
+        "error",
+      );
     } finally {
       setCompartilhandoEstoque(false);
     }

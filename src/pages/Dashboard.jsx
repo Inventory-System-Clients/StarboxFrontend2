@@ -104,9 +104,11 @@ export function Dashboard() {
 
   const handleCompartilharEstoqueLembrete = async () => {
     if (compartilhandoEstoqueLembrete) return;
+    // Reserva a aba durante o clique para evitar bloqueio e nao trocar a aba atual.
+    const popupReservado = window.open("about:blank", "_blank");
     try {
       setCompartilhandoEstoqueLembrete(true);
-      await compartilharEstoquePessoal(usuario);
+      await compartilharEstoquePessoal(usuario, popupReservado);
       dispensarLembreteEstoque();
     } catch {
       Swal.fire(

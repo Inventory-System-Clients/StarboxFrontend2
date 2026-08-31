@@ -23,9 +23,37 @@ export const montarMensagemEstoquePessoal = (estoque, usuario) => {
 // Busca o estoque pessoal do usuário logado e abre o WhatsApp já com o
 // texto pronto pra enviar (sem destinatário — quem manda escolhe o
 // contato depois que a aba abre).
-export const compartilharEstoquePessoal = async (usuario) => {
-  const res = await api.get("/estoque-usuarios/me");
-  const estoque = Array.isArray(res.data?.estoque) ? res.data.estoque : [];
-  const mensagem = montarMensagemEstoquePessoal(estoque, usuario);
-  window.open(montarWhatsAppUrl(mensagem), "_blank");
+//
+// `popupReservado` deve ser uma aba aberta de forma síncrona no clique
+// (window.open("about:blank", "_blank")), *antes* deste await — do
+// contrário, em boa parte dos navegadores mobile o window.open() feito só
+// depois do await perde o vínculo com o gesto do usuário e é bloqueado
+// silenciosamente (nenhum erro, a aba simplesmente não abre).
+export const compartilharEstoquePessoal = async (usuario, popupReservado = null) => {
+  try {
+    const res = await api.get("/estoque-usuarios/me");
+    const estoque = Array.isArray(res.data?.estoque) ? res.data.estoque : [];
+    const mensagem = montarMensagemEstoquePessoal(estoque, usuario);
+    const whatsappUrl = montarWhatsAppUrl(mensagem);
+
+    if (popupReservado && !popupReservado.closed) {
+      popupReservado.location.href = whatsappUrl;
+      popupReservado.focus?.();
+      return;
+    }
+
+    const novaAba = window.open(whatsappUrl, "_blank");
+    if (novaAba && !novaAba.closed) {
+      novaAba.focus?.();
+      return;
+    }
+
+    // Fallback para garantir redirecionamento ao WhatsApp mesmo com bloqueio de popup.
+    window.location.href = whatsappUrl;
+  } catch (error) {
+    if (popupReservado && !popupReservado.closed) {
+      popupReservado.close();
+    }
+    throw error;
+  }
 };
