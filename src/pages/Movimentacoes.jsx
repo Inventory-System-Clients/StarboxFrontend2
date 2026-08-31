@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Swal from "sweetalert2";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
@@ -71,6 +71,7 @@ export function Movimentacoes() {
   const [success, setSuccess] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [salvandoMovimentacao, setSalvandoMovimentacao] = useState(false);
+  const salvandoMovimentacaoRef = useRef(false);
 
   // Filtros Movimentações
   const [filtroLojaForm, setFiltroLojaForm] = useState("");
@@ -368,6 +369,8 @@ export function Movimentacoes() {
   // --- CORREÇÃO AQUI: Função handleSubmit recriada com o TRY ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (salvandoMovimentacaoRef.current) return;
+    salvandoMovimentacaoRef.current = true;
     setSalvandoMovimentacao(true);
     setError("");
     setSuccess("");
@@ -543,6 +546,7 @@ export function Movimentacoes() {
           "Erro ao registrar movimentação",
       );
     } finally {
+      salvandoMovimentacaoRef.current = false;
       setSalvandoMovimentacao(false);
     }
   };

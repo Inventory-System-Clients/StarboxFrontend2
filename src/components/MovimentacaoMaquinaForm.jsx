@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Swal from "sweetalert2";
 import api from "../services/api";
 import { Modal } from "./UIComponents";
@@ -84,6 +84,8 @@ export function MovimentacaoMaquinaForm({
   });
   const [confirmacaoAberta, setConfirmacaoAberta] = useState(false);
   const [dadosConfirmacao, setDadosConfirmacao] = useState(null);
+  const [salvandoMovimentacao, setSalvandoMovimentacao] = useState(false);
+  const salvandoMovimentacaoRef = useRef(false);
   const [fotoContadores, setFotoContadores] = useState(null);
   const [fotoContadoresPreview, setFotoContadoresPreview] = useState("");
   const [lendoFotoContadores, setLendoFotoContadores] = useState(false);
@@ -1385,6 +1387,9 @@ export function MovimentacaoMaquinaForm({
   };
 
   const salvarMovimentacaoEEnviarWhatsApp = async () => {
+    if (salvandoMovimentacaoRef.current) return;
+    salvandoMovimentacaoRef.current = true;
+    setSalvandoMovimentacao(true);
     setError("");
     setSuccess("");
     try {
@@ -1640,6 +1645,8 @@ export function MovimentacaoMaquinaForm({
       }, 1200);
     } catch (err) {
       setError(err?.response?.data?.error || "Erro ao registrar movimentação.");
+      salvandoMovimentacaoRef.current = false;
+      setSalvandoMovimentacao(false);
     }
   };
 
@@ -2442,16 +2449,18 @@ export function MovimentacaoMaquinaForm({
               <button
                 type="button"
                 onClick={() => setConfirmacaoAberta(false)}
-                className="btn-secondary w-full sm:w-auto"
+                disabled={salvandoMovimentacao}
+                className="btn-secondary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={confirmarSalvarEEnviar}
-                className="btn-primary w-full sm:w-auto"
+                disabled={salvandoMovimentacao}
+                className="btn-primary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirmar!
+                {salvandoMovimentacao ? "Salvando..." : "Confirmar!"}
               </button>
             </div>
           </div>
