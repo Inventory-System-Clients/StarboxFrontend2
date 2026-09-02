@@ -600,7 +600,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     }
 
     const mensagem = montarMensagemDeLeiturasWhatsApp(leituras, {
-      ocultarFinanceiro: usuario?.role === "ABASTECEDOR",
+      ocultarFinanceiro: isFuncionarioAbastecedor,
     });
 
     if (!mensagem) {
@@ -711,7 +711,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
 
       const mensagem = montarMensagemDeLeiturasWhatsApp(
         leiturasComAbastecimentoExtra,
-        { ocultarFinanceiro: usuario?.role === "ABASTECEDOR" },
+        { ocultarFinanceiro: isFuncionarioAbastecedor },
       );
       if (!mensagem) {
         lojasSemAbastecimentoExtra.push(loja.nome || "loja");
@@ -1811,7 +1811,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
             createdAt: resumoAbastecimentoExtra.dataMovimentacao,
           },
         ],
-        { ocultarFinanceiro: usuario?.role === "ABASTECEDOR" },
+        { ocultarFinanceiro: isFuncionarioAbastecedor },
       );
 
       const abriuWhatsApp = abrirWhatsAppComMensagem(
