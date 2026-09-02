@@ -15,6 +15,10 @@ const FAIXAS_MEDIA_POR_VALOR_FICHA = {
   5: { min: 65, max: 85 },
 };
 
+// Desativa a leitura dos contadores por foto/IA sem remover o código.
+// Mude para true para reativar a funcionalidade.
+const LEITURA_IA_CONTADORES_ATIVA = false;
+
 export function MovimentacaoMaquinaForm({
   roteiroId,
   lojaId,
@@ -2013,82 +2017,84 @@ export function MovimentacaoMaquinaForm({
                 </div>
               </div>
             )}
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-blue-900">
-                    📷 Foto dos contadores
-                  </h3>
-                  <p className="mt-1 text-xs text-blue-800">
-                    No celular, o botão abre a câmera para fotografar os
-                    dois contadores. O maior número será usado como IN e o
-                    menor como OUT. Confira e ajuste se precisar.
-                  </p>
-                </div>
-                <input
-                  id="foto-contadores-camera"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFotoContadores}
-                  disabled={lendoFotoContadores}
-                  className="sr-only"
-                />
-                <label
-                  htmlFor="foto-contadores-camera"
-                  className={`btn-primary inline-flex min-h-10 items-center justify-center text-center ${
-                    lendoFotoContadores
-                      ? "cursor-not-allowed opacity-60"
-                      : "cursor-pointer"
-                  }`}
-                  aria-disabled={lendoFotoContadores}
-                >
-                  {lendoFotoContadores
-                    ? "Lendo foto..."
-                    : "Tirar foto dos contadores"}
-                </label>
-              </div>
-
-              {fotoContadoresPreview && (
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <img
-                    src={fotoContadoresPreview}
-                    alt="Prévia da foto dos contadores"
-                    className="h-32 w-full rounded-lg border border-blue-200 bg-white object-contain sm:w-48"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs text-gray-600">
-                      {fotoContadores?.name || "Foto selecionada"}
+            {LEITURA_IA_CONTADORES_ATIVA && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-blue-900">
+                      📷 Foto dos contadores
+                    </h3>
+                    <p className="mt-1 text-xs text-blue-800">
+                      No celular, o botão abre a câmera para fotografar os
+                      dois contadores. O maior número será usado como IN e o
+                      menor como OUT. Confira e ajuste se precisar.
                     </p>
-                    {resultadoFotoContadores && (
-                      <p
-                        className={`mt-2 text-sm ${
-                          resultadoFotoContadores.startsWith("IA leu:")
-                            ? "font-semibold text-green-700"
-                            : "text-blue-900"
-                        }`}
-                      >
-                        {resultadoFotoContadores}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={limparFotoContadores}
-                      disabled={lendoFotoContadores}
-                      className="mt-3 text-sm font-semibold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Remover foto
-                    </button>
                   </div>
+                  <input
+                    id="foto-contadores-camera"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFotoContadores}
+                    disabled={lendoFotoContadores}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="foto-contadores-camera"
+                    className={`btn-primary inline-flex min-h-10 items-center justify-center text-center ${
+                      lendoFotoContadores
+                        ? "cursor-not-allowed opacity-60"
+                        : "cursor-pointer"
+                    }`}
+                    aria-disabled={lendoFotoContadores}
+                  >
+                    {lendoFotoContadores
+                      ? "Lendo foto..."
+                      : "Tirar foto dos contadores"}
+                  </label>
                 </div>
-              )}
 
-              {!fotoContadoresPreview && resultadoFotoContadores && (
-                <p className="mt-3 text-sm text-red-700">
-                  {resultadoFotoContadores}
-                </p>
-              )}
-            </div>
+                {fotoContadoresPreview && (
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <img
+                      src={fotoContadoresPreview}
+                      alt="Prévia da foto dos contadores"
+                      className="h-32 w-full rounded-lg border border-blue-200 bg-white object-contain sm:w-48"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs text-gray-600">
+                        {fotoContadores?.name || "Foto selecionada"}
+                      </p>
+                      {resultadoFotoContadores && (
+                        <p
+                          className={`mt-2 text-sm ${
+                            resultadoFotoContadores.startsWith("IA leu:")
+                              ? "font-semibold text-green-700"
+                              : "text-blue-900"
+                          }`}
+                        >
+                          {resultadoFotoContadores}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={limparFotoContadores}
+                        disabled={lendoFotoContadores}
+                        className="mt-3 text-sm font-semibold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Remover foto
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!fotoContadoresPreview && resultadoFotoContadores && (
+                  <p className="mt-3 text-sm text-red-700">
+                    {resultadoFotoContadores}
+                  </p>
+                )}
+              </div>
+            )}
             {resumoCalculo && (
               <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                 <p className="text-sm text-indigo-900 font-semibold">
