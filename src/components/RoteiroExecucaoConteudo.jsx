@@ -1773,9 +1773,9 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         codigoMaquina: nomeMaquina,
         tipoMaquina,
         inAnterior: Number(movimentacaoAtualizada?.contadorInAnterior || 0),
-        inAtual: Number(movimentacaoAtualizada?.contadorInAtual || 0),
+        inAtual: Number(movimentacaoAtualizada?.contadorIn || 0),
         outAnterior: Number(movimentacaoAtualizada?.contadorOutAnterior || 0),
-        outAtual: Number(movimentacaoAtualizada?.contadorOutAtual || 0),
+        outAtual: Number(movimentacaoAtualizada?.contadorOut || 0),
         diferencaIn: Number(movimentacaoAtualizada?.diferencaIn || 0),
         quantidadeSaiu: Number(movimentacaoAtualizada?.quantidadeSaiu || 0),
         jogado: Number(movimentacaoAtualizada?.jogado || 0),
@@ -3805,7 +3805,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                                   )}
                                 </button>
 
-                                {maquinaConcluida && (
+                                {maquinaConcluida && isFuncionarioAbastecedor && (
                                   <button
                                     className="w-full sm:w-auto px-3 py-2 rounded border border-blue-500 bg-blue-50 text-blue-800 text-xs font-semibold hover:bg-blue-100 whitespace-normal"
                                     onClick={() =>

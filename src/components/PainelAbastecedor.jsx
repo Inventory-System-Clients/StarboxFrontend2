@@ -311,11 +311,11 @@ export default function PainelAbastecedor() {
         dataMovimentacao: new Date().toISOString(),
         nomeUsuario: usuario?.nome || "-",
         codigoMaquina: maquina?.codigo || nomeMaquina,
-        tipoMaquina: nomeMaquina,
+        tipoMaquina: maquina?.tipo || nomeMaquina,
         inAnterior: Number(movimentacaoAtualizada?.contadorInAnterior || 0),
-        inAtual: Number(movimentacaoAtualizada?.contadorInAtual || 0),
+        inAtual: Number(movimentacaoAtualizada?.contadorIn || 0),
         outAnterior: Number(movimentacaoAtualizada?.contadorOutAnterior || 0),
-        outAtual: Number(movimentacaoAtualizada?.contadorOutAtual || 0),
+        outAtual: Number(movimentacaoAtualizada?.contadorOut || 0),
         // O abastecedor so reabastece produto, nunca faz leitura de contador -
         // a mensagem de WhatsApp dele nao pode mostrar dinheiro (Saldo/Jogada/
         // Entradas/etc). Zerar aqui e o suficiente porque
