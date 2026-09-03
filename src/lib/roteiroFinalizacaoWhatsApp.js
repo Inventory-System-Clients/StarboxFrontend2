@@ -866,7 +866,7 @@ const construirMensagemDeItensWhatsApp = (
     return [
       "STAR BOX",
       `*${normalizarTexto(primeiroResumo?.lojaNome) || "LOJA"}*`,
-      `Data: ${formatarDataCurta(ultimoResumo?.dataMovimentacao)}`,
+      `Data: ${formatarDataCurta(new Date())}`,
       `Lançado por: ${
         normalizarTexto(ultimoResumo?.nomeUsuario) ||
         normalizarTexto(
@@ -910,7 +910,7 @@ const construirMensagemDeItensWhatsApp = (
   return [
     "STAR BOX",
     `*${normalizarTexto(primeiroResumo?.lojaNome) || "LOJA"}*`,
-    `Data: ${formatarDataCurta(ultimoResumo?.dataMovimentacao)}`,
+    `Data: ${formatarDataCurta(new Date())}`,
     `Lançado por: ${nomeUsuarioLancamento}`,
     "___________________________________",
     ...blocosMaquinas,
