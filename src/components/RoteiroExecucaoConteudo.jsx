@@ -2360,12 +2360,12 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       (l) => l.id === lojaIdSalva,
     );
     if (lojaAtualizada) {
-      // Se essa era a última máquina pendente do ponto, volta sozinho pra
-      // lista de pontos em vez de esperar clicar em "Voltar para os
-      // pontos". Se ainda sobrar máquina, continua na tela do ponto.
-      setLojaSelecionada(
-        lojaComMaquinasFinalizadas(lojaAtualizada) ? null : lojaAtualizada,
-      );
+      // Fica na tela do ponto mesmo quando essa era a última máquina
+      // pendente (em vez de voltar sozinho pra lista de pontos) - senão o
+      // botão "Abastecimento extra" da máquina recém-concluída fica
+      // inacessível até o usuário reabrir o ponto manualmente. Quem quiser
+      // sair já tem o botão "Voltar para os pontos" na própria tela.
+      setLojaSelecionada(lojaAtualizada);
       verificarEEnviarWhatsAppLojaSeCompleta(lojaAtualizada);
     }
   };
