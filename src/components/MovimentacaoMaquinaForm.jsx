@@ -1036,13 +1036,13 @@ export function MovimentacaoMaquinaForm({
       (p) => String(p.id) === String(formData.produto_id),
     );
     const precoProduto = Number(produtoSelecionado?.preco || 0);
-    // "Valor por pelúcia": jogadas ÷ saíram, direto do contador de entrada
-    // (R$, sem envolver ficha). "Jogada": esse mesmo valor dividido pelo
-    // valor da ficha da máquina — não depende de "usa fichas" (só do valor
-    // da ficha estar preenchido), pra bater sempre com o mesmo cálculo do
-    // alerta no backend (verificarMediaJogadasForaPadrao).
+    // "Valor por pelúcia": saldo (já convertido pra R$ quando a máquina usa
+    // ficha) ÷ saíram. "Jogada": esse mesmo valor dividido pelo valor da
+    // ficha da máquina — não depende de "usa fichas" (só do valor da ficha
+    // estar preenchido), pra bater sempre com o mesmo cálculo do alerta no
+    // backend (verificarMediaJogadasForaPadrao).
     const valorMedidoSaidaPelucia =
-      quantidadeSaiu > 0 ? diferencaIn / quantidadeSaiu : 0;
+      quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
     const jogadasMediasPorPelucia =
       valorJogada > 0 ? valorMedidoSaidaPelucia / valorJogada : valorMedidoSaidaPelucia;
 

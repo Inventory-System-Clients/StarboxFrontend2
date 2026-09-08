@@ -173,10 +173,16 @@ export default function PainelAbastecedor() {
     }
     setProdutosDisponiveis(produtosComEstoque);
 
+    // produtoNaMaquinaId é atualizado a cada abastecimento (inclusive
+    // abastecimento extra) e reflete o produto predominante agora.
+    // detalhesProdutos[0] fica preso no primeiro produto lançado na
+    // movimentação, ignorando trocas feitas depois via abastecimento extra.
     const detalhePrincipal = Array.isArray(ultimaMov?.detalhesProdutos)
       ? ultimaMov.detalhesProdutos[0]
       : null;
-    const ultimoProdutoId = String(detalhePrincipal?.produtoId || "").trim();
+    const ultimoProdutoId = String(
+      ultimaMov?.produtoNaMaquinaId || detalhePrincipal?.produtoId || "",
+    ).trim();
     const produtoInicialId = produtosComEstoque.some(
       (produto) => String(produto?.id || "") === ultimoProdutoId,
     )
