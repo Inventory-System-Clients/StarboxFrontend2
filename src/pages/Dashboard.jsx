@@ -448,6 +448,26 @@ export function Dashboard() {
     lojas: [],
     carregando: false,
   });
+  // Estoque de loja por enquanto só está habilitado pro Shopping Osasco -
+  // achamos o ponto pelo nome/endereço em vez de fixar um ID, já que o ID
+  // difere entre ambiente local/demo/produção.
+  const [lojaEstoqueOsasco, setLojaEstoqueOsasco] = useState(null);
+
+  const carregarLojaEstoqueOsasco = async () => {
+    try {
+      const res = await api.get("/lojas", { params: { all: true } });
+      const lojas = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      const loja = lojas.find((item) =>
+        `${item?.nome || ""} ${item?.endereco || ""}`
+          .toLowerCase()
+          .includes("osasco"),
+      );
+      setLojaEstoqueOsasco(loja || null);
+    } catch (error) {
+      console.error("Erro ao carregar loja do estoque (Shopping Osasco):", error);
+      setLojaEstoqueOsasco(null);
+    }
+  };
 
   // Função para remover produto do estoque da loja (usando o id do registro)
 
@@ -589,6 +609,7 @@ export function Dashboard() {
       // então só vale a pena buscar pra quem realmente vê o widget.
       if (isAdminLike) {
         carregarAlertasEstoqueLoja();
+        carregarLojaEstoqueOsasco();
       }
 
       carregarAlertaInatividadeLojas();
@@ -1432,28 +1453,64 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Card do Depósito Principal - Apenas ADMIN */}
+        {/* Card do Depósito Principal + Estoque de Loja - Apenas ADMIN */}
         {isAdminLike && (
-          <div className="card-gradient mb-8 border-l-4 border-orange-500 p-4 sm:p-8 rounded-xl shadow-md sm:flex-row items-center justify-between gap-6">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                <span className="bg-linear-to-br from-orange-500 to-orange-600 p-2 sm:p-3 rounded-xl text-white">
-                  🏭
-                </span>
-                Base Principal
-              </h2>
-              <p className="text-gray-600 text-sm sm:text-base">
-                Gerencie o estoque central do sistema. Todo estoque distribuído
-                para lojas e funcionários é descontado automaticamente daqui.
-              </p>
+          <div className="mb-8 flex flex-col md:flex-row gap-4 items-stretch">
+            <div className="card-gradient flex-1 border-l-4 border-orange-500 p-4 sm:p-8 rounded-xl shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                  <span className="bg-linear-to-br from-orange-500 to-orange-600 p-2 sm:p-3 rounded-xl text-white">
+                    🏭
+                  </span>
+                  Base Principal
+                </h2>
+                <p className="text-gray-600 text-sm sm:text-base">
+                  Gerencie o estoque central do sistema. Todo estoque distribuído
+                  para lojas e funcionários é descontado automaticamente daqui.
+                </p>
+              </div>
+              <div className="text-left sm:text-right mt-4 sm:mt-0 flex flex-col items-end">
+                <button
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-2 rounded-lg shadow transition-colors flex items-center gap-2"
+                  onClick={() => navigate("/deposito-principal")}
+                >
+                  <span className="text-2xl">🏭</span> Ver Depósito
+                </button>
+              </div>
             </div>
-            <div className="text-left sm:text-right mt-4 sm:mt-0 flex flex-col items-end">
-              <button
-                className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-2 rounded-lg shadow transition-colors flex items-center gap-2"
-                onClick={() => navigate("/deposito-principal")}
-              >
-                <span className="text-2xl">🏭</span> Ver Depósito
-              </button>
+
+            <div className="card-gradient flex-1 border-l-4 border-purple-500 p-4 sm:p-8 rounded-xl shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                  <span className="bg-linear-to-br from-purple-500 to-purple-600 p-2 sm:p-3 rounded-xl text-white">
+                    🏪
+                  </span>
+                  Estoque Loja
+                </h2>
+                <p className="text-gray-600 text-sm sm:text-base">
+                  Por enquanto disponível só para o{" "}
+                  <strong>Shopping Osasco</strong>. Os funcionários podem
+                  escolher usar esse estoque ao invés do próprio ao fazer
+                  máquinas desse ponto.
+                </p>
+              </div>
+              <div className="text-left sm:text-right mt-4 sm:mt-0 flex flex-col items-end">
+                <button
+                  className="bg-purple-500 hover:bg-purple-600 text-white font-bold px-6 py-2 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() =>
+                    lojaEstoqueOsasco &&
+                    navigate(`/lojas/${lojaEstoqueOsasco.id}/editar`)
+                  }
+                  disabled={!lojaEstoqueOsasco}
+                  title={
+                    lojaEstoqueOsasco
+                      ? undefined
+                      : "Ponto Shopping Osasco não encontrado"
+                  }
+                >
+                  <span className="text-2xl">🏪</span> Ver Estoque
+                </button>
+              </div>
             </div>
           </div>
         )}
