@@ -629,6 +629,47 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     }));
   };
 
+  // Envia so a leitura de UMA maquina (nao o ponto inteiro). Util quando o
+  // funcionario fez so uma maquina da loja e quer avisar na hora, sem
+  // esperar terminar as outras para disparar a mensagem completa do ponto.
+  const enviarWhatsAppMaquina = async (loja, maquina) => {
+    if (!loja?.id || !maquina?.id) return;
+
+    let leituras = [];
+    try {
+      const resposta = await api.get("/movimentacoes/leituras-whatsapp", {
+        params: { roteiroId: id, lojaId: loja.id, maquinaId: maquina.id },
+      });
+      leituras = Array.isArray(resposta?.data) ? resposta.data : [];
+    } catch {
+      setError("Não foi possível carregar a leitura desta máquina.");
+      return;
+    }
+
+    const mensagem = montarMensagemDeLeiturasWhatsApp(leituras, {
+      ocultarFinanceiro: isFuncionarioAbastecedor,
+    });
+
+    if (!mensagem) {
+      setError(
+        "Não há leitura salva para esta máquina ainda. Finalize a máquina para gerar a mensagem.",
+      );
+      return;
+    }
+
+    const abriuWhatsApp = abrirWhatsAppComMensagem(mensagem, null, {
+      preferSameTab: true,
+      noFallback: true,
+    });
+    if (abriuWhatsApp) {
+      setSuccess("Leitura da máquina enviada para o WhatsApp.");
+    } else {
+      setError(
+        "Não foi possível abrir o WhatsApp. Verifique se o navegador bloqueou a abertura de janelas.",
+      );
+    }
+  };
+
   const abrirModalReenviarAbastecimentoExtra = () => {
     setModalReenviarAbastecimentoExtra({
       aberto: true,
@@ -3804,6 +3845,18 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                                     </span>
                                   )}
                                 </button>
+
+                                {maquinaConcluida && (
+                                  <button
+                                    className="w-full sm:w-auto px-3 py-2 rounded border border-emerald-500 bg-emerald-50 text-emerald-800 text-xs font-semibold hover:bg-emerald-100 whitespace-normal"
+                                    onClick={() =>
+                                      enviarWhatsAppMaquina(loja, maquina)
+                                    }
+                                    title="Enviar no WhatsApp somente a leitura desta máquina"
+                                  >
+                                    Enviar leitura
+                                  </button>
+                                )}
 
                                 {maquinaConcluida && (
                                   <button
