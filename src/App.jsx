@@ -19,6 +19,7 @@ import { Lojas } from "./pages/Lojas";
 import { LojaForm } from "./pages/LojaForm";
 import { LojaDetalhes } from "./pages/LojaDetalhes";
 import EstoqueDepositoPrincipal from "./pages/EstoqueDepositoPrincipal.jsx";
+import EstoqueLoja from "./pages/EstoqueLoja.jsx";
 import { Maquinas } from "./pages/Maquinas";
 import { MaquinaForm } from "./pages/MaquinaForm";
 import { MaquinaDetalhes } from "./pages/MaquinaDetalhes";
@@ -215,6 +216,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <EstoqueDepositoPrincipal />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/lojas/:id/estoque"
+        element={
+          <PrivateRoute deniedRoles={["FUNCIONARIO", "ABASTECEDOR"]}>
+            <EstoqueLoja />
           </PrivateRoute>
         }
       />
