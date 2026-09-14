@@ -68,6 +68,14 @@ export function MovimentacaoMaquinaForm({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [resumoCalculo, setResumoCalculo] = useState(null);
+  // Controla se a busca do contador sugerido (resumoCalculo) falhou ou ainda
+  // está em andamento, para bloquear o salvamento nesse estado - sem isso, o
+  // formulário caía silenciosamente para "contador anterior = 0" quando essa
+  // requisição falhava (rede instável em campo), inflando o "Jogado" da
+  // mensagem de WhatsApp para o valor bruto do contador (ver histórico do
+  // cliente "714 - Dupla lado direito" em 14/09/2026).
+  const [resumoCalculoErro, setResumoCalculoErro] = useState(false);
+  const [resumoCalculoCarregando, setResumoCalculoCarregando] = useState(false);
   const [alertaDivergencia, setAlertaDivergencia] = useState(null);
   const [alertaMediaVisto, setAlertaMediaVisto] = useState(false);
   const [isPrimeiraMovimentacao, setIsPrimeiraMovimentacao] = useState(false);
@@ -598,6 +606,7 @@ export function MovimentacaoMaquinaForm({
         }
       }
 
+      setResumoCalculoCarregando(true);
       try {
         const res = await api.get(
           `/maquinas/${maquinaId}/calcular-quantidade`,
@@ -630,6 +639,7 @@ export function MovimentacaoMaquinaForm({
               : 0;
 
         setResumoCalculo(res.data);
+        setResumoCalculoErro(false);
 
         const temContadoresDigitados =
           !isFuncionarioAbastecedor &&
@@ -645,6 +655,9 @@ export function MovimentacaoMaquinaForm({
         }
       } catch {
         setResumoCalculo(null);
+        setResumoCalculoErro(true);
+      } finally {
+        setResumoCalculoCarregando(false);
       }
     }
 
@@ -1440,6 +1453,31 @@ export function MovimentacaoMaquinaForm({
         !deveIgnorarContadores &&
         contadorInAtivoInformado !== null &&
         contadorOutAtivoInformado !== null;
+
+      // Sem isso, uma falha/demora na busca do contador sugerido
+      // (GET /maquinas/:id/calcular-quantidade) fazia o formulário assumir
+      // silenciosamente "contador anterior = 0" (ver obterResumoContadores),
+      // o que não afeta o contador salvo nem o fluxo de caixa (calculados
+      // no backend a partir da última movimentação de verdade), mas inflava
+      // o "Jogado" da mensagem de WhatsApp para o valor bruto do contador.
+      if (!isPrimeiraMovimentacao && !deveIgnorarContadores) {
+        if (resumoCalculoCarregando) {
+          setError(
+            "Ainda carregando os dados da máquina. Aguarde um instante e tente salvar novamente.",
+          );
+          salvandoMovimentacaoRef.current = false;
+          setSalvandoMovimentacao(false);
+          return;
+        }
+        if (!resumoCalculo || resumoCalculoErro) {
+          setError(
+            "Não foi possível carregar o contador anterior desta máquina (falha de conexão). Tente novamente antes de salvar, para a mensagem de WhatsApp não sair com o contador anterior zerado.",
+          );
+          salvandoMovimentacaoRef.current = false;
+          setSalvandoMovimentacao(false);
+          return;
+        }
+      }
 
       if (isPrimeiraMovimentacao) {
         if (deveIgnorarContadores) {
