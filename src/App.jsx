@@ -26,6 +26,7 @@ import { MaquinaDetalhes } from "./pages/MaquinaDetalhes";
 import { Produtos } from "./pages/Produtos";
 import { ProdutoForm } from "./pages/ProdutoForm";
 import { Movimentacoes } from "./pages/Movimentacoes";
+import { AbastecimentosExtras } from "./pages/AbastecimentosExtras";
 import { Graficos } from "./pages/Graficos";
 import { Relatorios } from "./pages/Relatorios";
 import { StyleGuide } from "./pages/StyleGuide";
@@ -288,6 +289,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Movimentacoes />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/abastecimentos-extras"
+        element={
+          <PrivateRoute allowedRoles={["ADMIN"]}>
+            <AbastecimentosExtras />
           </PrivateRoute>
         }
       />
