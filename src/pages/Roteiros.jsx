@@ -1346,12 +1346,6 @@ export function Roteiros() {
   };
 
   const handleReordenarLoja = async (roteiroId, lojaId, novaOrdem) => {
-    const roteiro = getRoteiroById(roteiroId);
-    if (isRoteiroFinalizado(roteiro)) {
-      setError("Roteiro finalizado não permite reordenar pontos.");
-      return;
-    }
-
     try {
       await api.patch(`/roteiros/${roteiroId}/reordenar-loja`, {
         lojaId,
@@ -1568,24 +1562,23 @@ export function Roteiros() {
   // --- DRAG AND DROP HANDLERS ---
   const onDragStart = (loja, roteiroId) => {
     if (!isGestorRoteiro) return;
-    const roteiroOrigem = getRoteiroById(roteiroId);
-    if (isRoteiroFinalizado(roteiroOrigem)) return;
 
     setDraggedLoja(loja);
     setDraggedFromRoteiro(roteiroId);
   };
 
   const onDragOver = (e, index, roteiroDestinoId) => {
-    const roteiroOrigem = getRoteiroById(draggedFromRoteiro);
-    const roteiroDestino = getRoteiroById(roteiroDestinoId);
+    if (!isGestorRoteiro || !draggedLoja) return;
 
-    if (
-      !isGestorRoteiro ||
-      !draggedLoja ||
-      isRoteiroFinalizado(roteiroOrigem) ||
-      isRoteiroFinalizado(roteiroDestino)
-    ) {
-      return;
+    // Reordenar dentro do mesmo roteiro é sempre permitido, mesmo finalizado.
+    // Mover pra outro roteiro exige que nenhum dos dois esteja finalizado.
+    const ehReordenacao = draggedFromRoteiro === roteiroDestinoId;
+    if (!ehReordenacao) {
+      const roteiroOrigem = getRoteiroById(draggedFromRoteiro);
+      const roteiroDestino = getRoteiroById(roteiroDestinoId);
+      if (isRoteiroFinalizado(roteiroOrigem) || isRoteiroFinalizado(roteiroDestino)) {
+        return;
+      }
     }
 
     e.preventDefault();
@@ -1606,27 +1599,27 @@ export function Roteiros() {
 
     if (!draggedLoja) return;
 
-    const roteiroOrigem = getRoteiroById(draggedFromRoteiro);
-    const roteiroDestino = getRoteiroById(roteiroDestinoId);
-
-    if (
-      isRoteiroFinalizado(roteiroOrigem) ||
-      isRoteiroFinalizado(roteiroDestino)
-    ) {
-      setError(
-        "Roteiro finalizado não permite adicionar, remover ou mover pontos.",
-      );
-      setDraggedLoja(null);
-      setDraggedFromRoteiro(null);
-      return;
-    }
-
-    // Se é o mesmo roteiro, reordenar
+    // Se é o mesmo roteiro, reordenar (permitido mesmo com o roteiro finalizado)
     if (draggedFromRoteiro === roteiroDestinoId && dropIndex !== null) {
       handleReordenarLoja(roteiroDestinoId, draggedLoja.id, dropIndex);
     }
-    // Se é roteiro diferente, mover
+    // Se é roteiro diferente, mover (bloqueado se origem ou destino finalizados)
     else if (draggedFromRoteiro !== roteiroDestinoId) {
+      const roteiroOrigem = getRoteiroById(draggedFromRoteiro);
+      const roteiroDestino = getRoteiroById(roteiroDestinoId);
+
+      if (
+        isRoteiroFinalizado(roteiroOrigem) ||
+        isRoteiroFinalizado(roteiroDestino)
+      ) {
+        setError(
+          "Roteiro finalizado não permite adicionar, remover ou mover pontos.",
+        );
+        setDraggedLoja(null);
+        setDraggedFromRoteiro(null);
+        return;
+      }
+
       handleMoverLoja(draggedLoja.id, draggedFromRoteiro, roteiroDestinoId);
     }
 
@@ -1791,16 +1784,16 @@ export function Roteiros() {
             <div
               key={roteiro.id}
               onDragOver={(e) => {
-                if (!isGestorRoteiro || isRoteiroFinalizado(roteiro)) return;
+                if (!isGestorRoteiro) return;
                 e.preventDefault();
               }}
               onDrop={(e) => {
-                if (!isGestorRoteiro || isRoteiroFinalizado(roteiro)) return;
+                if (!isGestorRoteiro) return;
                 onDrop(e, roteiro.id);
               }}
-              className={`rounded-xl shadow-lg p-6 border-2 transition-all 
+              className={`rounded-xl shadow-lg p-6 border-2 transition-all
                 ${roteiroEstaFinalizado ? "bg-green-50 border-green-600" : "bg-white border-transparent"}
-                ${draggedLoja && draggedFromRoteiro !== roteiro.id && !isRoteiroFinalizado(roteiro) ? "border-blue-400 border-dashed bg-blue-50" : ""}
+                ${draggedLoja && draggedFromRoteiro !== roteiro.id ? "border-blue-400 border-dashed bg-blue-50" : ""}
               `}
             >
               {(() => {
@@ -2180,9 +2173,7 @@ export function Roteiros() {
                           {lojasVisiveis.map((loja, index) => (
                             <div
                               key={loja.id}
-                              draggable={
-                                isGestorRoteiro && !isRoteiroFinalizado(roteiro)
-                              }
+                              draggable={isGestorRoteiro}
                               onDragStart={() => onDragStart(loja, roteiro.id)}
                               onDrag={(e) => atualizarAutoScrollDrag(e.clientY)}
                               onDragEnd={onDragEnd}
@@ -2192,12 +2183,12 @@ export function Roteiros() {
                               onDragLeave={onDragLeave}
                               onDrop={(e) => onDrop(e, roteiro.id, index)}
                               className={`bg-white p-3 rounded-md border shadow-sm mb-2 text-sm flex items-center gap-2 transition-colors
-                                ${isGestorRoteiro && !isRoteiroFinalizado(roteiro) ? "cursor-move hover:border-blue-300" : ""}
+                                ${isGestorRoteiro ? "cursor-move hover:border-blue-300" : ""}
                                 ${draggedOverIndex === index && draggedFromRoteiro === roteiro.id ? "border-blue-500 border-2 bg-blue-50" : "border-gray-200"}
                               `}
                             >
                               <span className="text-gray-400 hidden sm:inline">☰</span>
-                              {isGestorRoteiro && !isRoteiroFinalizado(roteiro) && (
+                              {isGestorRoteiro && (
                                 <div className="flex flex-col shrink-0">
                                   <button
                                     type="button"
