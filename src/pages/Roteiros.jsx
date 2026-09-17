@@ -1293,15 +1293,9 @@ export function Roteiros() {
     { recarregar = true } = {},
   ) => {
     const roteiroOrigem = origemId ? getRoteiroById(origemId) : null;
-    const roteiroDestino = getRoteiroById(destinoId);
 
-    if (
-      isRoteiroFinalizado(roteiroOrigem) ||
-      isRoteiroFinalizado(roteiroDestino)
-    ) {
-      setError(
-        "Roteiro finalizado não permite adicionar, remover ou mover pontos.",
-      );
+    if (isRoteiroFinalizado(roteiroOrigem)) {
+      setError("Roteiro finalizado não permite remover ou mover pontos.");
       return false;
     }
 
@@ -2157,7 +2151,7 @@ export function Roteiros() {
                   <span className="text-xs font-bold text-gray-400">
                     PONTOS NO DIA
                   </span>
-                  {isGestorRoteiro && !isRoteiroFinalizado(roteiro) && (
+                  {isGestorRoteiro && (
                     <button
                       onClick={() => {
                         setRoteiroParaAdicionar(roteiro);
@@ -2527,21 +2521,21 @@ export function Roteiros() {
               adicionar — não precisa reabrir esse modal a cada ponto.
             </p>
 
-            {isRoteiroFinalizado(roteiroParaAdicionar) ? (
+            {isRoteiroFinalizado(roteiroParaAdicionar) && (
               <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-                Esta rota está finalizada. Não é permitido adicionar pontos.
-              </div>
-            ) : (
-              <div className="mb-4">
-                <MultiSelectAutocomplete
-                  selectedIds={lojasParaAdicionarSelecionadas}
-                  onChange={setLojasParaAdicionarSelecionadas}
-                  options={opcoesLojasParaAdicionar}
-                  placeholder="Buscar ponto por nome, cidade ou bairro..."
-                  emptyLabel="Nenhum ponto encontrado (ou todos já estão no roteiro)"
-                />
+                Esta rota já foi finalizada, mas novos pontos adicionados agora
+                ainda serão incluídos nela.
               </div>
             )}
+            <div className="mb-4">
+              <MultiSelectAutocomplete
+                selectedIds={lojasParaAdicionarSelecionadas}
+                onChange={setLojasParaAdicionarSelecionadas}
+                options={opcoesLojasParaAdicionar}
+                placeholder="Buscar ponto por nome, cidade ou bairro..."
+                emptyLabel="Nenhum ponto encontrado (ou todos já estão no roteiro)"
+              />
+            </div>
 
             <div className="mt-auto flex gap-2">
               <button
@@ -2554,27 +2548,25 @@ export function Roteiros() {
               >
                 Fechar
               </button>
-              {!isRoteiroFinalizado(roteiroParaAdicionar) && (
-                <button
-                  onClick={async () => {
-                    const roteiroId = roteiroParaAdicionar.id;
-                    const lojaIds = lojasParaAdicionarSelecionadas;
-                    setLojasParaAdicionarSelecionadas([]);
-                    setRoteiroParaAdicionar(null);
-                    setShowModalAdicionarLoja(false);
-                    await handleAdicionarPontosEmLote(roteiroId, lojaIds);
-                  }}
-                  disabled={
-                    lojasParaAdicionarSelecionadas.length === 0 ||
-                    adicionandoLotePontos
-                  }
-                  className="flex-1 py-3 bg-[#24094E] text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {adicionandoLotePontos
-                    ? "Adicionando..."
-                    : `Adicionar${lojasParaAdicionarSelecionadas.length > 0 ? ` (${lojasParaAdicionarSelecionadas.length})` : ""}`}
-                </button>
-              )}
+              <button
+                onClick={async () => {
+                  const roteiroId = roteiroParaAdicionar.id;
+                  const lojaIds = lojasParaAdicionarSelecionadas;
+                  setLojasParaAdicionarSelecionadas([]);
+                  setRoteiroParaAdicionar(null);
+                  setShowModalAdicionarLoja(false);
+                  await handleAdicionarPontosEmLote(roteiroId, lojaIds);
+                }}
+                disabled={
+                  lojasParaAdicionarSelecionadas.length === 0 ||
+                  adicionandoLotePontos
+                }
+                className="flex-1 py-3 bg-[#24094E] text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {adicionandoLotePontos
+                  ? "Adicionando..."
+                  : `Adicionar${lojasParaAdicionarSelecionadas.length > 0 ? ` (${lojasParaAdicionarSelecionadas.length})` : ""}`}
+              </button>
             </div>
           </div>
         </div>
