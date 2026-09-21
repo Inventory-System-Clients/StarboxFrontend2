@@ -1358,11 +1358,6 @@ export function Roteiros() {
   };
 
   const handleRemoverPontoDoRoteiro = async (roteiro, loja) => {
-    if (isRoteiroFinalizado(roteiro)) {
-      setError("Roteiro finalizado não permite remover pontos.");
-      return;
-    }
-
     const confirmacao = await Swal.fire({
       icon: "warning",
       title: "Remover ponto do roteiro?",
@@ -2222,7 +2217,7 @@ export function Roteiros() {
                                 {index + 1}
                               </span>
                               <span className="flex-1">🏪 {loja.nome}</span>
-                              {isGestorRoteiro && !isRoteiroFinalizado(roteiro) && (
+                              {isGestorRoteiro && (
                                 <button
                                   type="button"
                                   draggable={false}
