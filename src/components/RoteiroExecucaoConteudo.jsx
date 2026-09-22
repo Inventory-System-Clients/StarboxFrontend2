@@ -3858,17 +3858,15 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                                   </button>
                                 )}
 
-                                {maquinaConcluida && (
-                                  <button
-                                    className="w-full sm:w-auto px-3 py-2 rounded border border-blue-500 bg-blue-50 text-blue-800 text-xs font-semibold hover:bg-blue-100 whitespace-normal"
-                                    onClick={() =>
-                                      abrirModalAbastecimentoExtra(maquina)
-                                    }
-                                    title="Lançar apenas abastecimento extra sem alterar contadores"
-                                  >
-                                    Abastecimento extra
-                                  </button>
-                                )}
+                                <button
+                                  className="w-full sm:w-auto px-3 py-2 rounded border border-blue-500 bg-blue-50 text-blue-800 text-xs font-semibold hover:bg-blue-100 whitespace-normal"
+                                  onClick={() =>
+                                    abrirModalAbastecimentoExtra(maquina)
+                                  }
+                                  title="Lançar apenas abastecimento extra sem alterar contadores"
+                                >
+                                  Abastecimento extra
+                                </button>
 
                                 {podeEditarUltimaMovimentacao && (
                                   <button
