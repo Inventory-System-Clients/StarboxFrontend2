@@ -11,6 +11,7 @@ import { PaginationControls } from "../components/PaginationControls";
 import {
   useManutencoesPersistentes,
   INTERVALO_ALERTA_PERSISTENTE_DIAS,
+  JANELA_MANUTENCOES_RECENTES_DIAS,
 } from "../hooks/useManutencoesPersistentes";
 import { montarWhatsAppUrl } from "../lib/whatsapp";
 
@@ -72,6 +73,7 @@ const montarMensagemDetalhesManutencao = (detalhe) => {
     `Descrição: ${descricao}`,
     `Data/Hora: ${dataHora}`,
     `Status: ${status}`,
+    `Criado por: ${detalhe?.criadoPor?.nome || "-"}`,
     `Responsável: ${funcionarioNome}`,
     `Concluída por: ${concluidaPor}`,
     `Concluída em: ${concluidaEm}`,
@@ -107,6 +109,22 @@ const montarMensagemConclusaoManutencao = ({
     `Peça: ${pecaUsada || "-"}`,
     `Observação: ${observacao || "-"}`,
   ].join("\n");
+};
+
+// Resumo do que foi feito na conclusão: peça trocada ou, sem peça, a
+// observação registrada por quem concluiu.
+const descreverOQueFoiFeito = (manutencao) => {
+  const partes = [];
+  if (manutencao?.pecaUsada?.nome) {
+    const quantidade = manutencao.quantidadePecaUsada
+      ? ` (x${manutencao.quantidadePecaUsada})`
+      : "";
+    partes.push(`Peça usada: ${manutencao.pecaUsada.nome}${quantidade}`);
+  }
+  if (manutencao?.explicacao_sem_peca) {
+    partes.push(manutencao.explicacao_sem_peca);
+  }
+  return partes.length ? partes.join(" · ") : "Nada registrado";
 };
 
 const formatarMaquinaParaAviso = (maquina) => {
@@ -418,7 +436,11 @@ function Manutencoes() {
   // Alerta de "manutenções persistentes" — hook compartilhado com a central
   // de Alertas, busca separada da listagem principal pra não prender a
   // tabela navegável a um histórico maior do que ela precisa.
-  const { manutencoesPersistentes, recarregar: recarregarManutencoesPersistentes } =
+  const {
+    manutencoesPersistentes,
+    manutencoesRecentes,
+    recarregar: recarregarManutencoesPersistentes,
+  } =
     useManutencoesPersistentes({ isAdmin, usuarioId: usuario?.id });
 
   const [showNovaManutencao, setShowNovaManutencao] = useState(false);
@@ -581,12 +603,19 @@ function Manutencoes() {
     }
   }, [showNovaManutencao, isAdmin]);
 
+  // Sem ponto selecionado, lista todas as máquinas: às vezes só se sabe o
+  // código da máquina, e o ponto é preenchido a partir dela.
   const maquinasFiltradas = useMemo(() => {
-    if (!novaManutencao.lojaId) return [];
+    if (!novaManutencao.lojaId) return maquinas;
     return maquinas.filter(
       (m) => String(m.lojaId) === String(novaManutencao.lojaId),
     );
   }, [maquinas, novaManutencao.lojaId]);
+
+  const nomeLojaPorId = useMemo(
+    () => new Map(lojas.map((loja) => [String(loja.id), loja.nome])),
+    [lojas],
+  );
 
   const opcoesLojas = useMemo(
     () =>
@@ -599,11 +628,17 @@ function Manutencoes() {
 
   const opcoesMaquinas = useMemo(
     () =>
-      maquinasFiltradas.map((maquina) => ({
-        value: String(maquina.id),
-        label: `${maquina.codigo}${maquina.nome ? ` - ${maquina.nome}` : ""}`,
-      })),
-    [maquinasFiltradas],
+      maquinasFiltradas.map((maquina) => {
+        const base = `${maquina.codigo}${maquina.nome ? ` - ${maquina.nome}` : ""}`;
+        const nomeLoja =
+          maquina.loja?.nome || nomeLojaPorId.get(String(maquina.lojaId));
+        return {
+          value: String(maquina.id),
+          label:
+            !novaManutencao.lojaId && nomeLoja ? `${base} (${nomeLoja})` : base,
+        };
+      }),
+    [maquinasFiltradas, nomeLojaPorId, novaManutencao.lojaId],
   );
 
   const opcoesFuncionarios = useMemo(
@@ -998,11 +1033,11 @@ function Manutencoes() {
     }
   };
 
-  const handleEnviarDetalhesWhatsApp = () => {
-    if (!detalhe) return;
+  const handleEnviarDetalhesWhatsApp = (manutencao = detalhe) => {
+    if (!manutencao) return;
 
     setError("");
-    const mensagem = montarMensagemDetalhesManutencao(detalhe);
+    const mensagem = montarMensagemDetalhesManutencao(manutencao);
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
 
     const abriuWhatsApp = abrirWhatsAppEmNovaAba({
@@ -1183,15 +1218,28 @@ function Manutencoes() {
                   label="Máquina"
                   value={novaManutencao.maquinaId}
                   options={opcoesMaquinas}
-                  onValueChange={(maquinaId) =>
+                  onValueChange={(maquinaId) => {
+                    const maquina = maquinas.find(
+                      (m) => String(m.id) === String(maquinaId),
+                    );
+                    const lojaDaMaquina = maquina?.lojaId
+                      ? String(maquina.lojaId)
+                      : "";
+                    const trocarLoja =
+                      lojaDaMaquina &&
+                      lojaDaMaquina !== String(novaManutencao.lojaId || "");
+
                     setNovaManutencao((dadosAtuais) => ({
                       ...dadosAtuais,
                       maquinaId,
-                    }))
-                  }
+                      ...(trocarLoja ? { lojaId: lojaDaMaquina } : {}),
+                    }));
+                    if (trocarLoja) {
+                      carregarDestinatariosWhatsApp(lojaDaMaquina);
+                    }
+                  }}
                   placeholder="Digite código ou nome da máquina"
                   required
-                  disabled={!novaManutencao.lojaId}
                 />
 
                 <CampoSelectDigitavel
@@ -1278,7 +1326,7 @@ function Manutencoes() {
                     Data/Hora
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    Criado por
+                    Funcionário
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Loja
@@ -1318,7 +1366,7 @@ function Manutencoes() {
                     <td className="px-4 py-2">
                       {new Date(m.createdAt).toLocaleString("pt-BR")}
                     </td>
-                    <td className="px-4 py-2">{m.criadoPor?.nome || "-"}</td>
+                    <td className="px-4 py-2">{m.funcionario?.nome || "-"}</td>
                     <td className="px-4 py-2">{m.loja?.nome || "-"}</td>
                     <td className="px-4 py-2">
                       {m.maquina?.codigo || "-"}
@@ -1336,29 +1384,40 @@ function Manutencoes() {
                       {formatarDataHora(m.concluidoEm)}
                     </td>
                     <td className="px-4 py-2">
-                      {m.status !== "feito" &&
-                      m.status !== "concluida" &&
-                      (isAdmin ||
-                        manutencaoAtribuidaAoUsuario(m, usuario?.id)) ? (
+                      <div className="flex items-center gap-2">
+                        {m.status !== "feito" &&
+                          m.status !== "concluida" &&
+                          (isAdmin ||
+                            manutencaoAtribuidaAoUsuario(m, usuario?.id)) && (
+                            <button
+                              className="btn-success text-xs px-3 py-1"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                concluirManutencaoDaLinha(m);
+                              }}
+                            >
+                              Concluir
+                            </button>
+                          )}
                         <button
-                          className="btn-success text-xs px-3 py-1"
+                          type="button"
+                          className="text-xs px-3 py-1 rounded-full bg-[#25D366] text-white font-semibold hover:bg-[#1ebe5b] whitespace-nowrap"
                           onClick={(event) => {
                             event.stopPropagation();
-                            concluirManutencaoDaLinha(m);
+                            handleEnviarDetalhesWhatsApp(m);
                           }}
+                          title="Enviar detalhes da manutenção pelo WhatsApp"
                         >
-                          Concluir
+                          WhatsApp
                         </button>
-                      ) : (
-                        <span className="text-xs text-gray-400">-</span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
 
                 {filtradas.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-gray-400 py-8">
+                    <td colSpan={9} className="text-center text-gray-400 py-8">
                       Nenhuma manutenção encontrada
                     </td>
                   </tr>
@@ -1373,36 +1432,127 @@ function Manutencoes() {
           </div>
         )}
 
-        {manutencoesPersistentes.length > 0 && (
-          <div className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
-            <h3 className="text-lg font-bold text-amber-900">
-              ⚠️ Manutenções persistentes
-            </h3>
-            <p className="mt-1 text-sm text-amber-800">
-              Estas máquinas tiveram mais de uma manutenção concluída em até{" "}
-              {INTERVALO_ALERTA_PERSISTENTE_DIAS} dias. Isso pode indicar que a
-              manutenção anterior não resolveu o problema.
-            </p>
+        {(manutencoesPersistentes.length > 0 ||
+          manutencoesRecentes.length > 0) && (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2 items-start">
+            {manutencoesPersistentes.length > 0 ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <h3 className="text-lg font-bold text-amber-900">
+                  ⚠️ Manutenções persistentes
+                </h3>
+                <p className="mt-1 text-sm text-amber-800">
+                  Estas máquinas tiveram mais de uma manutenção concluída em até{" "}
+                  {INTERVALO_ALERTA_PERSISTENTE_DIAS} dias. Isso pode indicar que a
+                  manutenção anterior não resolveu o problema.
+                </p>
 
-            <div className="mt-3 space-y-3">
-              {manutencoesPersistentes.map((item) => (
-                <div
-                  key={item.maquinaId}
-                  className="rounded-md border border-amber-200 bg-white p-3"
-                >
-                  <div className="font-semibold text-gray-900">
-                    {item.maquinaNome} - {item.lojaNome}
-                  </div>
-                  <div className="mt-1 text-sm text-gray-700">
-                    <strong>Data da última manutenção:</strong>{" "}
-                    {formatarDataHora(item.dataUltima)}
-                  </div>
-                  <div className="text-sm text-gray-700">
-                    <strong>Data da manutenção de agora:</strong>{" "}
-                    {formatarDataHora(item.dataAtual)}
-                  </div>
+                <div className="mt-3 space-y-3">
+                  {manutencoesPersistentes.map((item) => (
+                    <div
+                      key={item.maquinaId}
+                      className="rounded-md border border-amber-200 bg-white p-3"
+                    >
+                      <div className="font-semibold text-gray-900">
+                        {item.maquinaNome} - {item.lojaNome}
+                      </div>
+                      <div className="mt-2 grid gap-2">
+                        {[
+                          {
+                            titulo: "Última manutenção",
+                            data: item.dataUltima,
+                            manutencao: item.manutencaoUltima,
+                          },
+                          {
+                            titulo: "Manutenção de agora",
+                            data: item.dataAtual,
+                            manutencao: item.manutencaoAtual,
+                          },
+                        ].map(({ titulo, data, manutencao }) => (
+                          <div
+                            key={titulo}
+                            className="rounded border border-gray-100 bg-gray-50 p-2 text-sm text-gray-700"
+                          >
+                            <div>
+                              <strong>{titulo}:</strong> {formatarDataHora(data)}
+                            </div>
+                            <div>
+                              <strong>Problema:</strong>{" "}
+                              {manutencao?.descricao || "-"}
+                            </div>
+                            <div>
+                              <strong>O que foi feito:</strong>{" "}
+                              {descreverOQueFoiFeito(manutencao)}
+                            </div>
+                            <div>
+                              <strong>Concluída por:</strong>{" "}
+                              {manutencao?.concluidoPor?.nome || "-"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <h3 className="text-lg font-bold text-amber-900">
+                  ⚠️ Manutenções persistentes
+                </h3>
+                <p className="mt-1 text-sm text-amber-800">
+                  Nenhuma máquina com manutenção repetida nos últimos{" "}
+                  {INTERVALO_ALERTA_PERSISTENTE_DIAS} dias.
+                </p>
+              </div>
+            )}
+
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <h3 className="text-lg font-bold text-blue-900">
+                🛠️ Manutenções recentes
+              </h3>
+              <p className="mt-1 text-sm text-blue-800">
+                Manutenções concluídas nos últimos{" "}
+                {JANELA_MANUTENCOES_RECENTES_DIAS} dias e o que foi feito em
+                cada uma.
+              </p>
+
+              <div className="mt-3 space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                {manutencoesRecentes.length === 0 && (
+                  <div className="text-sm text-gray-500">
+                    Nenhuma manutenção concluída nos últimos{" "}
+                    {JANELA_MANUTENCOES_RECENTES_DIAS} dias.
+                  </div>
+                )}
+                {manutencoesRecentes.map((m) => (
+                  <div
+                    key={m.id}
+                    className="rounded-md border border-blue-100 bg-white p-3 text-sm text-gray-700 cursor-pointer hover:bg-blue-50"
+                    onClick={() => setDetalhe(m)}
+                  >
+                    <div className="font-semibold text-gray-900">
+                      {[m.maquina?.codigo, m.maquina?.nome]
+                        .filter(Boolean)
+                        .join(" - ") || "Máquina sem código"}{" "}
+                      - {m.loja?.nome || "Ponto não informado"}
+                    </div>
+                    <div className="mt-1">
+                      <strong>Concluída em:</strong>{" "}
+                      {formatarDataHora(m.concluidoEm || m.createdAt)}
+                    </div>
+                    <div>
+                      <strong>Problema:</strong> {m.descricao || "-"}
+                    </div>
+                    <div>
+                      <strong>O que foi feito:</strong>{" "}
+                      {descreverOQueFoiFeito(m)}
+                    </div>
+                    <div>
+                      <strong>Concluída por:</strong>{" "}
+                      {m.concluidoPor?.nome || "-"}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1510,7 +1660,7 @@ function Manutencoes() {
               <div className="flex flex-col sm:flex-row gap-2 mt-6">
                 <button
                   className="btn-success w-full sm:w-auto"
-                  onClick={handleEnviarDetalhesWhatsApp}
+                  onClick={() => handleEnviarDetalhesWhatsApp(detalhe)}
                 >
                   Enviar para WhatsApp
                 </button>
