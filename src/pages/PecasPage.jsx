@@ -220,6 +220,48 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
     }
   };
 
+  const enviarEstoqueWhatsApp = () => {
+    if (pecas.length === 0) {
+      Swal.fire("Atenção", "Nenhuma peça cadastrada para enviar.", "warning");
+      return;
+    }
+
+    const porCategoria = pecas.reduce((acc, peca) => {
+      const categoria = (peca.categoria || "Sem categoria").toUpperCase();
+      (acc[categoria] ||= []).push(peca);
+      return acc;
+    }, {});
+
+    const dataHora = new Date().toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const linhas = ["📦 *ESTOQUE DE PEÇAS*", `🗓️ ${dataHora}`, ""];
+    Object.keys(porCategoria)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .forEach((categoria) => {
+        const itens = porCategoria[categoria].sort((a, b) =>
+          String(a.nome).localeCompare(String(b.nome), "pt-BR"),
+        );
+        linhas.push(`*${categoria}*`);
+        itens.forEach((peca) => {
+          const qtd = Number(peca.quantidade) || 0;
+          linhas.push(`${qtd === 0 ? "🔴" : "▪️"} ${peca.nome}: *${qtd}*`);
+        });
+        linhas.push("");
+      });
+
+    const semEstoque = pecas.filter((p) => (Number(p.quantidade) || 0) === 0).length;
+    linhas.push(`Total de peças: ${pecas.length}`);
+    if (semEstoque > 0) linhas.push(`🔴 Sem estoque: ${semEstoque}`);
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(linhas.join("\n"))}`, "_blank");
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -230,15 +272,25 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        {podeCriarEditarExcluir && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="btn-primary"
-            onClick={() => setMostrarFormulario((v) => !v)}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold shadow"
+            onClick={enviarEstoqueWhatsApp}
+            disabled={carregando}
           >
-            {mostrarFormulario ? "Cancelar" : "+ Nova Peça"}
+            📲 Enviar para WhatsApp
           </button>
-        )}
+          {podeCriarEditarExcluir && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setMostrarFormulario((v) => !v)}
+            >
+              {mostrarFormulario ? "Cancelar" : "+ Nova Peça"}
+            </button>
+          )}
+        </div>
       </div>
 
       {mostrarFormulario && (
