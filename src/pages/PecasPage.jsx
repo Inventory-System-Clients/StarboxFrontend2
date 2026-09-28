@@ -240,7 +240,7 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
       minute: "2-digit",
     });
 
-    const linhas = ["📦 *ESTOQUE DE PEÇAS*", `🗓️ ${dataHora}`, ""];
+    const linhas = ["*ESTOQUE DE PEÇAS*", `Data: ${dataHora}`, ""];
     Object.keys(porCategoria)
       .sort((a, b) => a.localeCompare(b, "pt-BR"))
       .forEach((categoria) => {
@@ -250,14 +250,14 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
         linhas.push(`*${categoria}*`);
         itens.forEach((peca) => {
           const qtd = Number(peca.quantidade) || 0;
-          linhas.push(`${qtd === 0 ? "🔴" : "▪️"} ${peca.nome}: *${qtd}*`);
+          linhas.push(`- ${peca.nome}: *${qtd}*${qtd === 0 ? " _(sem estoque)_" : ""}`);
         });
         linhas.push("");
       });
 
     const semEstoque = pecas.filter((p) => (Number(p.quantidade) || 0) === 0).length;
     linhas.push(`Total de peças: ${pecas.length}`);
-    if (semEstoque > 0) linhas.push(`🔴 Sem estoque: ${semEstoque}`);
+    if (semEstoque > 0) linhas.push(`Sem estoque: ${semEstoque}`);
 
     window.open(`https://wa.me/?text=${encodeURIComponent(linhas.join("\n"))}`, "_blank");
   };
