@@ -6,6 +6,21 @@ import Footer from "../components/Footer.jsx";
 import api from "../services/api";
 import { PageLoader } from "../components/Loading";
 
+const formatarDataInput = (data) => {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
+
+// Semana atual: de segunda-feira até hoje (datas locais, formato yyyy-mm-dd)
+const periodoSemanaAtual = () => {
+  const hoje = new Date();
+  const segunda = new Date(hoje);
+  segunda.setDate(hoje.getDate() - ((hoje.getDay() + 6) % 7));
+  return { inicio: formatarDataInput(segunda), fim: formatarDataInput(hoje) };
+};
+
 const toNumberOrZero = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
@@ -28,6 +43,16 @@ export default function EstoqueLoja() {
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [historico, setHistorico] = useState([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [filtroHistoricoProduto, setFiltroHistoricoProduto] = useState("");
+  const [filtroHistoricoTipo, setFiltroHistoricoTipo] = useState("");
+  const [filtroHistoricoDataInicio, setFiltroHistoricoDataInicio] = useState(
+    () => periodoSemanaAtual().inicio,
+  );
+  const [filtroHistoricoDataFim, setFiltroHistoricoDataFim] = useState(
+    () => periodoSemanaAtual().fim,
+  );
 
   const montarRowsDoEstoque = useCallback(
     (estoqueAtual = []) =>
@@ -73,9 +98,58 @@ export default function EstoqueLoja() {
     }
   }, [lojaId, montarRowsDoEstoque]);
 
+  const carregarHistorico = useCallback(async () => {
+    try {
+      setCarregandoHistorico(true);
+      // Converte o dia local (yyyy-mm-dd) para o início/fim do dia em ISO
+      const params = { lojaId, limite: 300 };
+      if (filtroHistoricoDataInicio) {
+        params.dataInicio = new Date(
+          `${filtroHistoricoDataInicio}T00:00:00`,
+        ).toISOString();
+      }
+      if (filtroHistoricoDataFim) {
+        params.dataFim = new Date(
+          `${filtroHistoricoDataFim}T23:59:59.999`,
+        ).toISOString();
+      }
+      if (filtroHistoricoDataInicio || filtroHistoricoDataFim) {
+        params.limite = 1000;
+      }
+      const res = await api.get("/movimentacao-estoque-loja", { params });
+      setHistorico(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Erro ao carregar histórico do estoque da loja:", err);
+      setHistorico([]);
+    } finally {
+      setCarregandoHistorico(false);
+    }
+  }, [lojaId, filtroHistoricoDataInicio, filtroHistoricoDataFim]);
+
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
+
+  useEffect(() => {
+    carregarHistorico();
+  }, [carregarHistorico]);
+
+  // Uma linha por produto movimentado, já filtrada pelos filtros da tela.
+  const historicoLinhas = useMemo(() => {
+    const termo = filtroHistoricoProduto.trim().toLowerCase();
+    return historico.flatMap((mov) =>
+      (mov.produtosEnviados || [])
+        .filter(
+          (prod) =>
+            (!filtroHistoricoTipo ||
+              prod.tipoMovimentacao === filtroHistoricoTipo) &&
+            (!termo ||
+              (prod.produto?.nome || "").toLowerCase().includes(termo) ||
+              (prod.produto?.codigo || "").toLowerCase().includes(termo)),
+        )
+        .map((prod) => ({ mov, prod })),
+    );
+  }, [historico, filtroHistoricoProduto, filtroHistoricoTipo]);
 
   const bloquearScrollNumero = (event) => {
     event.target.blur();
@@ -146,6 +220,7 @@ export default function EstoqueLoja() {
     setEstoqueRows((prev) =>
       prev.filter((item) => item.produtoId !== row.produtoId),
     );
+    if (row.id) carregarHistorico();
   };
 
   const salvarEstoque = async () => {
@@ -170,7 +245,7 @@ export default function EstoqueLoja() {
       });
 
       setSuccess("Estoque salvo com sucesso.");
-      await carregarDados();
+      await Promise.all([carregarDados(), carregarHistorico()]);
     } catch (err) {
       console.error("Erro ao salvar estoque da loja:", err);
       setError(err?.response?.data?.error || "Erro ao salvar estoque");
@@ -414,6 +489,179 @@ export default function EstoqueLoja() {
             {salvando ? "Salvando..." : "Salvar estoque"}
           </button>
         </div>
+
+        <section className="mt-10">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                📜 Histórico de movimentações
+              </h2>
+              <p className="text-sm text-gray-600">
+                Entradas e saídas do estoque deste ponto (ajustes nesta tela,
+                envios e abastecimentos de máquinas usando o estoque do ponto).
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                className="input-field max-w-[220px]"
+                placeholder="Filtrar produto..."
+                value={filtroHistoricoProduto}
+                onChange={(e) => setFiltroHistoricoProduto(e.target.value)}
+              />
+              <label className="flex items-center gap-1 text-sm text-gray-600">
+                De
+                <input
+                  type="date"
+                  className="input-field"
+                  value={filtroHistoricoDataInicio}
+                  max={filtroHistoricoDataFim || undefined}
+                  onChange={(e) => setFiltroHistoricoDataInicio(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1 text-sm text-gray-600">
+                Até
+                <input
+                  type="date"
+                  className="input-field"
+                  value={filtroHistoricoDataFim}
+                  min={filtroHistoricoDataInicio || undefined}
+                  onChange={(e) => setFiltroHistoricoDataFim(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                onClick={() => {
+                  const semana = periodoSemanaAtual();
+                  setFiltroHistoricoDataInicio(semana.inicio);
+                  setFiltroHistoricoDataFim(semana.fim);
+                }}
+              >
+                Esta semana
+              </button>
+              {filtroHistoricoDataInicio || filtroHistoricoDataFim ? (
+                <button
+                  type="button"
+                  className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                  onClick={() => {
+                    setFiltroHistoricoDataInicio("");
+                    setFiltroHistoricoDataFim("");
+                  }}
+                >
+                  Ver tudo
+                </button>
+              ) : null}
+              <select
+                className="select-field"
+                value={filtroHistoricoTipo}
+                onChange={(e) => setFiltroHistoricoTipo(e.target.value)}
+              >
+                <option value="">Entradas e saídas</option>
+                <option value="entrada">Só entradas</option>
+                <option value="saida">Só saídas</option>
+              </select>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-60"
+                onClick={carregarHistorico}
+                disabled={carregandoHistorico}
+              >
+                {carregandoHistorico ? "Atualizando..." : "↻ Atualizar"}
+              </button>
+            </div>
+          </div>
+
+          <div className="card overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Data/Hora
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Produto
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Tipo
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Quantidade
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Responsável
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Observação
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {historicoLinhas.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-sm text-gray-500"
+                    >
+                      {carregandoHistorico
+                        ? "Carregando histórico..."
+                        : "Nenhuma movimentação registrada neste período."}
+                    </td>
+                  </tr>
+                ) : (
+                  historicoLinhas.map(({ mov, prod }) => {
+                    const entrada = prod.tipoMovimentacao === "entrada";
+                    return (
+                      <tr key={prod.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          {mov.dataMovimentacao
+                            ? new Date(mov.dataMovimentacao).toLocaleString(
+                                "pt-BR",
+                              )
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900">
+                            {prod.produto?.emoji || "📦"}{" "}
+                            {prod.produto?.nome || prod.produtoId}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {prod.produto?.codigo || "sem código"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              entrada
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {entrada ? "Entrada" : "Saída"}
+                          </span>
+                        </td>
+                        <td
+                          className={`px-4 py-3 font-bold ${
+                            entrada ? "text-green-700" : "text-red-700"
+                          }`}
+                        >
+                          {entrada ? "+" : "-"}
+                          {prod.quantidade}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {mov.usuario?.nome || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {mov.observacao || "-"}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
 
       <Footer />
