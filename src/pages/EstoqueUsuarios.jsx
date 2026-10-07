@@ -23,6 +23,21 @@ const normalizarTexto = (texto = "") =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
+const formatarDataInput = (data) => {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
+
+// Semana atual: de segunda-feira até hoje (datas locais, formato yyyy-mm-dd)
+const periodoSemanaAtual = () => {
+  const hoje = new Date();
+  const segunda = new Date(hoje);
+  segunda.setDate(hoje.getDate() - ((hoje.getDay() + 6) % 7));
+  return { inicio: formatarDataInput(segunda), fim: formatarDataInput(hoje) };
+};
+
 const formatarDataHora = (valor) => {
   const data = new Date(valor);
   if (Number.isNaN(data.getTime())) return "-";
@@ -48,13 +63,17 @@ export default function EstoqueUsuarios() {
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [filtroHistoricoUsuarioId, setFiltroHistoricoUsuarioId] = useState("");
-  const [filtroHistoricoDataInicio, setFiltroHistoricoDataInicio] =
-    useState("");
-  const [filtroHistoricoDataFim, setFiltroHistoricoDataFim] = useState("");
-  const [historicoMovimentacoes, setHistoricoMovimentacoes] = useState([]);
-  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [historico, setHistorico] = useState([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
   const [erroHistorico, setErroHistorico] = useState("");
+  const [filtroHistoricoProduto, setFiltroHistoricoProduto] = useState("");
+  const [filtroHistoricoTipo, setFiltroHistoricoTipo] = useState("");
+  const [filtroHistoricoDataInicio, setFiltroHistoricoDataInicio] = useState(
+    () => periodoSemanaAtual().inicio,
+  );
+  const [filtroHistoricoDataFim, setFiltroHistoricoDataFim] = useState(
+    () => periodoSemanaAtual().fim,
+  );
 
   // Monta as linhas só a partir dos registros que já existem de verdade pra
   // esse usuário — não do catálogo inteiro de produtos. É isso que corrige
@@ -321,8 +340,17 @@ export default function EstoqueUsuarios() {
     }
 
     const destinos = usuarios.filter((u) => u.id !== usuarioSelecionadoId);
-    if (destinos.length === 0) {
-      setError("Nenhum outro usuario disponivel para transferencia.");
+
+    let lojasDestino = [];
+    try {
+      const resLojas = await api.get("/estoque-usuarios/transferir/lojas");
+      lojasDestino = Array.isArray(resLojas.data) ? resLojas.data : [];
+    } catch (err) {
+      console.error("Erro ao carregar lojas de destino:", err);
+    }
+
+    if (destinos.length === 0 && lojasDestino.length === 0) {
+      setError("Nenhum destino disponivel para transferencia.");
       return;
     }
 
@@ -342,12 +370,26 @@ export default function EstoqueUsuarios() {
         </p>
         <select id="swal-destino" class="swal2-select" style="width:80%;display:block;margin:0 auto 12px">
           <option value="">Selecione o destino...</option>
-          ${destinos
-            .map(
-              (u) =>
-                `<option value="${escapar(u.id)}">${escapar(u.nome)} (${escapar(u.role)})</option>`,
-            )
-            .join("")}
+          ${
+            lojasDestino.length > 0
+              ? `<optgroup label="Lojas">${lojasDestino
+                  .map(
+                    (l) =>
+                      `<option value="loja:${escapar(l.id)}">🏬 ${escapar(l.nome)}</option>`,
+                  )
+                  .join("")}</optgroup>`
+              : ""
+          }
+          ${
+            destinos.length > 0
+              ? `<optgroup label="Usuarios">${destinos
+                  .map(
+                    (u) =>
+                      `<option value="usuario:${escapar(u.id)}">${escapar(u.nome)} (${escapar(u.role)})</option>`,
+                  )
+                  .join("")}</optgroup>`
+              : ""
+          }
         </select>
         <input id="swal-quantidade" type="number" min="1" max="${row.quantidade}"
           class="swal2-input" style="width:80%;margin:0 auto" placeholder="Quantidade" />
@@ -362,11 +404,13 @@ export default function EstoqueUsuarios() {
           document.getElementById("swal-quantidade").value,
         );
         if (!destinoId) {
-          Swal.showValidationMessage("Selecione o usuario de destino");
+          Swal.showValidationMessage("Selecione o destino");
           return false;
         }
-        if (!Number.isFinite(quantidade) || quantidade <= 0) {
-          Swal.showValidationMessage("Informe uma quantidade maior que zero");
+        if (!Number.isInteger(quantidade) || quantidade <= 0) {
+          Swal.showValidationMessage(
+            "Informe uma quantidade inteira maior que zero",
+          );
           return false;
         }
         if (quantidade > row.quantidade) {
@@ -384,14 +428,20 @@ export default function EstoqueUsuarios() {
     try {
       setError("");
       setSuccess("");
+      const [tipoDestino, idDestino] = dados.destinoId.split(/:(.+)/);
       const res = await api.post("/estoque-usuarios/transferir", {
         usuarioOrigemId: usuarioSelecionadoId,
-        usuarioDestinoId: dados.destinoId,
+        ...(tipoDestino === "loja"
+          ? { lojaDestinoId: idDestino }
+          : { usuarioDestinoId: idDestino }),
         produtoId: row.produtoId,
         quantidade: dados.quantidade,
       });
       setSuccess(res.data?.message || "Transferencia realizada com sucesso.");
-      await carregarEstoque(usuarioSelecionadoId, produtos, usuarios);
+      await Promise.all([
+        carregarEstoque(usuarioSelecionadoId, produtos, usuarios),
+        carregarHistorico(),
+      ]);
     } catch (err) {
       console.error("Erro ao transferir estoque:", err);
       setError(err?.response?.data?.error || "Erro ao transferir estoque");
@@ -417,7 +467,10 @@ export default function EstoqueUsuarios() {
       });
 
       setSuccess("Estoque salvo com sucesso.");
-      await carregarEstoque(usuarioSelecionadoId, produtos, usuarios);
+      await Promise.all([
+        carregarEstoque(usuarioSelecionadoId, produtos, usuarios),
+        carregarHistorico(),
+      ]);
     } catch (err) {
       console.error("Erro ao salvar estoque do usuario:", err);
       setError(err?.response?.data?.error || "Erro ao salvar estoque");
@@ -456,23 +509,60 @@ export default function EstoqueUsuarios() {
     });
   }, [buscaUsuario, usuarios]);
 
-  const filtrosHistoricoCompletos = useMemo(
-    () =>
-      Boolean(
-        filtroHistoricoUsuarioId &&
-        filtroHistoricoDataInicio &&
-        filtroHistoricoDataFim,
-      ),
-    [
-      filtroHistoricoDataFim,
-      filtroHistoricoDataInicio,
-      filtroHistoricoUsuarioId,
-    ],
-  );
+  // Historico do usuario selecionado (mesmo padrao da tela de estoque da loja).
+  const carregarHistorico = useCallback(async () => {
+    if (!isGestorEstoque || !usuarioSelecionadoId) {
+      setHistorico([]);
+      setErroHistorico("");
+      return;
+    }
+    try {
+      setCarregandoHistorico(true);
+      setErroHistorico("");
+      const temPeriodo = filtroHistoricoDataInicio || filtroHistoricoDataFim;
+      const res = await api.get("/estoque-usuarios/movimentacoes", {
+        params: {
+          usuarioId: usuarioSelecionadoId,
+          limit: temPeriodo ? 1000 : 300,
+          ...(filtroHistoricoDataInicio
+            ? { dataInicio: filtroHistoricoDataInicio }
+            : {}),
+          ...(filtroHistoricoDataFim ? { dataFim: filtroHistoricoDataFim } : {}),
+        },
+      });
+      setHistorico(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Erro ao carregar historico de estoque do usuario:", err);
+      setHistorico([]);
+      setErroHistorico(
+        err?.response?.data?.error ||
+          "Erro ao carregar historico de movimentacoes",
+      );
+    } finally {
+      setCarregandoHistorico(false);
+    }
+  }, [
+    filtroHistoricoDataFim,
+    filtroHistoricoDataInicio,
+    isGestorEstoque,
+    usuarioSelecionadoId,
+  ]);
 
-  const periodoHistoricoInvalido =
-    filtrosHistoricoCompletos &&
-    filtroHistoricoDataInicio > filtroHistoricoDataFim;
+  useEffect(() => {
+    carregarHistorico();
+  }, [carregarHistorico]);
+
+  const historicoFiltrado = useMemo(() => {
+    const termo = normalizarTexto(filtroHistoricoProduto.trim());
+    return historico.filter(
+      (item) =>
+        (!filtroHistoricoTipo ||
+          item.tipoMovimentacao === filtroHistoricoTipo) &&
+        (!termo ||
+          normalizarTexto(item.produto?.nome).includes(termo) ||
+          normalizarTexto(item.produto?.codigo).includes(termo)),
+    );
+  }, [historico, filtroHistoricoProduto, filtroHistoricoTipo]);
 
   useEffect(() => {
     if (!isGestorEstoque || loading) return;
@@ -507,71 +597,6 @@ export default function EstoqueUsuarios() {
     onTrocarUsuario,
     usuarioSelecionadoId,
     usuariosFiltrados,
-  ]);
-
-  useEffect(() => {
-    if (!isGestorEstoque) return;
-
-    if (!filtrosHistoricoCompletos) {
-      setHistoricoMovimentacoes([]);
-      setErroHistorico("");
-      setLoadingHistorico(false);
-      return;
-    }
-
-    if (periodoHistoricoInvalido) {
-      setHistoricoMovimentacoes([]);
-      setErroHistorico("Data inicio nao pode ser maior que data fim.");
-      setLoadingHistorico(false);
-      return;
-    }
-
-    let ativo = true;
-
-    const carregarHistorico = async () => {
-      try {
-        setLoadingHistorico(true);
-        setErroHistorico("");
-
-        const response = await api.get("/estoque-usuarios/movimentacoes", {
-          params: {
-            usuarioId: filtroHistoricoUsuarioId,
-            dataInicio: filtroHistoricoDataInicio,
-            dataFim: filtroHistoricoDataFim,
-          },
-        });
-
-        if (!ativo) return;
-
-        const movimentacoes = Array.isArray(response.data) ? response.data : [];
-        setHistoricoMovimentacoes(movimentacoes);
-      } catch (err) {
-        if (!ativo) return;
-        console.error("Erro ao carregar historico de estoque do usuario:", err);
-        setHistoricoMovimentacoes([]);
-        setErroHistorico(
-          err?.response?.data?.error ||
-            "Erro ao carregar historico de movimentacoes",
-        );
-      } finally {
-        if (ativo) {
-          setLoadingHistorico(false);
-        }
-      }
-    };
-
-    carregarHistorico();
-
-    return () => {
-      ativo = false;
-    };
-  }, [
-    filtroHistoricoDataFim,
-    filtroHistoricoDataInicio,
-    filtroHistoricoUsuarioId,
-    filtrosHistoricoCompletos,
-    isGestorEstoque,
-    periodoHistoricoInvalido,
   ]);
 
   return (
@@ -923,147 +948,184 @@ export default function EstoqueUsuarios() {
         </div>
 
         {isGestorEstoque ? (
-          <div className="card mt-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">
-              Registro de movimentacoes de estoque
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <section className="mt-10">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase">
-                  Usuario
-                </label>
-                <select
-                  className="select-field"
-                  value={filtroHistoricoUsuarioId}
-                  onChange={(e) => setFiltroHistoricoUsuarioId(e.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {usuarios.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.nome} ({item.role})
-                    </option>
-                  ))}
-                </select>
+                <h2 className="text-xl font-bold text-gray-900">
+                  📜 Histórico de movimentações
+                </h2>
+                <p className="text-sm text-gray-600">
+                  Entradas e saídas do estoque de{" "}
+                  {usuarioSelecionado?.nome || "usuario selecionado"} (ajustes
+                  nesta tela e transferências).
+                </p>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase">
-                  Data inicio
-                </label>
+              <div className="flex flex-wrap items-center gap-2">
                 <input
-                  type="date"
-                  className="input-field"
-                  value={filtroHistoricoDataInicio}
-                  onChange={(e) => setFiltroHistoricoDataInicio(e.target.value)}
+                  type="text"
+                  className="input-field max-w-[220px]"
+                  placeholder="Filtrar produto..."
+                  value={filtroHistoricoProduto}
+                  onChange={(e) => setFiltroHistoricoProduto(e.target.value)}
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase">
-                  Data fim
+                <label className="flex items-center gap-1 text-sm text-gray-600">
+                  De
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={filtroHistoricoDataInicio}
+                    max={filtroHistoricoDataFim || undefined}
+                    onChange={(e) =>
+                      setFiltroHistoricoDataInicio(e.target.value)
+                    }
+                  />
                 </label>
-                <input
-                  type="date"
-                  className="input-field"
-                  value={filtroHistoricoDataFim}
-                  onChange={(e) => setFiltroHistoricoDataFim(e.target.value)}
-                />
-              </div>
-
-              <div className="flex items-end">
+                <label className="flex items-center gap-1 text-sm text-gray-600">
+                  Até
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={filtroHistoricoDataFim}
+                    min={filtroHistoricoDataInicio || undefined}
+                    onChange={(e) => setFiltroHistoricoDataFim(e.target.value)}
+                  />
+                </label>
                 <button
                   type="button"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50"
+                  className="text-sm font-semibold text-gray-600 hover:text-gray-900"
                   onClick={() => {
-                    setFiltroHistoricoUsuarioId("");
-                    setFiltroHistoricoDataInicio("");
-                    setFiltroHistoricoDataFim("");
-                    setHistoricoMovimentacoes([]);
-                    setErroHistorico("");
+                    const semana = periodoSemanaAtual();
+                    setFiltroHistoricoDataInicio(semana.inicio);
+                    setFiltroHistoricoDataFim(semana.fim);
                   }}
                 >
-                  Limpar filtros
+                  Esta semana
+                </button>
+                {filtroHistoricoDataInicio || filtroHistoricoDataFim ? (
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                    onClick={() => {
+                      setFiltroHistoricoDataInicio("");
+                      setFiltroHistoricoDataFim("");
+                    }}
+                  >
+                    Ver tudo
+                  </button>
+                ) : null}
+                <select
+                  className="select-field"
+                  value={filtroHistoricoTipo}
+                  onChange={(e) => setFiltroHistoricoTipo(e.target.value)}
+                >
+                  <option value="">Entradas e saídas</option>
+                  <option value="entrada">Só entradas</option>
+                  <option value="saida">Só saídas</option>
+                </select>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-60"
+                  onClick={carregarHistorico}
+                  disabled={carregandoHistorico}
+                >
+                  {carregandoHistorico ? "Atualizando..." : "↻ Atualizar"}
                 </button>
               </div>
             </div>
 
-            {!filtrosHistoricoCompletos ? null : loadingHistorico ? (
-              <p className="text-sm text-gray-500">Carregando registros...</p>
-            ) : erroHistorico ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {erroHistorico ? (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {erroHistorico}
               </div>
-            ) : historicoMovimentacoes.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                Nenhuma movimentacao encontrada para os filtros selecionados.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+            ) : null}
+
+            <div className="card overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Data/Hora
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Produto
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Tipo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Quantidade
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Saldo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Responsável
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {historicoFiltrado.length === 0 ? (
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                        Data/Hora
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                        Produto
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                        Tipo
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                        Quantidade
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                        Saldo
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
-                        Lancado por
-                      </th>
+                      <td
+                        colSpan={6}
+                        className="px-4 py-6 text-center text-sm text-gray-500"
+                      >
+                        {carregandoHistorico
+                          ? "Carregando histórico..."
+                          : "Nenhuma movimentação registrada neste período."}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {historicoMovimentacoes.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-sm text-gray-700 whitespace-nowrap">
-                          {formatarDataHora(item.dataMovimentacao)}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-700">
-                          {(item.produto?.emoji || "📦") +
-                            " " +
-                            (item.produto?.nome || item.produtoId)}
-                        </td>
-                        <td className="px-3 py-2 text-sm">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              item.tipoMovimentacao === "entrada"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-700"
+                  ) : (
+                    historicoFiltrado.map((item) => {
+                      const entrada = item.tipoMovimentacao === "entrada";
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                            {formatarDataHora(item.dataMovimentacao)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-900">
+                              {item.produto?.emoji || "📦"}{" "}
+                              {item.produto?.nome || item.produtoId}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {item.produto?.codigo || "sem código"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                entrada
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-700"
+                              }`}
+                            >
+                              {entrada ? "Entrada" : "Saída"}
+                            </span>
+                          </td>
+                          <td
+                            className={`px-4 py-3 font-bold ${
+                              entrada ? "text-green-700" : "text-red-700"
                             }`}
                           >
-                            {item.tipoMovimentacao === "entrada"
-                              ? "Entrada"
-                              : "Saida"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-700">
-                          {toNumberOrZero(item.quantidade)}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-700 whitespace-nowrap">
-                          {toNumberOrZero(item.quantidadeAnterior)} {"->"}{" "}
-                          {toNumberOrZero(item.quantidadeAtual)}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-700">
-                          {item.lancadoPor?.nome || "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                            {entrada ? "+" : "-"}
+                            {toNumberOrZero(item.quantidade)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                            {toNumberOrZero(item.quantidadeAnterior)} {"→"}{" "}
+                            {toNumberOrZero(item.quantidadeAtual)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {item.lancadoPor?.nome || "-"}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         ) : null}
 
       </main>
