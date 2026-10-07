@@ -314,6 +314,90 @@ export default function EstoqueUsuarios() {
     );
   };
 
+  const transferirProduto = async (row) => {
+    if (!row.id) {
+      setError("Salve o estoque antes de transferir este produto.");
+      return;
+    }
+
+    const destinos = usuarios.filter((u) => u.id !== usuarioSelecionadoId);
+    if (destinos.length === 0) {
+      setError("Nenhum outro usuario disponivel para transferencia.");
+      return;
+    }
+
+    const escapar = (texto = "") =>
+      String(texto).replace(
+        /[&<>"']/g,
+        (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+      );
+
+    const { value: dados } = await Swal.fire({
+      title: "Transferir estoque",
+      html: `
+        <p style="font-size:14px;margin-bottom:12px">
+          ${escapar(row.emoji || "🧸")} <b>${escapar(row.produtoNome)}</b><br/>
+          De: <b>${escapar(usuarioSelecionado?.nome)}</b> (disponivel: ${row.quantidade})
+        </p>
+        <select id="swal-destino" class="swal2-select" style="width:80%;display:block;margin:0 auto 12px">
+          <option value="">Selecione o destino...</option>
+          ${destinos
+            .map(
+              (u) =>
+                `<option value="${escapar(u.id)}">${escapar(u.nome)} (${escapar(u.role)})</option>`,
+            )
+            .join("")}
+        </select>
+        <input id="swal-quantidade" type="number" min="1" max="${row.quantidade}"
+          class="swal2-input" style="width:80%;margin:0 auto" placeholder="Quantidade" />
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Transferir",
+      cancelButtonText: "Cancelar",
+      preConfirm: () => {
+        const destinoId = document.getElementById("swal-destino").value;
+        const quantidade = Number(
+          document.getElementById("swal-quantidade").value,
+        );
+        if (!destinoId) {
+          Swal.showValidationMessage("Selecione o usuario de destino");
+          return false;
+        }
+        if (!Number.isFinite(quantidade) || quantidade <= 0) {
+          Swal.showValidationMessage("Informe uma quantidade maior que zero");
+          return false;
+        }
+        if (quantidade > row.quantidade) {
+          Swal.showValidationMessage(
+            `Quantidade maior que o disponivel (${row.quantidade})`,
+          );
+          return false;
+        }
+        return { destinoId, quantidade };
+      },
+    });
+
+    if (!dados) return;
+
+    try {
+      setError("");
+      setSuccess("");
+      const res = await api.post("/estoque-usuarios/transferir", {
+        usuarioOrigemId: usuarioSelecionadoId,
+        usuarioDestinoId: dados.destinoId,
+        produtoId: row.produtoId,
+        quantidade: dados.quantidade,
+      });
+      setSuccess(res.data?.message || "Transferencia realizada com sucesso.");
+      await carregarEstoque(usuarioSelecionadoId, produtos, usuarios);
+    } catch (err) {
+      console.error("Erro ao transferir estoque:", err);
+      setError(err?.response?.data?.error || "Erro ao transferir estoque");
+    }
+  };
+
   const salvarEstoque = async () => {
     if (!isGestorEstoque || !usuarioSelecionadoId) return;
 
@@ -742,13 +826,22 @@ export default function EstoqueUsuarios() {
                         </td>
                         {isGestorEstoque ? (
                           <td className="px-4 py-3">
-                            <button
-                              type="button"
-                              onClick={() => excluirProdutoDoEstoque(item)}
-                              className="text-xs font-semibold text-red-600 hover:text-red-700"
-                            >
-                              🗑️ Excluir
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => transferirProduto(item)}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                              >
+                                🔁 Transferir
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => excluirProdutoDoEstoque(item)}
+                                className="text-xs font-semibold text-red-600 hover:text-red-700"
+                              >
+                                🗑️ Excluir
+                              </button>
+                            </div>
                           </td>
                         ) : null}
                       </tr>
