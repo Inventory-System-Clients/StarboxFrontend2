@@ -19,12 +19,14 @@ import { Lojas } from "./pages/Lojas";
 import { LojaForm } from "./pages/LojaForm";
 import { LojaDetalhes } from "./pages/LojaDetalhes";
 import EstoqueDepositoPrincipal from "./pages/EstoqueDepositoPrincipal.jsx";
+import EstoqueLoja from "./pages/EstoqueLoja.jsx";
 import { Maquinas } from "./pages/Maquinas";
 import { MaquinaForm } from "./pages/MaquinaForm";
 import { MaquinaDetalhes } from "./pages/MaquinaDetalhes";
 import { Produtos } from "./pages/Produtos";
 import { ProdutoForm } from "./pages/ProdutoForm";
 import { Movimentacoes } from "./pages/Movimentacoes";
+import { AbastecimentosExtras } from "./pages/AbastecimentosExtras";
 import { Graficos } from "./pages/Graficos";
 import { Relatorios } from "./pages/Relatorios";
 import { StyleGuide } from "./pages/StyleGuide";
@@ -219,6 +221,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/lojas/:id/estoque"
+        element={
+          <PrivateRoute deniedRoles={["FUNCIONARIO", "ABASTECEDOR"]}>
+            <EstoqueLoja />
+          </PrivateRoute>
+        }
+      />
+      <Route
         path="/maquinas"
         element={
           <PrivateRoute deniedRoles={["FUNCIONARIO", "ABASTECEDOR"]}>
@@ -279,6 +289,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Movimentacoes />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/abastecimentos-extras"
+        element={
+          <PrivateRoute allowedRoles={["ADMIN"]}>
+            <AbastecimentosExtras />
           </PrivateRoute>
         }
       />

@@ -181,6 +181,12 @@ const grupos = [
         icon: "📄",
         allowedRoles: ["ADMIN"],
       },
+      {
+        to: "/abastecimentos-extras",
+        label: "Abastecimentos Extras",
+        icon: "📦",
+        allowedRoles: ["ADMIN"],
+      },
     ],
   },
   {

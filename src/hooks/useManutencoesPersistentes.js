@@ -9,6 +9,8 @@ const JANELA_PERSISTENTES_DIAS = 180;
 
 export const INTERVALO_ALERTA_PERSISTENTE_DIAS = 45;
 
+export const JANELA_MANUTENCOES_RECENTES_DIAS = 20;
+
 const manutencaoAtribuidaAoUsuario = (manutencao, usuarioId) =>
   String(manutencao?.funcionarioId || "") === String(usuarioId || "");
 
@@ -52,13 +54,35 @@ export function useManutencoesPersistentes({
     carregar();
   }, [carregar]);
 
-  const manutencoesPersistentes = useMemo(() => {
-    const manutencoesBase = isAdmin
-      ? manutencoesConcluidasRecentes
-      : manutencoesConcluidasRecentes.filter((m) =>
-          manutencaoAtribuidaAoUsuario(m, usuarioId),
-        );
+  const manutencoesBase = useMemo(
+    () =>
+      isAdmin
+        ? manutencoesConcluidasRecentes
+        : manutencoesConcluidasRecentes.filter((m) =>
+            manutencaoAtribuidaAoUsuario(m, usuarioId),
+          ),
+    [isAdmin, manutencoesConcluidasRecentes, usuarioId],
+  );
 
+  // Manutenções concluídas nos últimos dias, mais recentes primeiro.
+  const manutencoesRecentes = useMemo(() => {
+    const limiteTs =
+      Date.now() - JANELA_MANUTENCOES_RECENTES_DIAS * 24 * 60 * 60 * 1000;
+
+    return manutencoesBase
+      .filter(
+        (m) =>
+          (m.status === "feito" || m.status === "concluida") &&
+          new Date(m.concluidoEm || m.createdAt).getTime() >= limiteTs,
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.concluidoEm || b.createdAt).getTime() -
+          new Date(a.concluidoEm || a.createdAt).getTime(),
+      );
+  }, [manutencoesBase]);
+
+  const manutencoesPersistentes = useMemo(() => {
     const limiteIntervaloMs =
       INTERVALO_ALERTA_PERSISTENTE_DIAS * 24 * 60 * 60 * 1000;
 
@@ -103,10 +127,15 @@ export function useManutencoesPersistentes({
 
         return {
           maquinaId: ordenadas[0].maquinaId,
-          maquinaNome: ordenadas[0].maquina?.codigo || "Máquina sem código",
+          maquinaNome:
+            [ordenadas[0].maquina?.codigo, ordenadas[0].maquina?.nome]
+              .filter(Boolean)
+              .join(" - ") || "Máquina sem código",
           lojaNome: ordenadas[0].loja?.nome || "Ponto não informado",
           dataAtual: ordenadas[0].concluidoEm || ordenadas[0].createdAt,
           dataUltima: ordenadas[1].concluidoEm || ordenadas[1].createdAt,
+          manutencaoAtual: ordenadas[0],
+          manutencaoUltima: ordenadas[1],
         };
       })
       .filter(Boolean)
@@ -114,7 +143,12 @@ export function useManutencoesPersistentes({
         (a, b) =>
           new Date(b.dataAtual).getTime() - new Date(a.dataAtual).getTime(),
       );
-  }, [isAdmin, manutencoesConcluidasRecentes, usuarioId]);
+  }, [manutencoesBase]);
 
-  return { manutencoesPersistentes, carregando, recarregar: carregar };
+  return {
+    manutencoesPersistentes,
+    manutencoesRecentes,
+    carregando,
+    recarregar: carregar,
+  };
 }

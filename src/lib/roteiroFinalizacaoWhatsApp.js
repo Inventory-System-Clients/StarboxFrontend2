@@ -708,6 +708,14 @@ const construirMensagemDeItensWhatsApp = (
       maximumFractionDigits: 0,
     });
 
+  // Sem data valida nao da pra afirmar que e de outro dia - mantem.
+  const ehDataDeHoje = (valor) => {
+    if (!valor) return true;
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return true;
+    return data.toDateString() === new Date().toDateString();
+  };
+
   const usaFichasResumo = (resumo = {}) =>
     resumo?.usaFichas === true ||
     resumo?.usa_fichas === true ||
@@ -722,13 +730,13 @@ const construirMensagemDeItensWhatsApp = (
       ? quantidadeJogadas * valorJogada
       : quantidadeJogadas;
     const quantidadeSaiu = Number(resumo?.quantidadeSaiu || 0);
-    // "Valor por pelúcia": jogadas ÷ saíram, direto do contador de entrada
-    // (R$, sem envolver ficha). "Jogada": esse mesmo valor dividido pelo
-    // valor da ficha da máquina — não depende de "usa fichas" (só do valor
-    // da ficha estar preenchido), pra bater sempre com o mesmo cálculo do
-    // alerta no backend (verificarMediaJogadasForaPadrao).
+    // "Valor por pelúcia": saldo (já convertido pra R$ quando a máquina usa
+    // ficha) ÷ saíram. "Jogada": esse mesmo valor dividido pelo valor da
+    // ficha da máquina — não depende de "usa fichas" (só do valor da ficha
+    // estar preenchido), pra bater sempre com o mesmo cálculo do alerta no
+    // backend (verificarMediaJogadasForaPadrao).
     const valorMedidoSaidaPelucia =
-      quantidadeSaiu > 0 ? quantidadeJogadas / quantidadeSaiu : 0;
+      quantidadeSaiu > 0 ? saldo / quantidadeSaiu : 0;
     const jogadaPorPelucia =
       valorJogada > 0 ? valorMedidoSaidaPelucia / valorJogada : valorMedidoSaidaPelucia;
 
@@ -803,15 +811,26 @@ const construirMensagemDeItensWhatsApp = (
       // recebe leitura de contador (E/S), saldo/jogada, alerta de saida
       // errada nem "cobrado com X dias" - so os produtos que ele reabasteceu.
       // Maquina sem nada reabastecido nem entra na mensagem.
+      // Tambem so entra o que foi feito HOJE: o backend devolve a leitura
+      // mais recente da semana (ou a ultima de qualquer data, no fallback),
+      // entao sem esse corte um abastecimento de dias atras (ex.: feito na
+      // segunda) voltava a aparecer na mensagem da visita de hoje.
       if (ocultarFinanceiro) {
+        const produtoAbastecidoEhDeHoje = ehDataDeHoje(
+          r?.dataMovimentacao || item?.createdAt,
+        );
+        const abastecimentoExtraEhDeHoje = ehDataDeHoje(
+          r?.dataAbastecimentoExtra || r?.dataMovimentacao || item?.createdAt,
+        );
         const linhasAbastecimento = [
-          ...(nomeProdutoAbastecido &&
+          ...(produtoAbastecidoEhDeHoje &&
+          nomeProdutoAbastecido &&
           nomeProdutoAbastecido.toLowerCase() !== "produto não informado"
             ? [
                 `Produto abastecido: ${nomeProdutoAbastecido}${Number.isFinite(quantidadeAbastecidaInformada) && quantidadeAbastecidaInformada > 0 ? ` (Qtd: ${formatarInteiro(quantidadeAbastecidaInformada)})` : ""}`,
               ]
             : []),
-          ...(quantidadeAbastecimentoExtra > 0
+          ...(abastecimentoExtraEhDeHoje && quantidadeAbastecimentoExtra > 0
             ? [
                 `Abastecimento extra: +${formatarInteiro(quantidadeAbastecimentoExtra)}${nomeProdutoAbastecimentoExtra ? ` (${nomeProdutoAbastecimentoExtra})` : ""}`,
               ]

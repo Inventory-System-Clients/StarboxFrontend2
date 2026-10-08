@@ -220,6 +220,48 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
     }
   };
 
+  const enviarEstoqueWhatsApp = () => {
+    if (pecas.length === 0) {
+      Swal.fire("Atenção", "Nenhuma peça cadastrada para enviar.", "warning");
+      return;
+    }
+
+    const porCategoria = pecas.reduce((acc, peca) => {
+      const categoria = (peca.categoria || "Sem categoria").toUpperCase();
+      (acc[categoria] ||= []).push(peca);
+      return acc;
+    }, {});
+
+    const dataHora = new Date().toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const linhas = ["*ESTOQUE DE PEÇAS*", `Data: ${dataHora}`, ""];
+    Object.keys(porCategoria)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .forEach((categoria) => {
+        const itens = porCategoria[categoria].sort((a, b) =>
+          String(a.nome).localeCompare(String(b.nome), "pt-BR"),
+        );
+        linhas.push(`*${categoria}*`);
+        itens.forEach((peca) => {
+          const qtd = Number(peca.quantidade) || 0;
+          linhas.push(`- ${peca.nome}: *${qtd}*${qtd === 0 ? " _(sem estoque)_" : ""}`);
+        });
+        linhas.push("");
+      });
+
+    const semEstoque = pecas.filter((p) => (Number(p.quantidade) || 0) === 0).length;
+    linhas.push(`Total de peças: ${pecas.length}`);
+    if (semEstoque > 0) linhas.push(`Sem estoque: ${semEstoque}`);
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(linhas.join("\n"))}`, "_blank");
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -230,15 +272,25 @@ function AbaEstoque({ usuario, podeAdicionarAoProprioCarrinho, podeCriarEditarEx
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        {podeCriarEditarExcluir && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="btn-primary"
-            onClick={() => setMostrarFormulario((v) => !v)}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold shadow"
+            onClick={enviarEstoqueWhatsApp}
+            disabled={carregando}
           >
-            {mostrarFormulario ? "Cancelar" : "+ Nova Peça"}
+            📲 Enviar para WhatsApp
           </button>
-        )}
+          {podeCriarEditarExcluir && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setMostrarFormulario((v) => !v)}
+            >
+              {mostrarFormulario ? "Cancelar" : "+ Nova Peça"}
+            </button>
+          )}
+        </div>
       </div>
 
       {mostrarFormulario && (
@@ -459,6 +511,9 @@ function AbaCarrinhos() {
   const [buscaFuncionario, setBuscaFuncionario] = useState("");
   const [buscaPeca, setBuscaPeca] = useState("");
   const [carregando, setCarregando] = useState(true);
+  // Quantidades digitadas nos inputs, por pecaId
+  const [qtdEnviar, setQtdEnviar] = useState({});
+  const [qtdRemover, setQtdRemover] = useState({});
 
   useEffect(() => {
     const carregarInicial = async () => {
@@ -510,11 +565,21 @@ function AbaCarrinhos() {
       Swal.fire("Atenção", "Peça sem estoque disponível", "warning");
       return;
     }
+    const quantidade = parseInt(qtdEnviar[pecaId] ?? 1, 10);
+    if (!(quantidade > 0)) {
+      Swal.fire("Atenção", "Informe uma quantidade válida", "warning");
+      return;
+    }
+    if (quantidade > peca.quantidade) {
+      Swal.fire("Atenção", `Estoque insuficiente. Disponível: ${peca.quantidade}`, "warning");
+      return;
+    }
     try {
       await api.post(`/usuarios/${funcionarioSelecionado.id}/carrinho`, {
         pecaId: String(pecaId),
-        quantidade: 1,
+        quantidade,
       });
+      setQtdEnviar((prev) => ({ ...prev, [pecaId]: 1 }));
       await Promise.all([
         carregarCarrinhoFuncionario(funcionarioSelecionado.id),
         recarregarPecas(),
@@ -528,12 +593,21 @@ function AbaCarrinhos() {
     }
   };
 
-  const removerPecaDoCarrinho = async (pecaId) => {
+  const removerPecaDoCarrinho = async (pecaId, quantidadeNoCarrinho) => {
     if (!funcionarioSelecionado) return;
+    const quantidade = parseInt(qtdRemover[pecaId] ?? 1, 10);
+    if (!(quantidade > 0)) {
+      Swal.fire("Atenção", "Informe uma quantidade válida", "warning");
+      return;
+    }
+    if (quantidade > quantidadeNoCarrinho) {
+      Swal.fire("Atenção", `O carrinho tem apenas ${quantidadeNoCarrinho} unidade(s)`, "warning");
+      return;
+    }
     const confirmacao = await Swal.fire({
       icon: "warning",
       title: "Remover peça",
-      text: "Deseja realmente remover esta peça do carrinho? Ela será devolvida ao estoque.",
+      text: `Deseja remover ${quantidade} unidade(s) do carrinho? Elas serão devolvidas ao estoque.`,
       showCancelButton: true,
       confirmButtonText: "Sim, remover",
       cancelButtonText: "Cancelar",
@@ -543,7 +617,10 @@ function AbaCarrinhos() {
       return;
     }
     try {
-      await api.delete(`/usuarios/${funcionarioSelecionado.id}/carrinho/${pecaId}`);
+      await api.delete(`/usuarios/${funcionarioSelecionado.id}/carrinho/${pecaId}`, {
+        params: { quantidade },
+      });
+      setQtdRemover((prev) => ({ ...prev, [pecaId]: 1 }));
       await Promise.all([
         carregarCarrinhoFuncionario(funcionarioSelecionado.id),
         recarregarPecas(),
@@ -639,12 +716,24 @@ function AbaCarrinhos() {
                       Quantidade: <strong>{peca.quantidadeCarrinho}</strong>
                     </div>
                   </div>
-                  <button
-                    onClick={() => removerPecaDoCarrinho(peca.id)}
-                    className="ml-2 px-3 py-1 rounded text-sm bg-red-500 hover:bg-red-600 text-white"
-                  >
-                    ❌
-                  </button>
+                  <div className="flex items-center gap-2 ml-2 shrink-0">
+                    <input
+                      type="number"
+                      min="1"
+                      max={peca.quantidadeCarrinho}
+                      value={qtdRemover[peca.id] ?? 1}
+                      onChange={(e) =>
+                        setQtdRemover((prev) => ({ ...prev, [peca.id]: e.target.value }))
+                      }
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                    />
+                    <button
+                      onClick={() => removerPecaDoCarrinho(peca.id, peca.quantidadeCarrinho)}
+                      className="px-3 py-1 rounded text-sm font-semibold bg-red-500 hover:bg-red-600 text-white"
+                    >
+                      Remover
+                    </button>
+                  </div>
                 </div>
               ))}
             {pecasNoCarrinhoComZero.every((p) => p.quantidadeCarrinho === 0) && (
@@ -691,17 +780,30 @@ function AbaCarrinhos() {
                       Estoque: <strong>{peca.quantidade}</strong>
                     </div>
                   </div>
-                  <button
-                    onClick={() => adicionarPecaAoCarrinho(peca.id)}
-                    disabled={peca.quantidade === 0}
-                    className={`ml-2 px-3 py-1 rounded text-sm ${
-                      peca.quantidade === 0
-                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        : "bg-green-500 hover:bg-green-600 text-white"
-                    }`}
-                  >
-                    ➕
-                  </button>
+                  <div className="flex items-center gap-2 ml-2 shrink-0">
+                    <input
+                      type="number"
+                      min="1"
+                      max={peca.quantidade}
+                      value={qtdEnviar[peca.id] ?? 1}
+                      onChange={(e) =>
+                        setQtdEnviar((prev) => ({ ...prev, [peca.id]: e.target.value }))
+                      }
+                      disabled={peca.quantidade === 0}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center disabled:bg-gray-100"
+                    />
+                    <button
+                      onClick={() => adicionarPecaAoCarrinho(peca.id)}
+                      disabled={peca.quantidade === 0}
+                      className={`px-3 py-1 rounded text-sm font-semibold ${
+                        peca.quantidade === 0
+                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          : "bg-green-500 hover:bg-green-600 text-white"
+                      }`}
+                    >
+                      Enviar
+                    </button>
+                  </div>
                 </div>
               ))
             )}
