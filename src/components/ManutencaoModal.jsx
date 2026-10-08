@@ -12,6 +12,10 @@ import api from "../services/api";
  * @param {string|number} props.roteiroId - ID do roteiro em execução
  * @param {number} props.usuarioId - ID do funcionário/usuário
  * @param {Function} props.onManutencaoConcluida - Callback após conclusão
+ * @param {boolean} props.obrigatorio - Se true, o modal não pode ser fechado
+ *   sem fazer a manutenção ou explicar por que não fez
+ * @param {number} props.totalPendentes - Total de manutenções pendentes na fila
+ * @param {number} props.posicaoAtual - Posição (1-based) da manutenção atual na fila
  */
 export default function ManutencaoModal({
   isOpen,
@@ -22,6 +26,9 @@ export default function ManutencaoModal({
   usuarioId,
   usuarioNome,
   onManutencaoConcluida,
+  obrigatorio = false,
+  totalPendentes = 1,
+  posicaoAtual = 1,
 }) {
   console.log("🔧 ManutencaoModal props:", {
     isOpen,
@@ -324,7 +331,7 @@ export default function ManutencaoModal({
   };
 
   const handleClose = () => {
-    if (loading) return;
+    if (loading || obrigatorio) return;
     resetarModal();
     onClose();
   };
@@ -343,6 +350,7 @@ export default function ManutencaoModal({
             : "📝 Não Fazer Manutenção"
       }
       size="md"
+      dismissable={!obrigatorio}
     >
       <div className="space-y-4">
         {error && (
@@ -355,7 +363,9 @@ export default function ManutencaoModal({
           <>
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="font-bold text-yellow-800 mb-2">
-                Este ponto tem uma manutenção pendente:
+                {totalPendentes > 1
+                  ? `Este ponto tem ${totalPendentes} manutenções pendentes (${posicaoAtual} de ${totalPendentes}):`
+                  : "Este ponto tem uma manutenção pendente:"}
               </p>
               <p className="text-sm text-gray-700">
                 <strong>Descrição:</strong> {manutencao.descricao}
@@ -371,6 +381,13 @@ export default function ManutencaoModal({
             <p className="text-gray-700">
               Você deseja fazer esta manutenção agora ou prosseguir sem fazê-la?
             </p>
+
+            {obrigatorio && (
+              <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                Para continuar as movimentações deste ponto, você precisa fazer
+                a manutenção ou explicar por que não vai fazê-la.
+              </p>
+            )}
 
             <div className="flex flex-col gap-3 mt-6">
               <button

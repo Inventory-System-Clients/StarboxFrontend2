@@ -61,6 +61,18 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   const [manutencaoPendente, setManutencaoPendente] = useState(null);
   const [modalManutencao, setModalManutencao] = useState(false);
   const [manutencaoRecemCriada, setManutencaoRecemCriada] = useState(null);
+  // Fila de manutenções pendentes exibidas ao abrir a loja. Enquanto houver
+  // itens, o modal é obrigatório: só sai fazendo ou justificando cada uma.
+  const [filaManutencoesObrigatorias, setFilaManutencoesObrigatorias] =
+    useState([]);
+  const [totalManutencoesObrigatorias, setTotalManutencoesObrigatorias] =
+    useState(0);
+  // Bloqueia a loja enquanto verifica manutenções e quando a verificação
+  // falha (ex.: sem internet) - só libera após confirmar que não há pendentes.
+  const [verificacaoManutencao, setVerificacaoManutencao] = useState({
+    status: "ok", // 'ok' | 'verificando' | 'erro'
+    lojaId: null,
+  });
 
   // Estados para controle de ordem
   const [modalJustificativa, setModalJustificativa] = useState({
@@ -2448,6 +2460,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
   };
 
   const verificarManutencoesPendentes = async (lojaId) => {
+    setVerificacaoManutencao({ status: "verificando", lojaId });
     try {
       const res = await api.get(`/manutencoes`, {
         params: {
@@ -2456,19 +2469,41 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
           all: true,
         },
       });
-      const manutencoesPendentes = res.data || [];
+      const manutencoesPendentes = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.rows)
+          ? res.data.rows
+          : null;
+
+      // Resposta em formato inesperado: não dá para garantir que não há
+      // pendentes, então bloqueia como se fosse falha de conexão.
+      if (!manutencoesPendentes) {
+        throw new Error("Resposta inválida ao verificar manutenções");
+      }
+
+      setVerificacaoManutencao({ status: "ok", lojaId: null });
 
       if (manutencoesPendentes.length > 0) {
-        // Pega a primeira manutenção pendente
+        // Todas as pendentes precisam ser feitas ou justificadas, uma a uma.
+        setFilaManutencoesObrigatorias(manutencoesPendentes);
+        setTotalManutencoesObrigatorias(manutencoesPendentes.length);
         setManutencaoPendente(manutencoesPendentes[0]);
         setModalManutencao(true);
         return true;
       }
+      setFilaManutencoesObrigatorias([]);
+      setTotalManutencoesObrigatorias(0);
       return false;
     } catch (err) {
       console.error("Erro ao verificar manutenções:", err);
+      setVerificacaoManutencao({ status: "erro", lojaId });
       return false;
     }
+  };
+
+  const voltarParaPontosSemVerificacao = () => {
+    setVerificacaoManutencao({ status: "ok", lojaId: null });
+    setLojaSelecionada(null);
   };
 
   const handleSelecionarLoja = async (loja) => {
@@ -2714,7 +2749,23 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     } else {
       setSuccess("Manutenção processada com sucesso!");
     }
-    setModalManutencao(false);
+
+    // Avança a fila obrigatória: se ainda houver pendentes, mostra a próxima.
+    const idProcessada = String(
+      evento?.manutencao?.id || manutencaoPendente?.id || "",
+    );
+    const filaRestante = filaManutencoesObrigatorias.filter(
+      (item) => String(item?.id || "") !== idProcessada,
+    );
+    setFilaManutencoesObrigatorias(filaRestante);
+
+    if (filaRestante.length > 0) {
+      setManutencaoPendente(filaRestante[0]);
+      setModalManutencao(true);
+    } else {
+      setTotalManutencoesObrigatorias(0);
+      setModalManutencao(false);
+    }
 
     if (
       manutencaoRecemCriada?.id &&
@@ -2723,7 +2774,9 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       setManutencaoRecemCriada(null);
     }
 
-    setManutencaoPendente(null);
+    if (filaRestante.length === 0) {
+      setManutencaoPendente(null);
+    }
     // Recarregar roteiro para atualizar status
     await carregarRoteiro();
 
@@ -4361,9 +4414,69 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
           />
         )}
 
+        <Modal
+          isOpen={verificacaoManutencao.status !== "ok"}
+          onClose={() => {}}
+          dismissable={false}
+          title={
+            verificacaoManutencao.status === "erro"
+              ? "⚠️ Sem conexão"
+              : "🔎 Verificando manutenções"
+          }
+          size="sm"
+        >
+          {verificacaoManutencao.status === "erro" ? (
+            <div className="space-y-4">
+              <p className="text-gray-700">
+                Não foi possível verificar se este ponto tem manutenções
+                pendentes. Verifique sua internet e tente novamente.
+              </p>
+              <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                As movimentações deste ponto ficam bloqueadas até a verificação
+                ser concluída.
+              </p>
+              <div className="flex flex-col gap-3 mt-6">
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  onClick={() =>
+                    verificarManutencoesPendentes(verificacaoManutencao.lojaId)
+                  }
+                >
+                  🔄 Tentar novamente
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary w-full"
+                  onClick={voltarParaPontosSemVerificacao}
+                >
+                  ← Voltar para os pontos
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-700 text-center py-4">
+              Verificando manutenções pendentes deste ponto...
+            </p>
+          )}
+        </Modal>
+
         <ManutencaoModal
           isOpen={modalManutencao}
-          onClose={() => setModalManutencao(false)}
+          onClose={() => {
+            // Na fila obrigatória quem fecha/avança é handleManutencaoConcluida.
+            if (filaManutencoesObrigatorias.length > 0) return;
+            setModalManutencao(false);
+          }}
+          obrigatorio={filaManutencoesObrigatorias.length > 0}
+          totalPendentes={totalManutencoesObrigatorias || 1}
+          posicaoAtual={
+            totalManutencoesObrigatorias > 0
+              ? totalManutencoesObrigatorias -
+                filaManutencoesObrigatorias.length +
+                1
+              : 1
+          }
           manutencao={manutencaoPendente}
           lojaId={lojaSelecionada?.id}
           roteiroId={id}

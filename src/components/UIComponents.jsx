@@ -207,7 +207,14 @@ export function AlertBox({ type = "info", title, message, onClose }) {
 /**
  * Modal - Componente de modal/dialog
  */
-export function Modal({ isOpen, onClose, title, children, size = "md" }) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = "md",
+  dismissable = true,
+}) {
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -223,7 +230,7 @@ export function Modal({ isOpen, onClose, title, children, size = "md" }) {
         {/* Overlay */}
         <div
           className="fixed inset-0 bg-black bg-opacity-50 transition-opacity backdrop-blur-sm"
-          onClick={onClose}
+          onClick={dismissable ? onClose : undefined}
         ></div>
 
         {/* Modal */}
@@ -232,25 +239,27 @@ export function Modal({ isOpen, onClose, title, children, size = "md" }) {
         >
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
             <h3 className="text-2xl font-bold text-gradient">{title}</h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {dismissable && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
           {children}
         </div>
