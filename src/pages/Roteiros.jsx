@@ -130,6 +130,8 @@ export function Roteiros() {
   const [roteiroParaAdicionar, setRoteiroParaAdicionar] = useState(null);
   const [observacoesPendentes, setObservacoesPendentes] = useState({});
   const [salvandoObservacao, setSalvandoObservacao] = useState({});
+  const [nomesPendentes, setNomesPendentes] = useState({});
+  const [salvandoNome, setSalvandoNome] = useState({});
   const [orcamentosPendentes, setOrcamentosPendentes] = useState({});
   const [salvandoOrcamento, setSalvandoOrcamento] = useState({});
   const [apagandoRoteiros, setApagandoRoteiros] = useState({});
@@ -756,6 +758,57 @@ export function Roteiros() {
       setError("Erro ao salvar observação do roteiro.");
     } finally {
       setSalvandoObservacao((prev) => ({ ...prev, [roteiroId]: false }));
+    }
+  };
+
+  const getNomeRoteiro = (roteiro) => {
+    if (nomesPendentes[roteiro.id] !== undefined) {
+      return nomesPendentes[roteiro.id];
+    }
+    return roteiro.nome || "";
+  };
+
+  const descartarNomePendente = (roteiroId) => {
+    setNomesPendentes((prev) => {
+      const copia = { ...prev };
+      delete copia[roteiroId];
+      return copia;
+    });
+  };
+
+  const salvarNome = async (roteiroId) => {
+    const nomeDigitado = nomesPendentes[roteiroId];
+    if (nomeDigitado === undefined) return;
+
+    const roteiroAtual = getRoteiroById(roteiroId);
+    const nomeNormalizado = nomeDigitado.trim();
+
+    if (!nomeNormalizado) {
+      setError("O nome do roteiro não pode ficar vazio.");
+      descartarNomePendente(roteiroId);
+      return;
+    }
+
+    if (nomeNormalizado === String(roteiroAtual?.nome || "").trim()) {
+      descartarNomePendente(roteiroId);
+      return;
+    }
+
+    try {
+      setSalvandoNome((prev) => ({ ...prev, [roteiroId]: true }));
+      await api.patch(`/roteiros/${roteiroId}`, { nome: nomeNormalizado });
+
+      setRoteiros((prev) =>
+        prev.map((item) =>
+          item.id === roteiroId ? { ...item, nome: nomeNormalizado } : item,
+        ),
+      );
+      descartarNomePendente(roteiroId);
+      setSuccess("Nome do roteiro atualizado com sucesso!");
+    } catch (err) {
+      setError(err?.response?.data?.error || "Erro ao renomear roteiro.");
+    } finally {
+      setSalvandoNome((prev) => ({ ...prev, [roteiroId]: false }));
     }
   };
 
@@ -1842,6 +1895,37 @@ export function Roteiros() {
 
               {cardEstaExpandido(roteiro.id) && (
                 <>
+              {/* Seção de Nome */}
+              {isGestorRoteiro && (
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-gray-400 block mb-1">
+                    NOME DO ROTEIRO
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-2 text-sm border rounded bg-gray-50"
+                    value={getNomeRoteiro(roteiro)}
+                    disabled={Boolean(salvandoNome[roteiro.id])}
+                    onChange={(e) =>
+                      setNomesPendentes((prev) => ({
+                        ...prev,
+                        [roteiro.id]: e.target.value,
+                      }))
+                    }
+                    onBlur={() => salvarNome(roteiro.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === "Escape") descartarNomePendente(roteiro.id);
+                    }}
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {salvandoNome[roteiro.id]
+                      ? "Salvando..."
+                      : "Enter para salvar · Esc para cancelar"}
+                  </p>
+                </div>
+              )}
+
               {/* Seção de Funcionário */}
               <div className="mb-4">
                 <label className="text-xs font-bold text-gray-400 block mb-1">

@@ -7,6 +7,11 @@ import {
   montarMensagemDeLeiturasWhatsApp,
   abrirWhatsAppComMensagem,
 } from "../lib/roteiroFinalizacaoWhatsApp";
+import {
+  carregarProdutosAbastecimentoExtra,
+  origemPadraoAbastecimentoExtra,
+  rotuloProdutoAbastecimentoExtra,
+} from "../lib/abastecimentoExtraEstoque";
 
 const MODAL_ABASTECIMENTO_VAZIO = {
   aberto: false,
@@ -15,6 +20,7 @@ const MODAL_ABASTECIMENTO_VAZIO = {
   roteiroId: "",
   movimentacaoBaseId: "",
   produtoId: "",
+  origemEstoque: "usuario",
   ultimoProdutoId: "",
   produtoPendenteId: "",
   confirmarTrocaProdutoAberto: false,
@@ -142,30 +148,8 @@ export default function PainelAbastecedor() {
 
     let produtosComEstoque = [];
     try {
-      const [produtosRes, estoqueRes] = await Promise.all([
-        api.get("/produtos", { params: { all: true } }),
-        api
-          .get("/estoque-usuarios/me")
-          .catch(() => ({ data: { estoque: [] } })),
-      ]);
-
-      const listaProdutos = Array.isArray(produtosRes.data)
-        ? produtosRes.data
-        : [];
-      const estoqueData = Array.isArray(estoqueRes?.data?.estoque)
-        ? estoqueRes.data.estoque
-        : Array.isArray(estoqueRes?.data)
-          ? estoqueRes.data
-          : [];
-
-      const idsComEstoque = new Set(
-        estoqueData
-          .filter((item) => Number(item?.quantidade || 0) > 0)
-          .map((item) => String(item.produtoId)),
-      );
-
-      produtosComEstoque = listaProdutos.filter((produto) =>
-        idsComEstoque.has(String(produto?.id || "")),
+      produtosComEstoque = await carregarProdutosAbastecimentoExtra(
+        maquina?.lojaId || loja?.id,
       );
     } catch {
       // segue com a lista vazia - o select fica sem opções e o erro real
@@ -183,11 +167,10 @@ export default function PainelAbastecedor() {
     const ultimoProdutoId = String(
       ultimaMov?.produtoNaMaquinaId || detalhePrincipal?.produtoId || "",
     ).trim();
-    const produtoInicialId = produtosComEstoque.some(
+    const produtoInicial = produtosComEstoque.find(
       (produto) => String(produto?.id || "") === ultimoProdutoId,
-    )
-      ? ultimoProdutoId
-      : "";
+    );
+    const produtoInicialId = produtoInicial ? ultimoProdutoId : "";
 
     setModalAbastecimento({
       aberto: true,
@@ -196,6 +179,7 @@ export default function PainelAbastecedor() {
       roteiroId,
       movimentacaoBaseId: ultimaMov.id,
       produtoId: produtoInicialId,
+      origemEstoque: origemPadraoAbastecimentoExtra(produtoInicial),
       ultimoProdutoId,
       produtoPendenteId: "",
       confirmarTrocaProdutoAberto: false,
@@ -209,6 +193,11 @@ export default function PainelAbastecedor() {
     if (modalAbastecimento.loading) return;
     setModalAbastecimento(MODAL_ABASTECIMENTO_VAZIO);
   };
+
+  const origemPadrao = (produtoId) =>
+    origemPadraoAbastecimentoExtra(
+      produtosDisponiveis.find((item) => String(item?.id || "") === produtoId),
+    );
 
   const alterarProdutoAbastecimento = (produtoIdSelecionado) => {
     const ultimoProdutoId = String(modalAbastecimento.ultimoProdutoId || "");
@@ -227,6 +216,7 @@ export default function PainelAbastecedor() {
     setModalAbastecimento((prev) => ({
       ...prev,
       produtoId: novoProdutoId,
+      origemEstoque: origemPadrao(novoProdutoId),
       erro: "",
     }));
   };
@@ -247,15 +237,22 @@ export default function PainelAbastecedor() {
     setModalAbastecimento((prev) => ({
       ...prev,
       produtoId: produtoIdConfirmado,
+      origemEstoque: origemPadrao(produtoIdConfirmado),
       produtoPendenteId: "",
       confirmarTrocaProdutoAberto: false,
       erro: "",
     }));
 
-    await salvarAbastecimento(produtoIdConfirmado);
+    await salvarAbastecimento(
+      produtoIdConfirmado,
+      origemPadrao(produtoIdConfirmado),
+    );
   };
 
-  const salvarAbastecimento = async (produtoIdConfirmado = "") => {
+  const salvarAbastecimento = async (
+    produtoIdConfirmado = "",
+    origemConfirmada = "",
+  ) => {
     const quantidadeNumero = Number(modalAbastecimento.quantidade || 0);
     const produtoId = String(
       produtoIdConfirmado || modalAbastecimento.produtoId || "",
@@ -295,7 +292,12 @@ export default function PainelAbastecedor() {
 
       const res = await api.patch(
         `/movimentacoes/${modalAbastecimento.movimentacaoBaseId}/abastecimento-extra`,
-        { produtoId, quantidadeAbastecida: quantidadeNumero },
+        {
+          produtoId,
+          quantidadeAbastecida: quantidadeNumero,
+          origemEstoque:
+            origemConfirmada || modalAbastecimento.origemEstoque || "usuario",
+        },
       );
 
       const movimentacaoAtualizada = res.data;
@@ -414,6 +416,10 @@ export default function PainelAbastecedor() {
       </div>
     );
   }
+
+  const produtoSelecionadoModal = produtosDisponiveis.find(
+    (item) => String(item?.id || "") === String(modalAbastecimento.produtoId),
+  );
 
   const roteirosComPontos = roteirosComLojas.filter(
     (item) => item.lojas.length > 0,
@@ -594,11 +600,42 @@ export default function PainelAbastecedor() {
               <option value="">Selecione um produto</option>
               {produtosDisponiveis.map((produto) => (
                 <option key={produto.id} value={produto.id}>
-                  {produto.nome}
+                  {rotuloProdutoAbastecimentoExtra(produto)}
                 </option>
               ))}
             </select>
           </div>
+
+          {produtoSelecionadoModal && (
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Origem do estoque *
+              </label>
+              <select
+                className="w-full p-3 border rounded-lg bg-white"
+                value={modalAbastecimento.origemEstoque}
+                onChange={(e) =>
+                  setModalAbastecimento((prev) => ({
+                    ...prev,
+                    origemEstoque: e.target.value,
+                    erro: "",
+                  }))
+                }
+                disabled={modalAbastecimento.loading}
+              >
+                {produtoSelecionadoModal.saldoUsuario > 0 && (
+                  <option value="usuario">
+                    Meu estoque ({produtoSelecionadoModal.saldoUsuario})
+                  </option>
+                )}
+                {produtoSelecionadoModal.saldoLoja > 0 && (
+                  <option value="loja">
+                    Estoque da loja ({produtoSelecionadoModal.saldoLoja})
+                  </option>
+                )}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">

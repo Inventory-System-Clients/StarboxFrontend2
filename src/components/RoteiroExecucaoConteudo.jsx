@@ -16,6 +16,11 @@ import {
   filtrarMensagemFinalizacaoRoteiroManutencoesPorPeriodo,
   isDispositivoMovel,
 } from "../lib/roteiroFinalizacaoWhatsApp";
+import {
+  carregarProdutosAbastecimentoExtra,
+  origemPadraoAbastecimentoExtra,
+  rotuloProdutoAbastecimentoExtra,
+} from "../lib/abastecimentoExtraEstoque";
 
 // Miolo funcional de RoteiroExecucao.jsx, extraido para poder ser embutido
 // tanto na pagina cheia (/roteiros/:id/executar) quanto dentro de um card do
@@ -119,6 +124,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     movimentacao: null,
     quantidade: "",
     produtoId: "",
+    origemEstoque: "usuario",
     ultimoProdutoId: "",
     produtoPendenteId: "",
     confirmarTrocaProdutoAberto: false,
@@ -1605,32 +1611,8 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     let erroProdutos = "";
 
     try {
-      const [produtosRes, estoqueUsuarioRes] = await Promise.all([
-        api.get("/produtos", { params: { all: true } }),
-        api
-          .get("/estoque-usuarios/me")
-          .catch(() => ({ data: { estoque: [] } })),
-      ]);
-
-      const listaProdutos = Array.isArray(produtosRes.data)
-        ? produtosRes.data
-        : [];
-      const estoqueUsuarioData = Array.isArray(
-        estoqueUsuarioRes?.data?.estoque,
-      )
-        ? estoqueUsuarioRes.data.estoque
-        : Array.isArray(estoqueUsuarioRes?.data)
-          ? estoqueUsuarioRes.data
-          : [];
-
-      const produtoIdsComEstoque = new Set(
-        estoqueUsuarioData
-          .filter((item) => Number(item?.quantidade || 0) > 0)
-          .map((item) => String(item.produtoId)),
-      );
-
-      produtosDisponiveisExtra = listaProdutos.filter((produto) =>
-        produtoIdsComEstoque.has(String(produto?.id || "")),
+      produtosDisponiveisExtra = await carregarProdutosAbastecimentoExtra(
+        lojaSelecionada?.id || maquina?.lojaId || maquina?.loja?.id || "",
       );
       setProdutosAbastecimentoExtra(produtosDisponiveisExtra);
     } catch (err) {
@@ -1643,12 +1625,11 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
 
     const produtoPrincipal = obterProdutoPrincipalMovimentacao(ultimaMov);
     const ultimoProdutoId = String(produtoPrincipal?.id || "").trim();
-    const produtoInicialId = produtosDisponiveisExtra.some(
+    const produtoInicial = produtosDisponiveisExtra.find(
       (produto) =>
         String(produto?.id || "") === ultimoProdutoId,
-    )
-      ? ultimoProdutoId
-      : "";
+    );
+    const produtoInicialId = produtoInicial ? ultimoProdutoId : "";
 
     setModalAbastecimentoExtra({
       aberto: true,
@@ -1656,6 +1637,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       movimentacao: ultimaMov,
       quantidade: "",
       produtoId: produtoInicialId,
+      origemEstoque: origemPadraoAbastecimentoExtra(produtoInicial),
       ultimoProdutoId,
       produtoPendenteId: "",
       confirmarTrocaProdutoAberto: false,
@@ -1672,6 +1654,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       movimentacao: null,
       quantidade: "",
       produtoId: "",
+      origemEstoque: "usuario",
       ultimoProdutoId: "",
       produtoPendenteId: "",
       confirmarTrocaProdutoAberto: false,
@@ -1679,6 +1662,13 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
       loading: false,
     });
   };
+
+  const origemPadraoProdutoExtra = (produtoId) =>
+    origemPadraoAbastecimentoExtra(
+      produtosAbastecimentoExtra.find(
+        (item) => String(item?.id || "") === produtoId,
+      ),
+    );
 
   const alterarProdutoAbastecimentoExtra = (produtoIdSelecionado) => {
     const ultimoProdutoId = String(
@@ -1703,6 +1693,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     setModalAbastecimentoExtra((prev) => ({
       ...prev,
       produtoId: novoProdutoId,
+      origemEstoque: origemPadraoProdutoExtra(novoProdutoId),
       erro: "",
     }));
   };
@@ -1723,15 +1714,22 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     setModalAbastecimentoExtra((prev) => ({
       ...prev,
       produtoId: produtoIdConfirmado,
+      origemEstoque: origemPadraoProdutoExtra(produtoIdConfirmado),
       produtoPendenteId: "",
       confirmarTrocaProdutoAberto: false,
       erro: "",
     }));
 
-    await salvarAbastecimentoExtra(produtoIdConfirmado);
+    await salvarAbastecimentoExtra(
+      produtoIdConfirmado,
+      origemPadraoProdutoExtra(produtoIdConfirmado),
+    );
   };
 
-  const salvarAbastecimentoExtra = async (produtoIdConfirmado = "") => {
+  const salvarAbastecimentoExtra = async (
+    produtoIdConfirmado = "",
+    origemConfirmada = "",
+  ) => {
     const quantidadeNumero = Number(modalAbastecimentoExtra.quantidade || 0);
     const produtoId = String(
       produtoIdConfirmado || modalAbastecimentoExtra.produtoId || "",
@@ -1774,6 +1772,10 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         {
           produtoId,
           quantidadeAbastecida: quantidadeNumero,
+          origemEstoque:
+            origemConfirmada ||
+            modalAbastecimentoExtra.origemEstoque ||
+            "usuario",
         },
       );
 
@@ -1873,6 +1875,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         movimentacao: null,
         quantidade: "",
         produtoId: "",
+        origemEstoque: "usuario",
         ultimoProdutoId: "",
         produtoPendenteId: "",
         confirmarTrocaProdutoAberto: false,
@@ -3342,6 +3345,10 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
     ...(roteiro.gastosSemana || roteiro.gastosHoje || []),
   ].sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
 
+  const produtoSelecionadoExtra = produtosAbastecimentoExtra.find(
+    (item) =>
+      String(item?.id || "") === String(modalAbastecimentoExtra.produtoId),
+  );
 
   return (
     <>
@@ -4232,11 +4239,42 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                 <option value="">Selecione um produto</option>
                 {produtosAbastecimentoExtra.map((produto) => (
                   <option key={produto.id} value={produto.id}>
-                    {produto.nome}
+                    {rotuloProdutoAbastecimentoExtra(produto)}
                   </option>
                 ))}
               </select>
             </div>
+
+            {produtoSelecionadoExtra && (
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Origem do estoque *
+                </label>
+                <select
+                  className="w-full p-3 border rounded-lg bg-white"
+                  value={modalAbastecimentoExtra.origemEstoque}
+                  onChange={(e) =>
+                    setModalAbastecimentoExtra((prev) => ({
+                      ...prev,
+                      origemEstoque: e.target.value,
+                      erro: "",
+                    }))
+                  }
+                  disabled={modalAbastecimentoExtra.loading}
+                >
+                  {produtoSelecionadoExtra.saldoUsuario > 0 && (
+                    <option value="usuario">
+                      Meu estoque ({produtoSelecionadoExtra.saldoUsuario})
+                    </option>
+                  )}
+                  {produtoSelecionadoExtra.saldoLoja > 0 && (
+                    <option value="loja">
+                      Estoque da loja ({produtoSelecionadoExtra.saldoLoja})
+                    </option>
+                  )}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">
