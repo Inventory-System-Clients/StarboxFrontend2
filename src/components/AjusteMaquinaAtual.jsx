@@ -30,6 +30,12 @@ const selecaoInicial = {
   contadorOut: false,
 };
 
+const selecaoContadorInicial = {
+  quantidadeAtual: false,
+  contadorIn: true,
+  contadorOut: true,
+};
+
 const somenteInteiroNaoNegativo = (valor) => String(valor || "").replace(/\D/g, "");
 
 const formatarDataHora = (dataTexto) => {
@@ -79,6 +85,7 @@ export default function AjusteMaquinaAtual() {
       : CAMPOS_AJUSTE.map((campo) => campo.chave);
   }, [dadosAtuais]);
 
+  const semValoresAtuais = Boolean(dadosAtuais?.semValoresAtuais);
   const algumCampoSelecionado = Object.values(camposSelecionados).some(Boolean);
   const termoBuscaLoja = buscaLoja.trim().toLowerCase();
   const termoBuscaMaquina = buscaMaquina.trim().toLowerCase();
@@ -118,12 +125,19 @@ export default function AjusteMaquinaAtual() {
       return true;
     }
 
+    if (
+      semValoresAtuais &&
+      (!camposSelecionados.contadorIn || !camposSelecionados.contadorOut)
+    ) {
+      return true;
+    }
+
     return CAMPOS_AJUSTE.some((campo) => {
       if (!camposSelecionados[campo.chave]) return false;
       const valor = valoresForm[campo.chave];
       return valor === "" || !Number.isInteger(Number(valor)) || Number(valor) < 0;
     });
-  }, [algumCampoSelecionado, camposSelecionados, lojaId, maquinaId, salvando, valoresForm]);
+  }, [algumCampoSelecionado, camposSelecionados, lojaId, maquinaId, salvando, semValoresAtuais, valoresForm]);
 
   const aplicarValoresAtuais = (payload) => {
     const valores = payload?.valoresAtuais || {};
@@ -142,15 +156,14 @@ export default function AjusteMaquinaAtual() {
           ? ""
           : String(valores.contadorOut),
     });
+    setCamposSelecionados(
+      payload?.semValoresAtuais ? selecaoContadorInicial : selecaoInicial,
+    );
   };
 
   const obterMensagemErro = (error) => {
     const status = error?.response?.status;
     const data = error?.response?.data || {};
-
-    if (status === 404 && data.code === "MAQUINA_SEM_VALORES_ATUAIS") {
-      return "Esta maquina ainda nao possui valores atuais para editar.";
-    }
 
     if (status === 400) {
       return data.error || "Nao foi possivel salvar os valores informados.";
@@ -270,6 +283,9 @@ export default function AjusteMaquinaAtual() {
   }, [lojaId, maquinaId]);
 
   const alterarCampoSelecionado = (chave) => {
+    if (semValoresAtuais && (chave === "contadorIn" || chave === "contadorOut")) {
+      return;
+    }
     setCamposSelecionados((prev) => ({
       ...prev,
       [chave]: !prev[chave],
@@ -290,7 +306,9 @@ export default function AjusteMaquinaAtual() {
     const confirmou = await Swal.fire({
       icon: "question",
       title: "Confirmar ajuste",
-      text: "Confirmar ajuste dos valores atuais desta maquina?",
+      text: semValoresAtuais
+        ? "Criar o contador inicial desta maquina com os valores informados?"
+        : "Confirmar ajuste dos valores atuais desta maquina?",
       showCancelButton: true,
       confirmButtonText: "Sim, confirmar",
       cancelButtonText: "Cancelar",
@@ -313,8 +331,11 @@ export default function AjusteMaquinaAtual() {
         payload,
       );
       aplicarValoresAtuais(response.data);
-      setCamposSelecionados(selecaoInicial);
-      setSucesso("Valores atuais salvos com sucesso.");
+      setSucesso(
+        semValoresAtuais
+          ? "Contador inicial criado com sucesso."
+          : "Valores atuais salvos com sucesso.",
+      );
     } catch (error) {
       setErro(obterMensagemErro(error));
     } finally {
@@ -419,6 +440,14 @@ export default function AjusteMaquinaAtual() {
           </div>
         )}
 
+        {dadosAtuais && semValoresAtuais && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+            Esta maquina ainda nao possui movimentacao. Informe o contador IN e
+            OUT iniciais (e, se quiser, a quantidade atual) para criar a
+            movimentacao inicial.
+          </div>
+        )}
+
         {dadosAtuais && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -465,7 +494,10 @@ export default function AjusteMaquinaAtual() {
                         type="checkbox"
                         checked={selecionado}
                         onChange={() => alterarCampoSelecionado(campo.chave)}
-                        disabled={!editavel}
+                        disabled={
+                          !editavel ||
+                          (semValoresAtuais && campo.chave !== "quantidadeAtual")
+                        }
                         className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                       />
                       <span className="text-sm font-bold text-gray-900">
@@ -502,7 +534,11 @@ export default function AjusteMaquinaAtual() {
             className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={formularioInvalido}
           >
-            {salvando ? "Salvando..." : "Salvar ajuste"}
+            {salvando
+              ? "Salvando..."
+              : semValoresAtuais
+                ? "Criar contador inicial"
+                : "Salvar ajuste"}
           </button>
         </div>
       </form>
