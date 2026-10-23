@@ -2662,24 +2662,28 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
 
     try {
       // Salvar justificativa via API
-      await api.post(`/roteiros/${id}/justificar-ordem`, {
+      const justificarRes = await api.post(`/roteiros/${id}/justificar-ordem`, {
         lojaId: modalJustificativa.lojaId,
         lojaPuladaId: modalJustificativa.lojaPuladaId,
         justificativa: modalJustificativa.justificativa,
       });
 
-      // Marcar imediatamente a loja pulada como justificada no estado local,
-      // para que verificações futuras de quebra de ordem reconheçam que ela
-      // já foi justificada e não peçam justificativa novamente desnecessariamente.
-      if (modalJustificativa.lojaPuladaId) {
-        setPontosPuladosPorLoja((prev) => ({
-          ...prev,
-          [String(modalJustificativa.lojaPuladaId)]: {
+      // Marcar imediatamente todas as lojas puladas (uma justificativa cobre
+      // todas) como justificadas no estado local, para que verificações
+      // futuras de quebra de ordem não peçam justificativa novamente.
+      const idsLojasPuladas = Array.isArray(justificarRes?.data?.lojasPuladas)
+        ? justificarRes.data.lojasPuladas.map((item) => String(item?.id || ""))
+        : [String(modalJustificativa.lojaPuladaId || "")];
+      setPontosPuladosPorLoja((prev) => {
+        const proximo = { ...prev };
+        idsLojasPuladas.filter(Boolean).forEach((lojaPuladaId) => {
+          proximo[lojaPuladaId] = {
             justificativaEnviada: true,
             justificativa: modalJustificativa.justificativa.trim(),
-          },
-        }));
-      }
+          };
+        });
+        return proximo;
+      });
 
       try {
         const statusAtualizadoRes = await api.get(
@@ -2706,7 +2710,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
         `Roteiro: ${roteiro?.nome || "-"}`,
         `Funcionario: ${usuario?.nome || "-"}`,
         "___________________________________",
-        `Ponto pulado: ${modalJustificativa.lojaPuladaNome || "-"}`,
+        `Ponto(s) pulado(s): ${modalJustificativa.lojaPuladaNome || "-"}`,
         `Ponto selecionado: ${modalJustificativa.lojaNome || "-"}`,
         `Justificativa: ${modalJustificativa.justificativa.trim()}`,
       ].join("\n");
@@ -4062,7 +4066,7 @@ export function RoteiroExecucaoConteudo({ roteiroId }) {
                 ⚠️ Você está pulando a ordem das lojas!
               </p>
               <p className="text-sm text-yellow-700">
-                Ponto pulado:{" "}
+                Ponto(s) pulado(s):{" "}
                 <span className="font-bold">
                   {modalJustificativa.lojaPuladaNome}
                 </span>
