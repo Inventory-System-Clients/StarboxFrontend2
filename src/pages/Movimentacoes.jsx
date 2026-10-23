@@ -16,6 +16,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 import AvisosMaquinasFaltam from "../components/AvisosMaquinasFaltam";
 import TabelaMovimentacoesEstoqueDeLoja from "../components/TabelaMovimentacoesEstoqueDeLoja";
 import ModalEditarMovimentacao from "../components/ModalEditarMovimentacao";
+import HistoricoPontosMaquina from "../components/HistoricoPontosMaquina";
 import { useFilteredList } from "../hooks/useFilteredList";
 import { ListFilterBar, FilterField } from "../components/ListFilterBar";
 import { PaginationControls } from "../components/PaginationControls";
@@ -1531,6 +1532,9 @@ export function Movimentacoes() {
             )}
           </div>
         )}
+
+        {/* Seção Histórico de Pontos da Máquina - visível apenas para ADMIN */}
+        {usuario?.role === "ADMIN" && <HistoricoPontosMaquina />}
 
         {/* Seção Movimentações de Estoque de Loja - visível apenas para ADMIN */}
         {usuario?.role === "ADMIN" && (
