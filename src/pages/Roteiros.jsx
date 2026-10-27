@@ -160,6 +160,7 @@ export function Roteiros() {
   const [draggedFromRoteiro, setDraggedFromRoteiro] = useState(null);
   const [draggedOverIndex, setDraggedOverIndex] = useState(null);
   const autoScrollIntervalRef = useRef(null);
+  const carregarDadosChamadaRef = useRef(0);
   const dragScrollDirectionRef = useRef(0);
 
   const pararAutoScrollDrag = () => {
@@ -875,7 +876,7 @@ export function Roteiros() {
 
   // Depende de usuario?.role para esperar o AuthContext hidratar do localStorage
   useEffect(() => {
-    if (usuario === undefined) return; // ainda inicializando
+    if (!usuario) return; // ainda inicializando
     carregarDadosIniciais();
   }, [usuario?.role]);
 
@@ -959,6 +960,9 @@ export function Roteiros() {
   };
 
   const carregarDadosIniciais = async () => {
+    // Descarta respostas de chamadas antigas que terminem depois de uma mais
+    // nova — senão uma carga feita antes do role hidratar zera responsáveis/veículos.
+    const chamadaId = ++carregarDadosChamadaRef.current;
     try {
       setLoading(true);
       const promises = [
@@ -984,6 +988,7 @@ export function Roteiros() {
       const listaComStatusExecucao = await aplicarStatusExecucaoRoteiros(
         listaRoteiros,
       );
+      if (chamadaId !== carregarDadosChamadaRef.current) return;
       setRoteiros(listaComStatusExecucao);
       setTodasLojas(resLojas.data || []);
       setFuncionarios(
@@ -995,9 +1000,10 @@ export function Roteiros() {
       );
       setVeiculos(resVeiculos.data || []);
     } catch (err) {
+      if (chamadaId !== carregarDadosChamadaRef.current) return;
       setError("Erro ao carregar dados dos roteiros.");
     } finally {
-      setLoading(false);
+      if (chamadaId === carregarDadosChamadaRef.current) setLoading(false);
     }
   };
 

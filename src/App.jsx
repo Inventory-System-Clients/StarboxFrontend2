@@ -117,7 +117,14 @@ function AppRoutes() {
       />
       <Route path="/registrar" element={<Registrar />} />
       <Route path="/style-guide" element={<StyleGuide />} />
-      <Route path="/roteiros" element={<Roteiros />} />
+      <Route
+        path="/roteiros"
+        element={
+          <PrivateRoute>
+            <Roteiros />
+          </PrivateRoute>
+        }
+      />
       <Route
         path="/roteiros/:id/andamento"
         element={
