@@ -38,6 +38,10 @@ export function MovimentacaoMaquinaForm({
     "FUNCIONARIO_TODAS_LOJAS",
     "ABASTECEDOR",
   ].includes(usuario?.role);
+  const podeIgnorarInOut = [
+    "FUNCIONARIO_TODAS_LOJAS",
+    "CONTROLADOR_ESTOQUE",
+  ].includes(usuario?.role);
   const podeVerCamposFinanceirosEObservacao = !isFuncionarioAbastecedor;
 
   // Estados para formulário
@@ -1995,6 +1999,21 @@ export function MovimentacaoMaquinaForm({
                   : "Usando contador mecânico. Clique para usar contador digital"}
               </label>
             </div>
+            {podeIgnorarInOut && !isPrimeiraMovimentacao && (
+              <div className="flex items-center mt-2">
+                <input
+                  type="checkbox"
+                  id="ignoreInOut"
+                  name="ignoreInOut"
+                  checked={formData.ignoreInOut || false}
+                  onChange={handleChange}
+                  className="mr-2"
+                />
+                <label htmlFor="ignoreInOut" className="text-sm text-gray-700">
+                  Ignorar IN/OUT (salvar sem os contadores)
+                </label>
+              </div>
+            )}
             {formData.usarContadorManual && !formData.ignoreInOut && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <div>
