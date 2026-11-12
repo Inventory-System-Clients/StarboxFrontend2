@@ -104,9 +104,17 @@ export default function AjusteMaquinaAtual() {
     );
   }, [lojas, termoBuscaLoja]);
 
+  const maquinasDaLoja = useMemo(
+    () =>
+      lojaId
+        ? maquinas.filter((maquina) => String(maquina?.lojaId) === String(lojaId))
+        : maquinas,
+    [maquinas, lojaId],
+  );
+
   const maquinasFiltradas = useMemo(() => {
-    if (!termoBuscaMaquina) return maquinas;
-    return maquinas.filter((maquina) =>
+    if (!termoBuscaMaquina) return maquinasDaLoja;
+    return maquinasDaLoja.filter((maquina) =>
       [
         maquina?.nome,
         maquina?.codigo,
@@ -118,10 +126,10 @@ export default function AjusteMaquinaAtual() {
           String(valor).toLowerCase().includes(termoBuscaMaquina),
         ),
     );
-  }, [maquinas, termoBuscaMaquina]);
+  }, [maquinasDaLoja, termoBuscaMaquina]);
 
   const formularioInvalido = useMemo(() => {
-    if (!lojaId || !maquinaId || !algumCampoSelecionado || salvando) {
+    if (!maquinaId || !algumCampoSelecionado || salvando) {
       return true;
     }
 
@@ -137,7 +145,7 @@ export default function AjusteMaquinaAtual() {
       const valor = valoresForm[campo.chave];
       return valor === "" || !Number.isInteger(Number(valor)) || Number(valor) < 0;
     });
-  }, [algumCampoSelecionado, camposSelecionados, lojaId, maquinaId, salvando, semValoresAtuais, valoresForm]);
+  }, [algumCampoSelecionado, camposSelecionados, maquinaId, salvando, semValoresAtuais, valoresForm]);
 
   const aplicarValoresAtuais = (payload) => {
     const valores = payload?.valoresAtuais || {};
@@ -202,28 +210,12 @@ export default function AjusteMaquinaAtual() {
   useEffect(() => {
     let cancelado = false;
 
-    async function carregarMaquinasDaLoja() {
-      if (!lojaId) {
-        setMaquinas([]);
-        setMaquinaId("");
-        setBuscaMaquina("");
-        setDadosAtuais(null);
-        setValoresForm(valoresIniciais);
-        setCamposSelecionados(selecaoInicial);
-        return;
-      }
-
+    // Carrega todas as maquinas; a loja so filtra a lista
+    async function carregarMaquinas() {
       try {
         setCarregandoMaquinas(true);
-        setErro("");
-        setSucesso("");
-        setMaquinaId("");
-        setBuscaMaquina("");
-        setDadosAtuais(null);
-        setValoresForm(valoresIniciais);
-        setCamposSelecionados(selecaoInicial);
         const response = await api.get("/maquinas", {
-          params: { lojaId, all: true },
+          params: { all: true },
         });
         if (!cancelado) setMaquinas(normalizarLista(response.data));
       } catch (error) {
@@ -236,18 +228,18 @@ export default function AjusteMaquinaAtual() {
       }
     }
 
-    carregarMaquinasDaLoja();
+    carregarMaquinas();
 
     return () => {
       cancelado = true;
     };
-  }, [lojaId]);
+  }, []);
 
   useEffect(() => {
     let cancelado = false;
 
     async function carregarValoresAtuais() {
-      if (!lojaId || !maquinaId) {
+      if (!maquinaId) {
         setDadosAtuais(null);
         setValoresForm(valoresIniciais);
         setCamposSelecionados(selecaoInicial);
@@ -261,7 +253,6 @@ export default function AjusteMaquinaAtual() {
         setCamposSelecionados(selecaoInicial);
         const response = await api.get(
           `/admin/maquinas/${maquinaId}/ajuste-atual`,
-          { params: { lojaId } },
         );
         if (!cancelado) aplicarValoresAtuais(response.data);
       } catch (error) {
@@ -280,7 +271,32 @@ export default function AjusteMaquinaAtual() {
     return () => {
       cancelado = true;
     };
-  }, [lojaId, maquinaId]);
+  }, [maquinaId]);
+
+  const alterarLoja = (novaLojaId) => {
+    setLojaId(novaLojaId);
+    const maquinaAtual = maquinas.find(
+      (maquina) => String(maquina.id) === String(maquinaId),
+    );
+    if (
+      novaLojaId &&
+      maquinaAtual &&
+      String(maquinaAtual.lojaId) !== String(novaLojaId)
+    ) {
+      setMaquinaId("");
+    }
+  };
+
+  // Digitar o codigo exato ja seleciona a maquina
+  const alterarBuscaMaquina = (texto) => {
+    setBuscaMaquina(texto);
+    const termo = texto.trim().toLowerCase();
+    if (!termo) return;
+    const exata = maquinasDaLoja.find(
+      (maquina) => String(maquina?.codigo || "").trim().toLowerCase() === termo,
+    );
+    if (exata) setMaquinaId(exata.id);
+  };
 
   const alterarCampoSelecionado = (chave) => {
     if (semValoresAtuais && (chave === "contadorIn" || chave === "contadorOut")) {
@@ -315,7 +331,7 @@ export default function AjusteMaquinaAtual() {
     });
     if (!confirmou.isConfirmed) return;
 
-    const payload = { lojaId };
+    const payload = {};
     CAMPOS_AJUSTE.forEach((campo) => {
       if (camposSelecionados[campo.chave]) {
         payload[campo.chave] = Number(valoresForm[campo.chave]);
@@ -374,11 +390,11 @@ export default function AjusteMaquinaAtual() {
             <select
               className="select-field w-full"
               value={lojaId}
-              onChange={(event) => setLojaId(event.target.value)}
+              onChange={(event) => alterarLoja(event.target.value)}
               disabled={carregandoLojas}
             >
               <option value="">
-                {carregandoLojas ? "Carregando lojas..." : "Selecione uma loja"}
+                {carregandoLojas ? "Carregando lojas..." : "Todas as lojas"}
               </option>
               {lojasFiltradas.map((loja) => (
                 <option key={loja.id} value={loja.id}>
@@ -396,15 +412,15 @@ export default function AjusteMaquinaAtual() {
               type="text"
               className="input-field w-full mb-2"
               value={buscaMaquina}
-              onChange={(event) => setBuscaMaquina(event.target.value)}
+              onChange={(event) => alterarBuscaMaquina(event.target.value)}
               placeholder="Digite o nome ou codigo da maquina"
-              disabled={!lojaId || carregandoMaquinas}
+              disabled={carregandoMaquinas}
             />
             <select
               className="select-field w-full"
               value={maquinaId}
               onChange={(event) => setMaquinaId(event.target.value)}
-              disabled={!lojaId || carregandoMaquinas}
+              disabled={carregandoMaquinas}
             >
               <option value="">
                 {carregandoMaquinas
@@ -416,6 +432,7 @@ export default function AjusteMaquinaAtual() {
                   {maquina.codigo
                     ? `${maquina.codigo} - ${maquina.nome || "Maquina"}`
                     : maquina.nome || maquina.id}
+                  {!lojaId && maquina.loja?.nome ? ` (${maquina.loja.nome})` : ""}
                 </option>
               ))}
             </select>
