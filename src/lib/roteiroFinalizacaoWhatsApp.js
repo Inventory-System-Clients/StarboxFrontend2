@@ -767,14 +767,28 @@ const construirMensagemDeItensWhatsApp = (
       }
     }
 
+    const percentualComissao = Math.max(
+      0,
+      Number(resumo?.percentualComissao || 0) || 0,
+    );
+    const comissao = (Math.max(0, saldo) * percentualComissao) / 100;
+
     return {
       quantidadeJogadas,
       saldo,
       valorMedidoSaidaPelucia,
       jogadaPorPelucia,
       alertaMediaForaPadrao,
+      percentualComissao,
+      comissao,
     };
   };
+
+  const formatarPercentual = (valor) =>
+    Number(valor || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
 
   const blocosMaquinas = itensNormalizados
     .map((item) => {
@@ -798,6 +812,8 @@ const construirMensagemDeItensWhatsApp = (
         valorMedidoSaidaPelucia,
         jogadaPorPelucia,
         alertaMediaForaPadrao,
+        percentualComissao,
+        comissao,
       } = calcularFinanceiroResumo(r);
       const dias = r?.diasDesdeUltimaMovimentacao;
       const quantidadeAbastecimentoExtra = Number(
@@ -863,6 +879,12 @@ const construirMensagemDeItensWhatsApp = (
             ]
           : []),
         `Saldo: ${formatarMoeda(saldo)}`,
+        ...(percentualComissao > 0
+          ? [
+              `Comissao (${formatarPercentual(percentualComissao)}%): ${formatarMoeda(comissao)}`,
+              `Liquido maq.: ${formatarMoeda(saldo - comissao)}`,
+            ]
+          : []),
         `Valor por pelucia: ${formatarMoeda(valorMedidoSaidaPelucia)}`,
         `Jogada: ${formatarInteiro(jogadaPorPelucia)}`,
         ...(alertaMediaForaPadrao
@@ -912,6 +934,10 @@ const construirMensagemDeItensWhatsApp = (
     (acc, item) => acc + calcularFinanceiroResumo(item?.resumo).saldo,
     0,
   );
+  const totalComissao = itensNormalizados.reduce(
+    (acc, item) => acc + calcularFinanceiroResumo(item?.resumo).comissao,
+    0,
+  );
   const totalAbastecimentoExtra = itensNormalizados.reduce(
     (acc, item) =>
       acc + Number(item?.resumo?.quantidadeAbastecimentoExtra || 0),
@@ -940,8 +966,8 @@ const construirMensagemDeItensWhatsApp = (
       ? [`Abast. extra.: ${formatarInteiro(totalAbastecimentoExtra)}`]
       : []),
     `Jogado.......: ${formatarMoeda(totalJogado)}`,
-    "Cliente....: 0,00",
-    `Liquido.....: ${formatarMoeda(totalEntradas)}`,
+    `Cliente....: ${formatarMoeda(totalComissao)}`,
+    `Liquido.....: ${formatarMoeda(totalEntradas - totalComissao)}`,
     "Cartao......: 0,00",
     `Especie.....: ${formatarMoeda(totalEntradas)}`,
   ].join("\n");

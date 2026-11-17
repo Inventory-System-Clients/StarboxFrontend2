@@ -210,6 +210,32 @@ export function LojaDetalhes() {
     return usuario.role === "ADMIN" || movimentacao.usuarioId === usuario.id;
   };
 
+  const [excluindoMovimentacaoId, setExcluindoMovimentacaoId] = useState(null);
+
+  const excluirMovimentacao = async (movimentacao) => {
+    if (usuario?.role !== "ADMIN") return;
+    const dataTexto = new Date(movimentacao.createdAt).toLocaleString("pt-BR");
+    const confirmado = window.confirm(
+      `Excluir a movimentação de ${dataTexto}?\n\nEssa ação não pode ser desfeita. As pelúcias abastecidas nela voltam para o estoque de onde saíram (ponto ou funcionário).`,
+    );
+    if (!confirmado) return;
+
+    try {
+      setExcluindoMovimentacaoId(movimentacao.id);
+      await api.delete(`/movimentacoes/${movimentacao.id}`);
+      setMovimentacoes((prev) =>
+        prev.filter((mov) => mov.id !== movimentacao.id),
+      );
+    } catch (error) {
+      window.alert(
+        "Erro ao excluir movimentação: " +
+          (error.response?.data?.error || error.message),
+      );
+    } finally {
+      setExcluindoMovimentacaoId(null);
+    }
+  };
+
   // Função para abrir modal de edição
   const abrirModalEdicao = (movimentacao) => {
     setMovimentacaoSelecionada(movimentacao);
@@ -1261,6 +1287,7 @@ export function LojaDetalhes() {
                                 "pt-BR",
                               )}
                             </span>
+                            <div className="flex items-center gap-2">
                             {podeEditar(mov) && (
                               <button
                                 onClick={() => abrirModalEdicao(mov)}
@@ -1283,6 +1310,32 @@ export function LojaDetalhes() {
                                 Editar
                               </button>
                             )}
+                            {usuario?.role === "ADMIN" && (
+                              <button
+                                onClick={() => excluirMovimentacao(mov)}
+                                disabled={excluindoMovimentacaoId === mov.id}
+                                className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors flex items-center gap-1 disabled:opacity-60"
+                                title="Excluir movimentação"
+                              >
+                                <svg
+                                  className="w-3 h-3"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                                {excluindoMovimentacaoId === mov.id
+                                  ? "Excluindo..."
+                                  : "Excluir"}
+                              </button>
+                            )}
+                            </div>
                           </div>
                           <div className="grid grid-cols-5 gap-4 mt-3 text-sm">
                             <div>

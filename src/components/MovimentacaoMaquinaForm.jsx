@@ -1119,7 +1119,12 @@ export function MovimentacaoMaquinaForm({
       },
     );
 
-    const linhaComissao = `Comissao a pagar (${percentualComissaoFormatado}%): R$${formatarMoeda((Math.max(0, Number(saldo || 0)) * percentualComissao) / 100)}`;
+    const valorComissao =
+      (Math.max(0, Number(saldo || 0)) * percentualComissao) / 100;
+    const linhaComissao =
+      percentualComissao > 0
+        ? `Comissao a pagar (${percentualComissaoFormatado}%): R$${formatarMoeda(valorComissao)}`
+        : null;
     const nomeProdutoAbastecido =
       produtoSelecionado?.nome || "Produto não informado";
     const quantidadeAbastecidaInformada =
@@ -1142,8 +1147,8 @@ export function MovimentacaoMaquinaForm({
           `Entradas.....: ${formatarInteiro(diferencaIn)}`,
           `Saidas.......: ${formatarInteiro(quantidadeSaiu)}`,
           `Jogado.......: ${formatarMoeda(jogado)}`,
-          "Cliente....: 0",
-          `Liquido.....: ${formatarMoeda(saldo)}`,
+          `Cliente....: ${formatarMoeda(valorComissao)}`,
+          `Liquido.....: ${formatarMoeda(saldo - valorComissao)}`,
           `Especie.....: ${formatarMoeda(saldo)}`,
         ];
 
