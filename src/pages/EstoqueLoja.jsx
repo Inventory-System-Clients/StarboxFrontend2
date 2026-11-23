@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer.jsx";
 import api from "../services/api";
 import { PageLoader } from "../components/Loading";
+import { carregarLojasComEstoque } from "../lib/lojasComEstoque";
 
 const formatarDataInput = (data) => {
   const ano = data.getFullYear();
@@ -36,6 +37,7 @@ export default function EstoqueLoja() {
   const navigate = useNavigate();
 
   const [loja, setLoja] = useState(null);
+  const [lojasComEstoque, setLojasComEstoque] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [estoqueRows, setEstoqueRows] = useState([]);
   const [produtoParaAdicionar, setProdutoParaAdicionar] = useState("");
@@ -129,6 +131,37 @@ export default function EstoqueLoja() {
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
+
+  useEffect(() => {
+    carregarLojasComEstoque()
+      .then(setLojasComEstoque)
+      .catch((err) => {
+        console.error("Erro ao carregar lojas com estoque:", err);
+        setLojasComEstoque([]);
+      });
+  }, []);
+
+  // Ao trocar de loja no select, limpa mensagens e o produto pendente de
+  // adicionar (os dados são recarregados pelo useEffect via lojaId da URL).
+  useEffect(() => {
+    setSuccess("");
+    setError("");
+    setProdutoParaAdicionar("");
+  }, [lojaId]);
+
+  const trocarLoja = (novoId) => {
+    if (!novoId || String(novoId) === String(lojaId)) return;
+    navigate(`/lojas/${novoId}/estoque`);
+  };
+
+  // Garante que a loja atual aparece no select mesmo se não estiver na lista
+  // de lojas habilitadas (ex.: acesso direto pela URL).
+  const opcoesLojas = useMemo(() => {
+    if (!loja || lojasComEstoque.some((l) => String(l.id) === String(loja.id))) {
+      return lojasComEstoque;
+    }
+    return [loja, ...lojasComEstoque];
+  }, [loja, lojasComEstoque]);
 
   useEffect(() => {
     carregarHistorico();
@@ -294,6 +327,24 @@ export default function EstoqueLoja() {
                 : "Carregando..."}
             </p>
           </div>
+          {opcoesLojas.length > 0 ? (
+            <label className="flex flex-col gap-1 text-sm font-semibold text-gray-700">
+              Loja
+              <select
+                className="select-field min-w-65"
+                value={lojaId}
+                onChange={(e) => trocarLoja(e.target.value)}
+                disabled={salvando}
+              >
+                {opcoesLojas.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                    {item.cidade ? ` - ${item.cidade}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <div className="bg-purple-50 border-l-4 border-purple-500 rounded-lg p-4 mb-6">

@@ -14,6 +14,7 @@ import AjusteMaquinaAtual from "../components/AjusteMaquinaAtual";
 import PainelAbastecedor from "../components/PainelAbastecedor";
 import PainelFuncionarioTodasLojas from "../components/PainelFuncionarioTodasLojas";
 import { compartilharEstoquePessoal } from "../lib/compartilharEstoque";
+import { carregarLojasComEstoque } from "../lib/lojasComEstoque";
 
 import Swal from "sweetalert2";
 
@@ -448,24 +449,17 @@ export function Dashboard() {
     lojas: [],
     carregando: false,
   });
-  // Estoque de loja por enquanto só está habilitado pro Shopping Osasco -
-  // achamos o ponto pelo nome/endereço em vez de fixar um ID, já que o ID
-  // difere entre ambiente local/demo/produção.
-  const [lojaEstoqueOsasco, setLojaEstoqueOsasco] = useState(null);
+  // Estoque de loja só está habilitado para algumas lojas (ver
+  // lib/lojasComEstoque.js). O botão abre a primeira e a troca é feita pelo
+  // select dentro da tela de estoque.
+  const [lojasEstoque, setLojasEstoque] = useState([]);
 
-  const carregarLojaEstoqueOsasco = async () => {
+  const carregarLojasEstoque = async () => {
     try {
-      const res = await api.get("/lojas", { params: { all: true } });
-      const lojas = Array.isArray(res.data) ? res.data : res.data?.data || [];
-      const loja = lojas.find((item) =>
-        `${item?.nome || ""} ${item?.endereco || ""}`
-          .toLowerCase()
-          .includes("osasco"),
-      );
-      setLojaEstoqueOsasco(loja || null);
+      setLojasEstoque(await carregarLojasComEstoque());
     } catch (error) {
-      console.error("Erro ao carregar loja do estoque (Shopping Osasco):", error);
-      setLojaEstoqueOsasco(null);
+      console.error("Erro ao carregar lojas com estoque:", error);
+      setLojasEstoque([]);
     }
   };
 
@@ -609,7 +603,7 @@ export function Dashboard() {
       // então só vale a pena buscar pra quem realmente vê o widget.
       if (isAdminLike) {
         carregarAlertasEstoqueLoja();
-        carregarLojaEstoqueOsasco();
+        carregarLojasEstoque();
       }
 
       carregarAlertaInatividadeLojas();
@@ -1488,24 +1482,28 @@ export function Dashboard() {
                   Estoque Loja
                 </h2>
                 <p className="text-gray-600 text-sm sm:text-base">
-                  Por enquanto disponível só para o{" "}
-                  <strong>Shopping Osasco</strong>. Os funcionários podem
-                  escolher usar esse estoque ao invés do próprio ao fazer
-                  máquinas desse ponto.
+                  Disponível para{" "}
+                  <strong>
+                    {lojasEstoque.length > 0
+                      ? lojasEstoque.map((l) => l.nome).join(" e ")
+                      : "Shopping Osasco e Shopping Catuaí"}
+                  </strong>
+                  . Os funcionários podem escolher usar esse estoque ao invés
+                  do próprio ao fazer máquinas desses pontos.
                 </p>
               </div>
               <div className="text-left sm:text-right mt-4 sm:mt-0 flex flex-col items-end">
                 <button
                   className="bg-purple-500 hover:bg-purple-600 text-white font-bold px-6 py-2 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() =>
-                    lojaEstoqueOsasco &&
-                    navigate(`/lojas/${lojaEstoqueOsasco.id}/estoque`)
+                    lojasEstoque[0] &&
+                    navigate(`/lojas/${lojasEstoque[0].id}/estoque`)
                   }
-                  disabled={!lojaEstoqueOsasco}
+                  disabled={lojasEstoque.length === 0}
                   title={
-                    lojaEstoqueOsasco
+                    lojasEstoque.length > 0
                       ? undefined
-                      : "Ponto Shopping Osasco não encontrado"
+                      : "Nenhuma loja com estoque encontrada"
                   }
                 >
                   <span className="text-2xl">🏪</span> Ver Estoque
