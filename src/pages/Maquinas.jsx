@@ -16,6 +16,7 @@ import { EmptyState } from "../components/Loading";
 import { useFilteredList } from "../hooks/useFilteredList";
 import { ListFilterBar, FilterField } from "../components/ListFilterBar";
 import { PaginationControls } from "../components/PaginationControls";
+import { AutocompleteSelect } from "../components/AutocompleteSelect";
 
 export function Maquinas() {
   const navigate = useNavigate();
@@ -307,20 +308,16 @@ export function Maquinas() {
           loading={listaMaquinas.loading}
         >
           <FilterField label="Ponto">
-            <select
-              className="input-field"
+            <AutocompleteSelect
               value={listaMaquinas.filters.lojaId}
-              onChange={(e) =>
-                listaMaquinas.setFilter("lojaId", e.target.value)
-              }
-            >
-              <option value="">Todos os pontos</option>
-              {lojas.map((loja) => (
-                <option key={loja.id} value={loja.id}>
-                  {loja.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => listaMaquinas.setFilter("lojaId", id)}
+              options={lojas.map((loja) => ({
+                id: loja.id,
+                label: loja.nome,
+              }))}
+              placeholder="Todos os pontos (digite para buscar)"
+              emptyLabel="Nenhum ponto encontrado"
+            />
           </FilterField>
           <FilterField label="Buscar máquina">
             <input
